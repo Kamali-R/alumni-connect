@@ -11,7 +11,7 @@ function App() {
   const [userData, setUserData] = useState(null); // For passing data from Register to VerifyOtp
 
   return (
-    <Router>
+    <Router>c
       <div className="App">
         <Routes>
           {/* Default Home */}
