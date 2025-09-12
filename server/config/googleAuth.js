@@ -1,9 +1,22 @@
-import passport from "passport";
+ import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import dotenv from "dotenv";
 dotenv.config();
-
 import User from "../models/User.js";
+
+// Validate environment variables
+if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_CALLBACK_URL) {
+  console.error("❌ Google OAuth environment variables are missing");
+  console.log("Required variables:");
+  console.log("- GOOGLE_CLIENT_ID:", !!process.env.GOOGLE_CLIENT_ID);
+  console.log("- GOOGLE_CLIENT_SECRET:", !!process.env.GOOGLE_CLIENT_SECRET);
+  console.log("- GOOGLE_CALLBACK_URL:", !!process.env.GOOGLE_CALLBACK_URL);
+  process.exit(1);
+}
+
+console.log("✅ Google OAuth Config loaded:");
+console.log("- Client ID:", process.env.GOOGLE_CLIENT_ID?.substring(0, 20) + "...");
+console.log("- Callback URL:", process.env.GOOGLE_CALLBACK_URL);
 
 passport.use(
   new GoogleStrategy(
@@ -11,24 +24,79 @@ passport.use(
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       callbackURL: process.env.GOOGLE_CALLBACK_URL,
+      passReqToCallback: true
     },
-    async (accessToken, refreshToken, profile, done) => {
+    async (req, accessToken, refreshToken, profile, done) => {
       try {
+        console.log('🔍 Processing Google profile for:', profile.emails[0].value);
+        
         const email = profile.emails[0].value;
-
-        let user = await User.findOne({ email });
-
+        const name = profile.displayName;
+        
+        // Check if user already exists
+        let user = await User.findOne({ 
+          $or: [
+            { email: email },
+            { googleId: profile.id }
+          ]
+        });
+        
         if (!user) {
-          // ✅ DO NOT create new user
-          return done(null, false, { message: " No account exists for this Google email. " });
+          // Create new user with Google profile
+          console.log('👤 Creating new user for Google login:', email);
+          
+          user = new User({
+            name: name,
+            email: email,
+            role: 'alumni', // Default role for Google signups
+            googleId: profile.id,
+            isVerified: true, // Auto-verify Google users
+            profileCompleted: false, // They'll need to complete profile
+            authProvider: 'google',
+            createdAt: new Date(),
+            lastLogin: new Date()
+          });
+          
+          await user.save();
+          console.log('✅ New Google user created successfully');
+          
+        } else {
+          // Update existing user
+          console.log('🔄 Updating existing user for Google login:', email);
+          
+          // Ensure Google ID is set
+          if (!user.googleId) {
+            user.googleId = profile.id;
+          }
+          
+          // Update last login
+          user.lastLogin = new Date();
+          
+          // Ensure user is verified
+          if (!user.isVerified) {
+            user.isVerified = true;
+          }
+          
+          // Update auth provider if needed
+          if (!user.authProvider) {
+            user.authProvider = 'google';
+          }
+          
+          await user.save();
+          console.log('✅ Existing Google user updated successfully');
         }
-
-        // ✅ Update login time and proceed
-        user.lastLogin = new Date();
-        await user.save();
-
+        
+        console.log('🎯 Google auth successful for user:', {
+          id: user._id,
+          email: user.email,
+          role: user.role,
+          profileCompleted: user.profileCompleted
+        });
+        
         return done(null, user);
+        
       } catch (error) {
+        console.error('❌ Google OAuth strategy error:', error);
         return done(error, null);
       }
     }
@@ -36,14 +104,19 @@ passport.use(
 );
 
 passport.serializeUser((user, done) => {
-  done(null, user.id);
+  console.log('🔐 Serializing user:', user._id);
+  done(null, user._id);
 });
 
 passport.deserializeUser(async (id, done) => {
   try {
+    console.log('🔓 Deserializing user:', id);
     const user = await User.findById(id);
     done(null, user);
   } catch (err) {
+    console.error('❌ Deserialize error:', err);
     done(err, null);
   }
 });
+
+export default passport; 

@@ -1,105 +1,137 @@
-// authRoutes.js
-import express from 'express';
 import passport from 'passport';
 import jwt from 'jsonwebtoken';
+import User from '../models/User.js';
+import express from 'express';
 import {
   sendOtp,
   verifyOtp,
   login,
   verifyResetOtp,
   resetPassword,
+<<<<<<< HEAD
   forgotPassword ,// ✅ Import the dedicated forgot password function
   completeRegistration 
 } from '../controllers/authController.js';
 import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
 import Alumni from '../models/Alumni.js';
+=======
+  forgotPassword,
+  completeProfile
+} from '../controllers/authController.js';
+import auth from '../middleware/authMiddleware.js';
+
+>>>>>>> 19cc2c4ecbf68ede9d2ab0a007d85dbec2df3aaf
 const router = express.Router();
 
-// ✅ Registration & Login Routes
+// Registration & Login Routes
 router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
 router.post('/login', login);
+<<<<<<< HEAD
 router.post('/complete-registration', completeRegistration);
 // ✅ Password Reset Routes
 router.post('/forgot-password', forgotPassword); // Use dedicated function
+=======
+
+// Profile completion route
+router.post('/complete-profile', auth, completeProfile);
+
+// Password Reset Routes
+router.post('/forgot-password', forgotPassword);
+>>>>>>> 19cc2c4ecbf68ede9d2ab0a007d85dbec2df3aaf
 router.post('/verify-reset-otp', verifyResetOtp);
 router.post('/reset-password', resetPassword);
 
-// ✅ Google OAuth Routes
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+// Google OAuth Routes
+router.get('/auth/google', (req, res, next) => {
+  console.log('🚀 Initiating Google OAuth flow');
+  next();
+}, passport.authenticate('google', { 
+  scope: ['profile', 'email'],
+  prompt: 'select_account'
+}));
 
-router.get('/google/callback',
+router.get('/auth/google/callback',
   passport.authenticate('google', {
     session: false,
-    failureRedirect: 'http://localhost:3000/signup'
+    failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=google_auth_failed`
   }),
-  (req, res) => {
-    const token = jwt.sign(
-      { id: req.user._id, email: req.user.email, role: req.user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' }
-    );
-    res.redirect(`http://localhost:3000/dashboard?token=${token}`);
+  async (req, res) => {
+    try {
+      console.log('✅ Google callback reached');
+      console.log('User from passport:', req.user ? req.user.email : 'No user');
+      
+      if (!req.user) {
+        console.error('❌ No user from Google authentication');
+        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=authentication_failed`);
+      }
+      
+      // Generate JWT token with all necessary user data
+      const tokenPayload = {
+        id: req.user._id,
+        email: req.user.email,
+        role: req.user.role || 'alumni',
+        name: req.user.name,
+        profileCompleted: req.user.profileCompleted || false
+      };
+      
+      console.log('Token payload:', tokenPayload);
+      
+      const token = jwt.sign(
+        tokenPayload,
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+      
+      console.log('Generated token for user:', req.user.email);
+      
+      // Redirect to frontend with token and success flag
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const redirectUrl = `${frontendUrl}/auth/google/callback?token=${token}&success=true`;
+      
+      console.log('🔄 Redirecting to:', redirectUrl);
+      res.redirect(redirectUrl);
+      
+    } catch (error) {
+      console.error('❌ Google callback error:', error);
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      res.redirect(`${frontendUrl}/login?error=auth_failed`);
+    }
   }
 );
-// ✅ Add this route for registration
-router.post('/register', async (req, res) => {
+
+// User data endpoint (protected)
+router.get('/user', auth, async (req, res) => {
   try {
-    const { name, email, password, role, profile } = req.body;
+    console.log('Fetching user data for ID:', req.user.id);
     
-    console.log('Registration attempt:', { name, email, role });
+    const user = await User.findById(req.user.id).select('-password -__v');
     
-    // Check if user exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(409).json({
-        success: false,
-        message: 'Email already registered'
-      });
+    if (!user) {
+      console.error('User not found for ID:', req.user.id);
+      return res.status(404).json({ message: 'User not found' });
     }
     
-    // Create new user
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({
-      name,
-      email,
-      password: hashedPassword,
-      role,
-      isVerified: true
-    });
-    
-    await user.save();
-    
-    // Create alumni profile if role is alumni
-    if (role === 'alumni' && profile) {
-      const alumni = new Alumni({
-        userId: user._id,
-        ...profile,
-        status: 'complete'
-      });
-      await alumni.save();
-    }
-    
-    // Create student profile if needed (add similar logic)
-    
-    res.status(201).json({
-      success: true,
-      message: 'User registered successfully',
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      }
-    });
-    
+    console.log('User data retrieved:', { email: user.email, role: user.role });
+    res.json(user);
   } catch (error) {
-    console.error('Registration error:', error);
-    res.status(400).json({
-      success: false,
-      message: error.message
+    console.error('Error fetching user data:', error);
+    res.status(500).json({ message: 'Error fetching user data' });
+  }
+});
+// Check if profile is completed
+// Check if profile is completed
+router.get('/check-profile', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('profileCompleted role');
+    res.json({
+      profileCompleted: user.profileCompleted,
+      role: user.role
     });
+  } catch (error) {
+    console.error('Profile check error:', error);
+    res.status(500).json({ message: 'Error checking profile status' });
   }
 });
 export default router;

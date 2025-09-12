@@ -1,4 +1,3 @@
-// AlumniConnectProfile.jsx
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -9,40 +8,42 @@ const AlumniConnectProfile = ({ userRole }) => {
   const { userData, verified, role } = location.state || {};
   
   // State for form data
-  const [formData, setFormData] = useState({
-    firstName: userData?.name?.split(' ')[0] || '',
-    lastName: userData?.name?.split(' ')[1] || '',
-    email: userData?.email || '',
-    phone: '',
-    dob: '',
-    gender: '',
-    address: '',
-    city: '',
-    state: '',
-    country: '',
-
-    degreeType: '',
-    fieldOfStudy: '',
-    graduationYear: '',
-    gpa: '',
-    studentId: '',
-    activities: '',
-    experiences: [{
-      jobTitle: '',
-      company: '',
-      startDate: '',
-      endDate: '',
-      jobDescription: '',
-      industry: '',
-      workLocation: ''
-    }],
-    linkedin: '',
-    website: '',
-    skills: [],
-    bio: '',
-    networking: [],
-    privacy: ['profile-visible', 'email-notifications'],
-    terms: false
+  const [formData, setFormData] = useState(() => {
+    const initialUserData = location.state?.userData || JSON.parse(localStorage.getItem('user')) || {};
+    return {
+      firstName: initialUserData.name?.split(' ')[0] || '',
+      lastName: initialUserData.name?.split(' ')[1] || '',
+      email: initialUserData.email || '',
+      phone: '',
+      dob: '',
+      gender: '',
+      address: '',
+      city: '',
+      state: '',
+      country: '',
+      degreeType: '',
+      fieldOfStudy: '',
+      graduationYear: '',
+      gpa: '',
+      studentId: '',
+      activities: '',
+      experiences: [{
+        jobTitle: '',
+        company: '',
+        startDate: '',
+        endDate: '',
+        jobDescription: '',
+        industry: '',
+        workLocation: ''
+      }],
+      linkedin: '',
+      website: '',
+      skills: [],
+      bio: '',
+      networking: [],
+      privacy: ['profile-visible', 'email-notifications'],
+      terms: false
+    };
   });
   
   const [progress, setProgress] = useState(0);
@@ -59,23 +60,52 @@ const AlumniConnectProfile = ({ userRole }) => {
   }
   
   // Check if user data exists and if OTP is verified
-  // In AlumniConnectProfile.jsx, modify the useEffect to handle the redirect logic better
+  // In AlumniConnectProfile component, update the useEffect
 useEffect(() => {
+  const token = localStorage.getItem('token');
   const isOtpVerified = localStorage.getItem('otpVerified') === 'true';
   const userEmail = localStorage.getItem('userEmail');
-  const userId = localStorage.getItem('userId');
+  const profileCompleted = localStorage.getItem('profileCompleted') === 'true';
+  
+  const urlParams = new URLSearchParams(window.location.search);
+  const fromGoogle = urlParams.get('fromGoogle');
+  const tokenFromQuery = urlParams.get('token');
+  
   // Get role from multiple possible sources
   const effectiveRole = userRole || 
-                        localStorage.getItem('userRole') || 
-                        (location.state ? location.state.role : null);
+                    localStorage.getItem('userRole') || 
+                    (location.state ? location.state.role : null);
   
-  if (!userData || !isOtpVerified || !userId)  {
+  // Handle Google auth users
+  if (fromGoogle === 'true' && tokenFromQuery) {
+    localStorage.setItem('token', tokenFromQuery);
+    return;
+  }
+  
+  // If profile is already completed, redirect to dashboard
+  if (profileCompleted) {
     setMessage({ 
-      text: 'Unauthorized access. Please verify your email first.', 
+      text: 'Your profile is already completed. Redirecting to dashboard...', 
+      type: 'info' 
+    });
+    setTimeout(() => {
+      if (effectiveRole === 'student') {
+        navigate('/student-dashboard');
+      } else {
+        navigate('/dashboard');
+      }
+    }, 2000);
+    return;
+  }
+  
+  // If we don't have user data and we're not coming from Google, redirect to register
+  if (!userData && !token && !isOtpVerified) {
+    setMessage({ 
+      text: 'Unauthorized access. Please register first.', 
       type: 'error' 
     });
     setTimeout(() => navigate('/register'), 2000);
-  } else if (userEmail !== userData.email) {
+  } else if (userEmail && userData && userEmail !== userData.email) {
     setMessage({ 
       text: 'Session expired. Please register again.', 
       type: 'error' 
@@ -183,13 +213,16 @@ useEffect(() => {
   };
   
   // Handle form submission
+  // In the AlumniConnectProfile component, update the form submission logic
+
+// Handle form submission
 const handleSubmit = async (e) => {
   e.preventDefault();
-
+  
   // Validate required fields
   const requiredFields = formRef.current.querySelectorAll('input[required], select[required]');
   let isValid = true;
-
+  
   requiredFields.forEach(field => {
     if (!field.value.trim()) {
       field.classList.add('border-red-500');
@@ -198,104 +231,92 @@ const handleSubmit = async (e) => {
       field.classList.remove('border-red-500');
     }
   });
-
+  
   if (!isValid) {
     setMessage({ text: 'Please fill in all required fields marked with *', type: 'error' });
     return;
   }
-
+  
   // Check terms agreement
   if (!formData.terms) {
     setMessage({ text: 'Please agree to the Terms of Service and Privacy Policy to continue.', type: 'error' });
     return;
   }
-
+  
   try {
     setLoading(true);
     setMessage({ text: '', type: '' });
-
-    // Get userId from location state or localStorage
-    const userId = location.state?.userId || localStorage.getItem('userId');
-    if (!userId) {
-      throw new Error('User ID not found. Please restart the registration process.');
+    
+    // Get the token
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      throw new Error('Authentication token not found');
     }
-
-    // Get token and role
-    const token = localStorage.getItem('authToken');
-    const userRole = localStorage.getItem('userRole') || role;
-console.log('Token retrieved from localStorage:', token);
-    // Prepare the payload to match backend requirements
-    const payload = {
+    
+    // Prepare form data
+    const submitData = {
       ...formData,
-      privacySettings: {
-        agreeTerms: formData.terms,
-        visible: formData.privacy.includes('profile-visible'),
-        showContact: formData.privacy.includes('show-contact'),
-        mailNotifications: formData.privacy.includes('email-notifications')
-      }
+      role: userRole || role || localStorage.getItem('userRole')
     };
-
-    // Send profile data to complete registration
-    const response = await axios.post('http://localhost:5000/api/alumni', {
-      userId: userId,
-      role: userRole,
-      ...payload
-    }, {
+    
+    // For alumni, generate studentId if not provided
+    if (isAlumni && !submitData.studentId) {
+      const timestamp = Date.now().toString().slice(-6);
+      submitData.studentId = `ALUM-${timestamp}`;
+    }
+    
+    console.log('Submitting profile data:', submitData);
+    
+    // Update the user profile
+    const response = await axios.post('http://localhost:5000/complete-profile', submitData, {
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}` // Add Authorization header
+        'Authorization': `Bearer ${token}`
       }
     });
-
-    console.log('Registration response:', response.data);
-
-    if (response.data && response.data.success) {
-      setMessage({
-        text: 'Registration successful! Redirecting to dashboard...',
-        type: 'success'
+    
+    console.log('Profile update response:', response.data);
+    
+    if (response.data && response.data.message) {
+      setMessage({ 
+        text: 'Profile completed successfully! Redirecting to dashboard...', 
+        type: 'success' 
       });
-
-      if (response.data.token) {
-        localStorage.setItem('authToken', response.data.token);
-        localStorage.setItem('userRole', userRole);
+      
+      // Update user data in localStorage - this is crucial
+      if (response.data.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        localStorage.setItem('userRole', response.data.user.role);
+        localStorage.setItem('profileCompleted', 'true');
       }
-
-      // Clean up localStorage
+      
+      // Clear OTP verification data
       localStorage.removeItem('otpVerified');
       localStorage.removeItem('userEmail');
-      localStorage.removeItem('userId');
-
-      // Redirect to dashboard after a short delay
+      
+      // Redirect to dashboard after successful profile completion
       setTimeout(() => {
         navigate('/dashboard');
       }, 2000);
     } else {
-      throw new Error(response.data.message || 'Registration failed');
+      throw new Error('Profile update failed');
     }
-
+    
   } catch (error) {
-    console.error('Registration error:', error);
-
-    let errorMessage = 'Registration failed. Please try again.';
+    console.error('Profile update error:', error);
+    
+    let errorMessage = 'Profile update failed. Please try again.';
     if (error.response) {
-      console.error('Error response data:', error.response.data);
-      console.error('Error response status:', error.response.status);
-
-      if (error.response.status === 409) {
-        errorMessage = 'Email already registered. Please login instead.';
+      if (error.response.status === 401) {
+        errorMessage = 'Authentication expired. Please login again.';
+        setTimeout(() => navigate('/login'), 2000);
       } else if (error.response.status === 400) {
-        errorMessage = error.response.data.message || 'Invalid registration data.';
+        errorMessage = error.response.data.message || error.response.data.error || 'Invalid profile data.';
       } else {
-        errorMessage = error.response.data?.message || errorMessage;
+        errorMessage = error.response.data?.message || error.response.data?.error || errorMessage;
       }
-    } else if (error.request) {
-      console.error('No response received:', error.request);
-      errorMessage = 'No response from server. Please check your connection.';
-    } else {
-      console.error('Request setup error:', error.message);
-      errorMessage = error.message;
     }
-
+    
     setMessage({ text: errorMessage, type: 'error' });
   } finally {
     setLoading(false);
@@ -479,106 +500,117 @@ console.log('Token retrieved from localStorage:', token);
           </div>
           
           {/* Educational Details Section */}
-          <div className="mb-8">
-            <div className="flex items-center mb-6">
-              <div className="bg-indigo-100 p-2 rounded-lg mr-3">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path d="M12 14l9-5-9-5-9 5 9 5z" />
-                  <path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-800">Educational Details</h3>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Degree Type *</label>
-                <select
-                  name="degreeType"
-                  value={formData.degreeType}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  required
-                >
-                  <option value="">Select Degree</option>
-                  <option value="bachelor">Bachelor's</option>
-                  <option value="master">Master's</option>
-                  <option value="doctorate">Doctorate</option>
-                  <option value="diploma">Diploma</option>
-                  <option value="certificate">Certificate</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Field of Study *</label>
-                <input
-                  type="text"
-                  name="fieldOfStudy"
-                  value={formData.fieldOfStudy}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  placeholder="e.g., Computer Science"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {isAlumni ? 'Graduation Year' : 'Expected Graduation Year'} *
-                </label>
-                <select
-                  name="graduationYear"
-                  value={formData.graduationYear}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  required
-                >
-                  <option value="">Select Year</option>
-                  {graduationYears.map(year => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">GPA</label>
-                <input
-                  type="text"
-                  name="gpa"
-                  value={formData.gpa}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  placeholder="e.g., 3.8"
-                />
-              </div>
-              
-              {!isAlumni && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Student ID *</label>
-                  <input
-                    type="text"
-                    name="studentId"
-                    value={formData.studentId}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    required
-                  />
-                </div>
-              )}
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Activities & Societies</label>
-                <textarea
-                  name="activities"
-                  value={formData.activities}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  rows="2"
-                  placeholder="e.g., Debate Club, Football Team"
-                ></textarea>
-              </div>
-            </div>
-          </div>
+          {/* Educational Details Section */}
+<div className="mb-8">
+  <div className="flex items-center mb-6">
+    <div className="bg-indigo-100 p-2 rounded-lg mr-3">
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path d="M12 14l9-5-9-5-9 5 9 5z" />
+        <path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+      </svg>
+    </div>
+    <h3 className="text-xl font-semibold text-gray-800">Educational Details</h3>
+  </div>
+  
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">Degree Type *</label>
+      <select
+        name="degreeType"
+        value={formData.degreeType}
+        onChange={handleInputChange}
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        required
+      >
+        <option value="">Select Degree</option>
+        <option value="bachelor">Bachelor's</option>
+        <option value="master">Master's</option>
+        <option value="doctorate">Doctorate</option>
+        <option value="diploma">Diploma</option>
+        <option value="certificate">Certificate</option>
+      </select>
+    </div>
+    
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">Field of Study *</label>
+      <input
+        type="text"
+        name="fieldOfStudy"
+        value={formData.fieldOfStudy}
+        onChange={handleInputChange}
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        placeholder="e.g., Computer Science"
+        required
+      />
+    </div>
+    
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {isAlumni ? 'Graduation Year' : 'Expected Graduation Year'} *
+      </label>
+      <select
+        name="graduationYear"
+        value={formData.graduationYear}
+        onChange={handleInputChange}
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        required
+      >
+        <option value="">Select Year</option>
+        {graduationYears.map(year => (
+          <option key={year} value={year}>{year}</option>
+        ))}
+      </select>
+    </div>
+    
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">GPA</label>
+      <input
+        type="text"
+        name="gpa"
+        value={formData.gpa}
+        onChange={handleInputChange}
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        placeholder="e.g., 3.8"
+      />
+    </div>
+    
+    {/* Only show Student ID field for students */}
+    {!isAlumni && (
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Student ID *</label>
+        <input
+          type="text"
+          name="studentId"
+          value={formData.studentId}
+          onChange={handleInputChange}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          required
+        />
+      </div>
+    )}
+    
+    {/* For alumni, we'll add a hidden field for studentId that will be populated on the backend */}
+    {isAlumni && (
+      <input
+        type="hidden"
+        name="studentId"
+        value={formData.studentId}
+      />
+    )}
+    
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">Activities & Societies</label>
+      <textarea
+        name="activities"
+        value={formData.activities}
+        onChange={handleInputChange}
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        rows="2"
+        placeholder="e.g., Debate Club, Football Team"
+      ></textarea>
+    </div>
+  </div>
+</div>
           
           {/* Professional Experience Section - Only for Alumni */}
           {isAlumni && (

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+ import React, { useState, useRef } from 'react';
 import axios from 'axios';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -12,76 +12,87 @@ const VerifyOtp = () => {
   const [loading, setLoading] = useState(false);
   const [showResend, setShowResend] = useState(false);
   const inputsRef = useRef([]);
-
+  
   const handleChange = (index, value) => {
     if (!/^\d?$/.test(value)) return;
     const newOtp = [...otp];
     newOtp[index] = value;
     setOtp(newOtp);
-
     if (value && index < 5) {
       inputsRef.current[index + 1].focus();
     }
   };
-
-  const handleVerify = async (e) => {
-    e.preventDefault();
-    const fullOtp = otp.join('');
+  
+  // In VerifyOtp component, update the handleVerify function
+const handleVerify = async (e) => {
+  e.preventDefault();
+  const fullOtp = otp.join('');
+  
+  try {
+    setLoading(true);
+    const response = await axios.post('http://localhost:5000/verify-otp', {
+      ...userData,
+      otp: fullOtp,
+      purpose: 'register'
+    });
     
-    try {
-      setLoading(true);
-      const response = await axios.post('http://localhost:5000/api/verify-otp', {
-        ...userData,
-        otp: fullOtp,
-        purpose: 'register'
-      });
-      
-      setMessage({ 
-        text: response.data.message || 'Verification successful!', 
-        type: 'success' 
-      });
-      setShowResend(false);
-      
-      // Get userId from the server response or userData
-      const userId = response.data.userId || userData?._id || userData?.userId;
-      
-      if (!userId) {
-        throw new Error('User ID not found in response');
-      }
-      
-      setTimeout(() => {
-        // Store verification status and user data
-        localStorage.setItem('otpVerified', 'true');
-        localStorage.setItem('userEmail', userData.email);
-        localStorage.setItem('userRole', userData.role);
-        localStorage.setItem('userId', userId);
-        
+    setMessage({ 
+      text: response.data.message || 'Verification successful!', 
+      type: 'success' 
+    });
+    setShowResend(false);
+    
+    // Store token and user data
+    if (response.data.token) {
+      localStorage.setItem('token', response.data.token);
+    }
+    
+    if (response.data.user) {
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+      localStorage.setItem('userRole', response.data.user.role);
+      localStorage.setItem('profileCompleted', response.data.user.profileCompleted ? 'true' : 'false');
+    }
+    
+    // Store verification status
+    localStorage.setItem('otpVerified', 'true');
+    localStorage.setItem('userEmail', userData.email);
+    
+    setTimeout(() => {
+      // Check if profile needs to be completed
+      if (response.data.user && response.data.user.profileCompleted) {
+        // Profile already completed, go to dashboard
+        if (response.data.user.role === 'student') {
+          navigate('/student-dashboard');
+        } else {
+          navigate('/dashboard');
+        }
+      } else {
         // Navigate to profile completion page
         navigate('/alumni-profile', { 
           state: { 
-            userData: { ...userData, _id: userId },
+            userData: userData || response.data.user, 
             verified: true,
-            role: userData.role,
-            userId: userId
+            role: userData?.role || response.data.user?.role 
           } 
         });
-      }, 2000);
-      
-    } catch (error) {
-      setMessage({ 
-        text: error.response?.data?.message || error.message || 'OTP verification failed.', 
-        type: 'error' 
-      });
-      setShowResend(true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+      }
+    }, 2000);
+    
+  } catch (error) {
+    setMessage({ 
+      text: error.response?.data?.message || 'OTP verification failed.', 
+      type: 'error' 
+    });
+    setShowResend(true);
+  } finally {
+    setLoading(false);
+  }
+};
+  
   const handleResend = async () => {
     try {
       setLoading(true);
-      await axios.post('http://localhost:5000/api/send-otp', {
+      await axios.post('http://localhost:5000/send-otp', {
         ...userData,
         purpose: 'register'
       });
@@ -101,6 +112,7 @@ const VerifyOtp = () => {
       setLoading(false);
     }
   };
+  
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -171,4 +183,4 @@ const VerifyOtp = () => {
   );
 };
 
-export default VerifyOtp;
+export default VerifyOtp

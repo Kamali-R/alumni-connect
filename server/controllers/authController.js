@@ -1,182 +1,154 @@
-import User from '../models/User.js';
+ import User from '../models/User.js';
 import Otp from '../models/otp.js';
 import bcrypt from 'bcryptjs';
 import sendEmail from '../utils/sendEmail.js';
 import jwt from 'jsonwebtoken';
+import Alumni from '../models/Alumni.js';
 
 // STEP 1: Send OTP
 export const sendOtp = async (req, res) => {
   const { name, email, password, role, purpose } = req.body;
-
   if (!email)
     return res.status(400).json({ message: 'Email is required' });
-
   if (purpose === 'register') {
     if (!name || !password || !role)
       return res.status(400).json({ message: 'All fields are required for registration' });
-
     const existing = await User.findOne({ email });
     if (existing) return res.status(400).json({ message: 'User already exists' });
   } else if (purpose === 'reset') {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: 'User not found' });
   }
-
   const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
   await Otp.deleteMany({ email });
-
   const otp = new Otp({ email, otp: otpCode });
   await otp.save();
-
   await sendEmail(email, 'Your OTP Code', `Your OTP is: ${otpCode}`);
-
   res.status(200).json({ message: 'OTP sent to your email' });
 };
 
-// ... existing code ...
-
 // Updated verifyOtp function
 export const verifyOtp = async (req, res) => {
-  try {
-    const { name, email, password, role, otp, purpose } = req.body;
-
-    // Validate required fields
-    if (!email || !otp || !purpose) {
-      return res.status(400).json({ message: 'Email, OTP and purpose are required' });
-    }
-
-    const otpRecord = await Otp.findOne({ email, otp });
-    if (!otpRecord) {
-      return res.status(400).json({ message: 'Invalid or expired OTP' });
-    }
-
-    if (purpose === 'register') {
-      // Validate registration fields
-      if (!name || !password || !role) {
-        return res.status(400).json({ message: 'Name, password and role are required for registration' });
-      }
-
-      // Check if user already exists
-      const existing = await User.findOne({ email });
-      if (existing) {
-        return res.status(400).json({ message: 'User already exists' });
-      }
-
-      // Create new user
-      const hashedPwd = await bcrypt.hash(password, 10);
-      const newUser = new User({ 
-        name, 
-        email, 
-        password: hashedPwd, 
-        role,
-        isVerified: true,
-        registrationComplete: false
-      });
-      
-      await newUser.save();
-      
-      // Delete OTP after successful verification
-      await Otp.deleteMany({ email });
-      
-      // Return success with userId
-      return res.status(200).json({ 
-        message: 'OTP verified successfully',
-        userId: newUser._id
-      });
-      
-    } else if (purpose === 'reset') {
-      // Handle password reset verification
-      // Mark OTP as verified but don't delete it yet
-      await Otp.updateOne({ email, otp }, { verified: true });
-      
-      return res.status(200).json({ 
-        message: 'OTP verified successfully',
-        purpose: 'password_reset'
-      });
-      
-    } else {
-      return res.status(400).json({ message: 'Invalid purpose' });
-    }
-    
-  } catch (error) {
-    console.error('Verify OTP error:', error);
-    res.status(500).json({ message: 'Server error during OTP verification' });
+  const { name, email, password, role, otp, purpose } = req.body;
+  const otpRecord = await Otp.findOne({ email, otp });
+  
+  if (!otpRecord) {
+    return res.status(400).json({ message: 'Invalid or expired OTP' });
   }
-};
-// Add this new function to complete registration with profile data
-export const completeRegistration = async (req, res) => {
-  try {
-    const { userId, profileData } = req.body;
-    
-    // Find the user
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+  
+  if (purpose === 'register') {
+    // Check if user already exists again (just in case)
+    const existing = await User.findOne({ email });
+    if (existing) {
+      return res.status(400).json({ message: 'User already exists' });
     }
     
-    if (user.registrationComplete) {
-      return res.status(400).json({ message: 'Registration already completed' });
-    }
+    const hashedPwd = await bcrypt.hash(password, 10);
+    const newUser = new User({ 
+      name, 
+      email, 
+      password: hashedPwd, 
+      role,
+      isVerified: true,
+      profileCompleted: false // Set to false initially for new registrations
+    });
     
-    // Create alumni profile if role is alumni
-    if (user.role === 'alumni') {
-      const alumni = new alumni({
-        userId: user._id,
-        ...profileData,
-        status: 'complete'
-      });
-      await alumni.save();
-    }
+    await newUser.save();
     
-    // Update user registration status
-    user.registrationComplete = true;
-    await user.save();
-    
-    // Generate JWT token for authentication
+    // Generate token after successful registration
     const token = jwt.sign(
-      {
-        id: user._id,
-        role: user.role,
+      { 
+        id: newUser._id, 
+        role: newUser.role,
+        profileCompleted: newUser.profileCompleted
       },
       process.env.JWT_SECRET,
       { expiresIn: '2h' }
     );
     
-    res.status(200).json({
-      success: true,
-      message: 'Registration completed successfully',
+    // Delete OTP record
+    await Otp.deleteMany({ email });
+    
+    return res.status(200).json({ 
+      message: 'OTP verified successfully',
       token,
       user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        profileCompleted: newUser.profileCompleted // This will be false for new registrations
       }
     });
+  }
+};
+// Complete profile function
+export const completeProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userData = req.body;
     
+    console.log('Completing profile for user:', userId);
+    
+    // Check if alumni profile already exists
+    let alumniProfile = await Alumni.findOne({ userId });
+    
+    if (alumniProfile) {
+      // Update existing alumni profile
+      alumniProfile = await Alumni.findOneAndUpdate(
+        { userId },
+        { ...userData, status: 'complete' },
+        { new: true, runValidators: true }
+      );
+    } else {
+      // Create new alumni profile
+      alumniProfile = new Alumni({
+        userId,
+        ...userData,
+        status: 'complete'
+      });
+      await alumniProfile.save();
+    }
+    
+    // Update User document to mark profileCompleted = true and link alumni profile
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { 
+        profileCompleted: true, // This is the key fix
+        alumniProfile: alumniProfile._id,
+        // Update user name if provided in profile
+        ...(userData.firstName && userData.lastName && {
+          name: `${userData.firstName} ${userData.lastName}`
+        })
+      },
+      { new: true }
+    ).select('-password');
+    
+    console.log('Profile completion successful for user:', userId);
+    
+    res.status(200).json({
+      message: 'Alumni profile saved successfully',
+      user: updatedUser,
+      alumni: alumniProfile
+    });
   } catch (error) {
-    console.error('Complete registration error:', error);
-    res.status(500).json({ message: 'Server error during registration completion' });
+    console.error('Complete profile error:', error);
+    res.status(500).json({ message: 'Server error during profile completion' });
   }
 };
 
-// ... existing code ...
-// ✅ FIXED: New function for password reset verification
+// Other functions remain the same...
 export const verifyResetOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
-
     if (!email || !otp) {
       return res.status(400).json({ message: 'Email and OTP are required' });
     }
-
     const otpRecord = await Otp.findOne({ email, otp });
     if (!otpRecord) {
       return res.status(400).json({ message: 'Invalid or expired OTP' });
     }
-
-    // ✅ IMPORTANT: Mark OTP as verified but don't delete it yet
-    // We'll delete it after successful password reset
+    
     await Otp.updateOne({ email, otp }, { verified: true });
     
     res.status(200).json({ message: 'OTP verified successfully' });
@@ -186,32 +158,34 @@ export const verifyResetOtp = async (req, res) => {
   }
 };
 
+// In your login function
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-
+    
     // 1. Check if user exists
    const user = await User.findOne({ email }).select('+password');
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-
+    
     // 2. Compare password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-
+    
     // 3. Create JWT token
     const token = jwt.sign(
       {
         id: user._id,
         role: user.role,
+        profileCompleted: user.profileCompleted // Include this in the token
       },
       process.env.JWT_SECRET,
-      { expiresIn: '2h' } // token expires in 2 hours
+      { expiresIn: '2h' }
     );
-
+    
     // 4. Return token and user info
     res.status(200).json({
       message: 'Login successful',
@@ -220,30 +194,25 @@ export const login = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        profileCompleted: user.profileCompleted // Make sure this is included
       },
     });
   } catch (err) {
     console.error('Login error:', err);
-    res.status(500).json({ message: 'Server error:' +err.message});
+    res.status(500).json({ message: 'Server error:' + err.message });
   }
 };
 
-// 🔁 Send OTP for Forgot Password (reuse sendEmail)
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
-
     if (!email) return res.status(400).json({ message: 'Email is required' });
-
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: 'User not found' });
-
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-
     await Otp.deleteMany({ email }); // Remove old OTPs
     const otp = new Otp({ email, otp: otpCode, verified: false });
     await otp.save();
-
     await sendEmail(email, 'Reset your password', `Your OTP is: ${otpCode}`);
     res.status(200).json({ message: 'OTP sent to your email' });
   } catch (err) {
@@ -252,43 +221,35 @@ export const forgotPassword = async (req, res) => {
   }
 };
 
-// ✅ FIXED: Reset password function
 export const resetPassword = async (req, res) => {
   try {
     const { email, newPassword, confirmPassword } = req.body;
-
     if (!email || !newPassword || !confirmPassword) {
       return res.status(400).json({ message: 'All fields are required' });
     }
-
     if (newPassword !== confirmPassword) {
       return res.status(400).json({ message: 'Passwords do not match' });
     }
-
-    // ✅ Check if there's a verified OTP for this email
+    
     const otpRecord = await Otp.findOne({ email, verified: true });
     if (!otpRecord) {
       return res.status(400).json({ 
         message: 'Please verify your OTP first' 
       });
     }
-
-    // ✅ Check if user exists
+    
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-
-    // ✅ Update the password
+    
     const hashedPwd = await bcrypt.hash(newPassword, 10);
     await User.updateOne({ email }, { password: hashedPwd });
     
-    // ✅ Clean up OTP records after successful password reset
     await Otp.deleteMany({ email });
-
     res.status(200).json({ message: 'Password reset successful' });
   } catch (err) {
     console.error('Reset password error:', err);
     res.status(500).json({ message: 'Server error during password reset' });
   }
-};
+}; 

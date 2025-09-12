@@ -1,12 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate,useLocation, Link } from 'react-router-dom';
 
-
-
-
-const Register = () => {
+const Register = ({setUserData}) => {
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -58,42 +54,49 @@ const Register = () => {
   };
   
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validateForm()) return;
+ // In Register component, update the handleSubmit function
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  if (!validateForm()) return;
 
-    try {
-      setLoading(true);
-      setMessage({ text: '', type: '' });
+  try {
+    setLoading(true);
+    setMessage({ text: '', type: '' });
 
-      const response = await axios.post('http://localhost:5000/api/send-otp', form);
+    const response = await axios.post('http://localhost:5000/send-otp', {
+      ...form,
+      purpose: 'register'
+    });
 
-      setMessage({
-        text: response.data.message || 'OTP sent successfully!',
-        type: 'success',
+    setMessage({
+      text: response.data.message || 'OTP sent successfully!',
+      type: 'success',
+    });
+
+    // Store user data for profile completion
+    setUserData(form);
+
+    setTimeout(() => {
+      navigate('/VerifyOtp', {
+        state: {
+          userData: form,
+          email: form.email,
+        },
       });
-
-      setTimeout(() => {
-        navigate('/VerifyOtp', {
-          state: {
-            userData: form,
-            email: form.email,
-          },
-        });
-      }, 1500);
-    } catch (error) {
-      const errorMessage =
-        error.response?.data?.message ||
-        error.message ||
-        'Failed to send OTP. Please try again.';
-      setMessage({
-        text: errorMessage,
-        type: 'error',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+    }, 1500);
+  } catch (error) {
+    const errorMessage =
+      error.response?.data?.message ||
+      error.message ||
+      'Failed to send OTP. Please try again.';
+    setMessage({
+      text: errorMessage,
+      type: 'error',
+    });
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -223,4 +226,4 @@ const Register = () => {
   );
 };
 
-export default Register;
+export default Register; 

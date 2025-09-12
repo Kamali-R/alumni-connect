@@ -61,7 +61,7 @@ const PasswordResetFlow = () => {
     setError('');
     
     try {
-      const response = await fetch('http://localhost:5000/api/forgot-password', {
+      const response = await fetch('http://localhost:5000/forgot-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -97,7 +97,7 @@ const handleVerificationSubmit = async (e) => {
   }
 
   try {
-    const response = await fetch('http://localhost:5000/api/verify-reset-otp', { // Changed endpoint
+    const response = await fetch('http://localhost:5000/verify-reset-otp', { // Changed endpoint
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -145,7 +145,7 @@ const handleNewPasswordSubmit = async (e) => {
   
   try {
     console.log('Submitting password reset for:', email); // Debug log
-    const response = await fetch('http://localhost:5000/api/reset-password', {
+    const response = await fetch('http://localhost:5000/reset-password', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -280,7 +280,7 @@ const handleNewPasswordSubmit = async (e) => {
     setError('');
     
     try {
-      const response = await fetch('http://localhost:5000/api/forgot-password', {
+      const response = await fetch('http://localhost:5000/forgot-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

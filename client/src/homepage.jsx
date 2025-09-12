@@ -18,7 +18,7 @@ const AlumniConnect = () => {
   e.preventDefault();
 
   try {
-    await axios.post('http://localhost:5000/api/contact', contactForm); // ✅ Send to backend
+    await axios.post('http://localhost:5000/contact', contactForm); // ✅ Send to backend
     alert('Message sent successfully!');
     setContactForm({ firstName: '', lastName: '', email: '', message: '' });
   } catch (error) {
