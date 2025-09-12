@@ -223,7 +223,7 @@ const handleSubmit = async (e) => {
     // Get token and role
     const token = localStorage.getItem('authToken');
     const userRole = localStorage.getItem('userRole') || role;
-
+console.log('Token retrieved from localStorage:', token);
     // Prepare the payload to match backend requirements
     const payload = {
       ...formData,
@@ -241,7 +241,6 @@ const handleSubmit = async (e) => {
       role: userRole,
       ...payload
     }, {
-      withCredentials: true,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}` // Add Authorization header
