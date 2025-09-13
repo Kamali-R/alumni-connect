@@ -1,966 +1,1940 @@
-import { useState, useEffect, useRef } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  FaUser, FaVenusMars, FaCalendar, FaEnvelope, FaPhone, FaMapMarkerAlt,
+  FaGraduationCap, FaUniversity, FaIdCard, FaCertificate, FaCodeBranch, FaCalendarAlt,
+  FaBriefcase, FaTools, FaStar, FaUserEdit, FaGlobe, FaUpload, FaShieldAlt, FaInfoCircle,
+  FaPlus, FaTimes, FaArrowRight, FaCheckCircle, FaWrench, FaHeart, FaDollarSign,
+  FaBuilding, FaLightbulb, FaGraduationCap as FaGraduation, FaSearch, FaExclamationCircle
+} from 'react-icons/fa';
+import { FaLinkedin, FaGithub } from 'react-icons/fa';
 
-const AlumniConnectProfile = ({ userRole }) => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { userData, verified, role } = location.state || {};
-  
-  // State for form data
-  const [formData, setFormData] = useState(() => {
-    const initialUserData = location.state?.userData || JSON.parse(localStorage.getItem('user')) || {};
-    return {
-      firstName: initialUserData.name?.split(' ')[0] || '',
-      lastName: initialUserData.name?.split(' ')[1] || '',
-      email: initialUserData.email || '',
-      phone: '',
-      dob: '',
-      gender: '',
-      address: '',
-      city: '',
-      state: '',
-      country: '',
-      degreeType: '',
-      fieldOfStudy: '',
-      graduationYear: '',
-      gpa: '',
-      studentId: '',
-      activities: '',
-      experiences: [{
-        jobTitle: '',
-        company: '',
-        startDate: '',
-        endDate: '',
-        jobDescription: '',
-        industry: '',
-        workLocation: ''
-      }],
-      linkedin: '',
-      website: '',
-      skills: [],
-      bio: '',
-      networking: [],
-      privacy: ['profile-visible', 'email-notifications'],
-      terms: false
-    };
+const AlumniConnectProfile = () => {
+
+  const [showSuccess, setShowSuccess] = useState(false);
+  // Personal Information State
+
+  const [personalInfo, setPersonalInfo] = useState({
+    fullName: '',
+    gender: '',
+    dob: '',
+    personalEmail: '',
+    phone: '',
+    location: ''
   });
   
-  const [progress, setProgress] = useState(0);
+  // Academic Information State
+  const [academicInfo, setAcademicInfo] = useState({
+    collegeEmail: '',
+    enrollmentNumber: '',
+    degree: '',
+    branch: '',
+    graduationYear: '',
+    cgpa: '' // Added CGPA field
+  });
+  
+  // Professional Information State
+  const [professionalInfo, setProfessionalInfo] = useState({
+    employmentStatus: '',
+    salaryRange: ''
+  });
+  
+  // Career Status State
+  const [careerStatus, setCareerStatus] = useState('');
+  const [careerDetails, setCareerDetails] = useState({
+    // Currently Working
+    companyName: '',
+    jobTitle: '',
+    companyLocation: '',
+    yearsOfExperience: '',
+    
+    // Entrepreneur
+    startupName: '',
+    industry: '',
+    roleInStartup: '',
+    yearsRunning: '',
+    
+    // Higher Studies
+    institutionName: '',
+    courseArea: '',
+    institutionLocation: '',
+    expectedGraduationYear: '',
+    
+    // Not Currently Working
+    careerGoal: ''
+  });
+  
+  // Other Information State
+  const [otherInfo, setOtherInfo] = useState({
+    bio: '',
+    linkedin: '',
+    github: '',
+    portfolio: '',
+    termsAccept: false,
+    emailConsent: false
+  });
+  
+  // Dynamic sections state
+  const [experiences, setExperiences] = useState([]);
+  const [skills, setSkills] = useState([]);
+  const [interests, setInterests] = useState([]);
+  const [resumeFile, setResumeFile] = useState(null);
+  
+  // Experience input states
+  const [currentExperience, setCurrentExperience] = useState({
+    company: '',
+    title: '',
+    location: '',
+    duration: '',
+    description: ''
+  });
+  
+  // Dropdown states
   const [skillInput, setSkillInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState({ text: '', type: '' });
-  const formRef = useRef(null);
+  const [interestInput, setInterestInput] = useState('');
+  const [showSkillDropdown, setShowSkillDropdown] = useState(false);
+  const [showInterestDropdown, setShowInterestDropdown] = useState(false);
+  const [filteredSkills, setFilteredSkills] = useState([]);
+  const [filteredInterests, setFilteredInterests] = useState([]);
   
-  // Populate graduation years
-  const graduationYears = [];
-  const currentYear = new Date().getFullYear();
-  for (let year = currentYear; year >= 1950; year--) {
-    graduationYears.push(year);
-  }
+  // Location dropdown states
+  const [locationInput, setLocationInput] = useState('');
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+  const [filteredLocations, setFilteredLocations] = useState([]);
   
-  // Check if user data exists and if OTP is verified
-  // In AlumniConnectProfile component, update the useEffect
-useEffect(() => {
-  const token = localStorage.getItem('token');
-  const isOtpVerified = localStorage.getItem('otpVerified') === 'true';
-  const userEmail = localStorage.getItem('userEmail');
-  const profileCompleted = localStorage.getItem('profileCompleted') === 'true';
+  // Validation states
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
   
-  const urlParams = new URLSearchParams(window.location.search);
-  const fromGoogle = urlParams.get('fromGoogle');
-  const tokenFromQuery = urlParams.get('token');
+  // Refs
+  const fileInputRef = useRef(null);
   
-  // Get role from multiple possible sources
-  const effectiveRole = userRole || 
-                    localStorage.getItem('userRole') || 
-                    (location.state ? location.state.role : null);
+  // Options for dropdowns
+  const degreeOptions = [
+    'B.Tech', 'B.E', 'B.Sc', 'B.A', 'B.Com', 'BBA', 'BCA', 'B.Arch', 'B.Des', 'B.Pharm',
+    'M.Tech', 'M.E', 'M.Sc', 'M.A', 'M.Com', 'MBA', 'MCA', 'M.Arch', 'M.Des', 'M.Pharm',
+    'PhD', 'MPhil', 'Post Doc', 'Diploma', 'Integrated Dual Degree', 'Other'
+  ];
   
-  // Handle Google auth users
-  if (fromGoogle === 'true' && tokenFromQuery) {
-    localStorage.setItem('token', tokenFromQuery);
-    return;
-  }
+  const branchOptions = [
+    'Computer Science', 'Computer Science & Engineering', 'Information Technology',
+    'Electrical Engineering', 'Electrical & Electronics Engineering', 'Electronics & Communication Engineering',
+    'Electronics & Instrumentation Engineering', 'Mechanical Engineering', 'Mechanical & Automation Engineering',
+    'Civil Engineering', 'Chemical Engineering', 'Aerospace Engineering', 'Biotechnology',
+    'Information Technology', 'Electronics and Communication', 'Instrumentation Engineering',
+    'Production Engineering', 'Metallurgical Engineering', 'Mining Engineering', 'Petroleum Engineering',
+    'Biomedical Engineering', 'Environmental Engineering', 'Industrial Engineering', 'Agricultural Engineering',
+    'Marine Engineering', 'Nuclear Engineering', 'Business Administration', 'Economics', 'Mathematics',
+    'Physics', 'Chemistry', 'Biology', 'English Literature', 'History', 'Psychology', 'Sociology',
+    'Philosophy', 'Fine Arts', 'Performing Arts', 'Architecture', 'Pharmacy', 'Medicine', 'Dentistry',
+    'Nursing', 'Public Health', 'Law', 'Education', 'Journalism', 'Hospitality Management', 'Other'
+  ];
   
-  // If profile is already completed, redirect to dashboard
-  if (profileCompleted) {
-    setMessage({ 
-      text: 'Your profile is already completed. Redirecting to dashboard...', 
-      type: 'info' 
-    });
-    setTimeout(() => {
-      if (effectiveRole === 'student') {
-        navigate('/student-dashboard');
-      } else {
-        navigate('/dashboard');
-      }
-    }, 2000);
-    return;
-  }
+  const locationOptions = [
+    'Karur, Tamil Nadu, India', 'Chennai, Tamil Nadu, India', 'Coimbatore, Tamil Nadu, India',
+    'Madurai, Tamil Nadu, India', 'Salem, Tamil Nadu, India', 'Tiruchirappalli, Tamil Nadu, India',
+    'Bangalore, Karnataka, India', 'Mysore, Karnataka, India', 'Hubli, Karnataka, India',
+    'Mangalore, Karnataka, India', 'Mumbai, Maharashtra, India', 'Pune, Maharashtra, India',
+    'Nagpur, Maharashtra, India', 'Nashik, Maharashtra, India', 'Delhi, Delhi, India',
+    'New Delhi, Delhi, India', 'Gurgaon, Haryana, India', 'Faridabad, Haryana, India',
+    'Kolkata, West Bengal, India', 'Howrah, West Bengal, India', 'Hyderabad, Telangana, India',
+    'Secunderabad, Telangana, India', 'Ahmedabad, Gujarat, India', 'Surat, Gujarat, India',
+    'Vadodara, Gujarat, India', 'Jaipur, Rajasthan, India', 'Jodhpur, Rajasthan, India',
+    'Udaipur, Rajasthan, India', 'Lucknow, Uttar Pradesh, India', 'Kanpur, Uttar Pradesh, India',
+    'Agra, Uttar Pradesh, India', 'Patna, Bihar, India', 'Gaya, Bihar, India',
+    'Bhopal, Madhya Pradesh, India', 'Indore, Madhya Pradesh, India', 'Chandigarh, Punjab, India',
+    'Amritsar, Punjab, India', 'Dehradun, Uttarakhand, India', 'Rishikesh, Uttarakhand, India',
+    'Guwahati, Assam, India', 'Shillong, Meghalaya, India', 'Bhubaneswar, Odisha, India',
+    'Ranchi, Jharkhand, India', 'Thiruvananthapuram, Kerala, India', 'Kochi, Kerala, India',
+    'Goa, Goa, India', 'Puducherry, Puducherry, India', 'Andaman and Nicobar Islands, Andaman and Nicobar Islands, India',
+    'Lakshadweep, Lakshadweep, India', 'Daman and Diu, Daman and Diu, India',
+    'Dadra and Nagar Haveli, Dadra and Nagar Haveli, India', 'Ladakh, Ladakh, India',
+    'Jammu and Kashmir, Jammu and Kashmir, India', 'New York, New York, USA',
+    'Los Angeles, California, USA', 'Chicago, Illinois, USA', 'Houston, Texas, USA',
+    'Phoenix, Arizona, USA', 'Philadelphia, Pennsylvania, USA', 'San Antonio, Texas, USA',
+    'San Diego, California, USA', 'Dallas, Texas, USA', 'San Jose, California, USA',
+    'Austin, Texas, USA', 'Jacksonville, Florida, USA', 'London, England, United Kingdom',
+    'Birmingham, England, United Kingdom', 'Manchester, England, United Kingdom',
+    'Glasgow, Scotland, United Kingdom', 'Liverpool, England, United Kingdom',
+    'Edinburgh, Scotland, United Kingdom', 'Leeds, England, United Kingdom',
+    'Sheffield, England, United Kingdom', 'Bristol, England, United Kingdom',
+    'Toronto, Ontario, Canada', 'Montreal, Quebec, Canada', 'Vancouver, British Columbia, Canada',
+    'Calgary, Alberta, Canada', 'Edmonton, Alberta, Canada', 'Ottawa, Ontario, Canada',
+    'Sydney, New South Wales, Australia', 'Melbourne, Victoria, Australia',
+    'Brisbane, Queensland, Australia', 'Perth, Western Australia, Australia',
+    'Adelaide, South Australia, Australia', 'Canberra, Australian Capital Territory, Australia',
+    'Gold Coast, Queensland, Australia', 'Newcastle, New South Wales, Australia',
+    'Central Coast, New South Wales, Australia', 'Singapore, Singapore, Singapore',
+    'Dubai, Dubai, United Arab Emirates', 'Abu Dhabi, Abu Dhabi, United Arab Emirates',
+    'Sharjah, Sharjah, United Arab Emirates', 'Tokyo, Tokyo, Japan', 'Osaka, Osaka, Japan',
+    'Kyoto, Kyoto, Japan', 'Yokohama, Kanagawa, Japan', 'Nagoya, Aichi, Japan',
+    'Sapporo, Hokkaido, Japan', 'Kobe, Hyogo, Japan', 'Fukuoka, Fukuoka, Japan',
+    'Beijing, China', 'Shanghai, China', 'Guangzhou, China', 'Shenzhen, China',
+    'Hong Kong, Hong Kong', 'Seoul, South Korea', 'Busan, South Korea',
+    'Moscow, Russia', 'St. Petersburg, Russia', 'Berlin, Germany', 'Munich, Germany',
+    'Paris, France', 'Marseille, France', 'Barcelona, Spain', 'Madrid, Spain',
+    'Rome, Italy', 'Milan, Italy', 'Amsterdam, Netherlands', 'Stockholm, Sweden',
+    'Copenhagen, Denmark', 'Oslo, Norway', 'Helsinki, Finland', 'Zurich, Switzerland',
+    'Vienna, Austria', 'Warsaw, Poland', 'Prague, Czech Republic', 'Budapest, Hungary',
+    'Athens, Greece', 'Lisbon, Portugal', 'Dublin, Ireland', 'Istanbul, Turkey',
+    'Tel Aviv, Israel', 'Cairo, Egypt', 'Johannesburg, South Africa', 'Cape Town, South Africa',
+    'Lagos, Nigeria', 'Nairobi, Kenya', 'Mexico City, Mexico', 'Buenos Aires, Argentina',
+    'Rio de Janeiro, Brazil', 'São Paulo, Brazil', 'Santiago, Chile', 'Lima, Peru',
+    'Bogotá, Colombia', 'Caracas, Venezuela'
+  ];
   
-  // If we don't have user data and we're not coming from Google, redirect to register
-  if (!userData && !token && !isOtpVerified) {
-    setMessage({ 
-      text: 'Unauthorized access. Please register first.', 
-      type: 'error' 
-    });
-    setTimeout(() => navigate('/register'), 2000);
-  } else if (userEmail && userData && userEmail !== userData.email) {
-    setMessage({ 
-      text: 'Session expired. Please register again.', 
-      type: 'error' 
-    });
-    setTimeout(() => navigate('/register'), 2000);
-  } else if (!effectiveRole) {
-    setMessage({ 
-      text: 'Role information missing. Please register again.', 
-      type: 'error' 
-    });
-    setTimeout(() => navigate('/register'), 2000);
-  }
-}, [userData, navigate, userRole, location.state]);
+  const industryOptions = [
+    'Technology/Software', 'Healthcare', 'Finance/Banking', 'Education',
+    'Retail/E-commerce', 'Manufacturing', 'Consulting', 'Real Estate',
+    'Media/Entertainment', 'Hospitality/Tourism', 'Automotive', 'Telecommunications',
+    'Energy/Utilities', 'Agriculture', 'Fashion/Apparel', 'Food & Beverage',
+    'Transportation/Logistics', 'Construction', 'Legal Services', 'Government/Public Sector',
+    'Non-profit/NGO', 'Biotechnology/Pharmaceuticals', 'Sports/Fitness', 'Art/Design'
+  ];
   
-  // Update progress
-  useEffect(() => {
-    if (formRef.current) {
-      const requiredFields = formRef.current.querySelectorAll('input[required], select[required]');
-      const filledFields = Array.from(requiredFields).filter(field => field.value.trim() !== '');
-      const newProgress = Math.round((filledFields.length / requiredFields.length) * 100);
-      setProgress(newProgress);
-    }
-  }, [formData]);
+  const skillSuggestions = [
+    'JavaScript', 'Python', 'Java', 'React', 'Node.js', 'Angular', 'Vue.js', 'TypeScript',
+    'HTML/CSS', 'SQL', 'MongoDB', 'PostgreSQL', 'AWS', 'Docker', 'Kubernetes', 'Git',
+    'Project Management', 'Agile/Scrum', 'Leadership', 'Communication', 'Problem Solving',
+    'Data Analysis', 'Machine Learning', 'Artificial Intelligence', 'Cybersecurity',
+    'Digital Marketing', 'Content Writing', 'Graphic Design', 'UI/UX Design', 'Photography',
+    'Sales', 'Customer Service', 'Business Analysis', 'Financial Analysis', 'Accounting',
+    'C++', 'C#', 'PHP', 'Ruby', 'Swift', 'Kotlin', 'Go', 'Rust', 'Scala', 'Perl',
+    'MATLAB', 'R', 'SPSS', 'Excel', 'Tableau', 'Power BI', 'SAS', 'TensorFlow',
+    'PyTorch', 'Natural Language Processing', 'Computer Vision', 'Deep Learning',
+    'Blockchain', 'Solidity', 'Web3', 'DevOps', 'CI/CD', 'Terraform', 'Ansible',
+    'Jenkins', 'Microservices', 'RESTful APIs', 'GraphQL', 'Firebase', 'MongoDB Atlas',
+    'Redis', 'Elasticsearch', 'Kafka', 'RabbitMQ', 'Network Security', 'Penetration Testing',
+    'Ethical Hacking', 'Cloud Security', 'Identity Management', 'Risk Assessment',
+    'Adobe Creative Suite', 'Figma', 'Sketch', 'InVision', 'User Research', 'Prototyping',
+    'Wireframing', 'Information Architecture', 'Interaction Design', 'Visual Design',
+    'SEO', 'SEM', 'Social Media Marketing', 'Email Marketing', 'Content Strategy',
+    'Copywriting', 'Brand Management', 'Public Relations', 'Event Planning', 'Salesforce',
+    'HubSpot', 'Market Research', 'A/B Testing', 'Conversion Optimization', 'Google Analytics',
+    'Financial Modeling', 'Valuation', 'Budgeting', 'Forecasting', 'Risk Management',
+    'Audit', 'Tax Preparation', 'QuickBooks', 'SAP', 'Oracle', 'Financial Reporting',
+    'Strategic Planning', 'Business Development', 'Partnership Management', 'Contract Negotiation',
+    'Team Building', 'Public Speaking', 'Presentation Skills', 'Time Management', 'Conflict Resolution',
+    'Critical Thinking', 'Decision Making', 'Adaptability', 'Creativity', 'Emotional Intelligence'
+  ];
   
-  // Handle input changes
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    
-    if (type === 'checkbox') {
-      if (name === 'terms') {
-        setFormData(prev => ({ ...prev, [name]: checked }));
-      } else if (name === 'networking[]' || name === 'privacy[]') {
-        const key = name === 'networking[]' ? 'networking' : 'privacy';
-        setFormData(prev => {
-          const newArray = checked 
-            ? [...prev[key], value]
-            : prev[key].filter(item => item !== value);
-          return { ...prev, [key]: newArray };
-        });
-      }
-    } else {
-      setFormData(prev => ({ ...prev, [name]: value }));
-    }
-  };
-  
-  // Handle experience changes
-  const handleExperienceChange = (index, e) => {
-    const { name, value } = e.target;
-    const fieldName = name.replace('[]', '');
-    
-    setFormData(prev => {
-      const newExperiences = [...prev.experiences];
-      newExperiences[index] = { ...newExperiences[index], [fieldName]: value };
-      return { ...prev, experiences: newExperiences };
-    });
-  };
-  
-  // Add new experience
-  const addExperience = () => {
-    setFormData(prev => ({
-      ...prev,
-      experiences: [
-        ...prev.experiences,
-        {
-          jobTitle: '',
-          company: '',
-          startDate: '',
-          endDate: '',
-          jobDescription: '',
-          industry: '',
-          workLocation: ''
-        }
-      ]
-    }));
-  };
-  
-  // Remove experience
-  const removeExperience = (index) => {
-    if (formData.experiences.length <= 1) return;
-    
-    setFormData(prev => ({
-      ...prev,
-      experiences: prev.experiences.filter((_, i) => i !== index)
-    }));
-  };
-  
-  // Add skill
-  const addSkill = (skill) => {
-    const trimmedSkill = skill.trim();
-    if (trimmedSkill && !formData.skills.includes(trimmedSkill)) {
-      setFormData(prev => ({
-        ...prev,
-        skills: [...prev.skills, trimmedSkill]
-      }));
-      setSkillInput('');
-    }
-  };
-  
-  // Remove skill
-  const removeSkill = (index) => {
-    setFormData(prev => ({
-      ...prev,
-      skills: prev.skills.filter((_, i) => i !== index)
-    }));
-  };
-  
-  // Handle form submission
-  // In the AlumniConnectProfile component, update the form submission logic
+  const interestSuggestions = [
+    'Technology', 'Artificial Intelligence', 'Machine Learning', 'Data Science', 'Cybersecurity',
+    'Web Development', 'Mobile Development', 'Cloud Computing', 'DevOps', 'Blockchain',
+    'Entrepreneurship', 'Startups', 'Innovation', 'Leadership', 'Management', 'Consulting',
+    'Finance', 'Investment', 'Marketing', 'Digital Marketing', 'Social Media', 'Content Creation',
+    'Design', 'User Experience', 'Photography', 'Video Production', 'Writing', 'Blogging',
+    'Travel', 'Sports', 'Fitness', 'Music', 'Art', 'Reading', 'Gaming', 'Cooking',
+    'Volunteering', 'Social Impact', 'Sustainability', 'Environment', 'Education', 'Research',
+    'Healthcare', 'Biotechnology', 'Pharmaceuticals', 'Mental Health', 'Wellness',
+    'Film', 'Theater', 'Dance', 'Fashion', 'Interior Design', 'Architecture',
+    'History', 'Philosophy', 'Politics', 'Economics', 'Psychology', 'Sociology',
+    'Science', 'Space Exploration', 'Astronomy', 'Physics', 'Chemistry', 'Biology',
+    'Engineering', 'Robotics', 'Automotive', 'Aviation', 'Renewable Energy', 'Sustainability',
+    'Agriculture', 'Food Science', 'Nutrition', 'Culinary Arts', 'Wine', 'Craft Beer',
+    'Outdoor Activities', 'Hiking', 'Camping', 'Cycling', 'Running', 'Swimming',
+    'Yoga', 'Meditation', 'Mindfulness', 'Personal Development', 'Coaching', 'Mentoring'
+  ];
 
-// Handle form submission
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  
-  // Validate required fields
-  const requiredFields = formRef.current.querySelectorAll('input[required], select[required]');
-  let isValid = true;
-  
-  requiredFields.forEach(field => {
-    if (!field.value.trim()) {
-      field.classList.add('border-red-500');
-      isValid = false;
-    } else {
-      field.classList.remove('border-red-500');
+  // Handle input changes
+  const handlePersonalInfoChange = (e) => {
+    const { name, value } = e.target;
+    setPersonalInfo(prev => ({ ...prev, [name]: value }));
+    
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
     }
-  });
+  };
   
-  if (!isValid) {
-    setMessage({ text: 'Please fill in all required fields marked with *', type: 'error' });
-    return;
-  }
-  
-  // Check terms agreement
-  if (!formData.terms) {
-    setMessage({ text: 'Please agree to the Terms of Service and Privacy Policy to continue.', type: 'error' });
-    return;
-  }
-  
-  try {
-    setLoading(true);
-    setMessage({ text: '', type: '' });
+  const handleAcademicInfoChange = (e) => {
+    const { name, value } = e.target;
+    setAcademicInfo(prev => ({ ...prev, [name]: value }));
     
-    // Get the token
-    const token = localStorage.getItem('token');
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+  
+  const handleProfessionalInfoChange = (e) => {
+    const { name, value } = e.target;
+    setProfessionalInfo(prev => ({ ...prev, [name]: value }));
+  };
+  
+  const handleCareerStatusChange = (e) => {
+    const value = e.target.value;
+    setCareerStatus(value);
     
-    if (!token) {
-      throw new Error('Authentication token not found');
+    // Clear career status error when user selects an option
+    if (errors.careerStatus) {
+      setErrors(prev => ({ ...prev, careerStatus: '' }));
+    }
+  };
+  
+  const handleCareerDetailsChange = (e) => {
+    const { name, value } = e.target;
+    setCareerDetails(prev => ({ ...prev, [name]: value }));
+    
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+  
+  const handleOtherInfoChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setOtherInfo(prev => ({ 
+      ...prev, 
+      [name]: type === 'checkbox' ? checked : value 
+    }));
+    
+    // Clear error when user starts typing or checks the box
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+  
+  // Handle blur events to mark fields as touched
+  const handleBlur = (e) => {
+    const { name } = e.target;
+    setTouched(prev => ({ ...prev, [name]: true }));
+  };
+  
+  // Validation function
+  const validateForm = () => {
+    const newErrors = {};
+    
+    // Personal info validation
+    if (!personalInfo.fullName) newErrors.fullName = 'Full name is required';
+    if (!personalInfo.gender) newErrors.gender = 'Gender is required';
+    if (!personalInfo.dob) newErrors.dob = 'Date of birth is required';
+    if (!personalInfo.personalEmail) newErrors.personalEmail = 'Personal email is required';
+    if (!personalInfo.phone) newErrors.phone = 'Phone number is required';
+    if (!personalInfo.location) newErrors.location = 'Location is required';
+    
+    // Academic info validation
+    if (!academicInfo.collegeEmail) newErrors.collegeEmail = 'College email is required';
+    if (!academicInfo.enrollmentNumber) newErrors.enrollmentNumber = 'Enrollment number is required';
+    if (!academicInfo.degree) newErrors.degree = 'Degree is required';
+    if (!academicInfo.branch) newErrors.branch = 'Branch is required';
+    if (!academicInfo.graduationYear) newErrors.graduationYear = 'Graduation year is required';
+    
+    // Career status validation
+    if (!careerStatus) newErrors.careerStatus = 'Career status is required';
+    
+    // Career details validation based on status
+    if (careerStatus === 'working') {
+      if (!careerDetails.companyName) newErrors.companyName = 'Company name is required';
+      if (!careerDetails.jobTitle) newErrors.jobTitle = 'Job title is required';
+    } else if (careerStatus === 'entrepreneur') {
+      if (!careerDetails.startupName) newErrors.startupName = 'Startup name is required';
+      if (!careerDetails.industry) newErrors.industry = 'Industry is required';
+      if (!careerDetails.roleInStartup) newErrors.roleInStartup = 'Role is required';
+    } else if (careerStatus === 'studies') {
+      if (!careerDetails.institutionName) newErrors.institutionName = 'Institution name is required';
+      if (!careerDetails.courseArea) newErrors.courseArea = 'Course area is required';
+    } else if (careerStatus === 'not-working') {
+      if (!careerDetails.careerGoal) newErrors.careerGoal = 'Career goal is required';
     }
     
-    // Prepare form data
-    const submitData = {
-      ...formData,
-      role: userRole || role || localStorage.getItem('userRole')
+    // Terms acceptance validation
+    if (!otherInfo.termsAccept) newErrors.termsAccept = 'You must accept the terms and conditions';
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+  
+  // Experience management
+  const handleExperienceInputChange = (e) => {
+    const { name, value } = e.target;
+    setCurrentExperience(prev => ({ ...prev, [name]: value }));
+  };
+  
+  const addExperience = () => {
+    // Validate required fields
+    if (!currentExperience.company.trim() || !currentExperience.title.trim()) {
+      return; // Prevent adding if required fields are empty
+    }
+    
+    const newExperience = {
+      id: Date.now(),
+      company: currentExperience.company.trim(),
+      title: currentExperience.title.trim(),
+      location: currentExperience.location.trim(),
+      duration: currentExperience.duration.trim(),
+      description: currentExperience.description.trim()
     };
     
-    // For alumni, generate studentId if not provided
-    if (isAlumni && !submitData.studentId) {
-      const timestamp = Date.now().toString().slice(-6);
-      submitData.studentId = `ALUM-${timestamp}`;
-    }
-    
-    console.log('Submitting profile data:', submitData);
-    
-    // Update the user profile
-    const response = await axios.post('http://localhost:5000/complete-profile', submitData, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    
-    console.log('Profile update response:', response.data);
-    
-    if (response.data && response.data.message) {
-      setMessage({ 
-        text: 'Profile completed successfully! Redirecting to dashboard...', 
-        type: 'success' 
-      });
-      
-      // Update user data in localStorage - this is crucial
-      if (response.data.user) {
-        localStorage.setItem('user', JSON.stringify(response.data.user));
-        localStorage.setItem('userRole', response.data.user.role);
-        localStorage.setItem('profileCompleted', 'true');
-      }
-      
-      // Clear OTP verification data
-      localStorage.removeItem('otpVerified');
-      localStorage.removeItem('userEmail');
-      
-      // Redirect to dashboard after successful profile completion
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 2000);
-    } else {
-      throw new Error('Profile update failed');
-    }
-    
-  } catch (error) {
-    console.error('Profile update error:', error);
-    
-    let errorMessage = 'Profile update failed. Please try again.';
-    if (error.response) {
-      if (error.response.status === 401) {
-        errorMessage = 'Authentication expired. Please login again.';
-        setTimeout(() => navigate('/login'), 2000);
-      } else if (error.response.status === 400) {
-        errorMessage = error.response.data.message || error.response.data.error || 'Invalid profile data.';
-      } else {
-        errorMessage = error.response.data?.message || error.response.data?.error || errorMessage;
-      }
-    }
-    
-    setMessage({ text: errorMessage, type: 'error' });
-  } finally {
-    setLoading(false);
-  }
-};
-  // Save as draft
-  const saveAsDraft = () => {
-    // In a real application, you would save the current form state
-    setMessage({ 
-      text: 'Profile saved as draft. You can complete it later from your account settings.', 
-      type: 'success' 
+    setExperiences(prev => [...prev, newExperience]);
+    setCurrentExperience({
+      company: '',
+      title: '',
+      location: '',
+      duration: '',
+      description: ''
     });
   };
   
-  // If no user data, show loading or error
-  if (!userData || !verified) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="text-center">
-          <div className="text-xl font-semibold text-gray-700 mb-2">Redirecting...</div>
-          <div className="text-gray-600">Please wait while we redirect you to the registration page.</div>
-        </div>
-      </div>
+  const removeExperience = (id) => {
+    setExperiences(prev => prev.filter(exp => exp.id !== id));
+  };
+  
+  // Skills management
+  const handleSkillInputChange = (e) => {
+    const value = e.target.value;
+    setSkillInput(value);
+    
+    if (value.trim() === '') {
+      setShowSkillDropdown(false);
+      return;
+    }
+    
+    const filtered = skillSuggestions.filter(skill => 
+      skill.toLowerCase().startsWith(value.toLowerCase()) && 
+      !skills.includes(skill)
     );
-  }
+    
+    setFilteredSkills(filtered.slice(0, 8));
+    setShowSkillDropdown(true);
+  };
   
-  // Determine if user is alumni or student
-  const isAlumni = userRole === 'alumni' || role === 'alumni' || localStorage.getItem('userRole') === 'alumni';
+  const addSkill = () => {
+    if (skillInput.trim() && !skills.includes(skillInput.trim())) {
+      setSkills(prev => [...prev, skillInput.trim()]);
+      setSkillInput('');
+      setShowSkillDropdown(false);
+    }
+  };
   
-  return (
-    <div className="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
-      {/* Header */}
-      <header className="bg-white shadow-lg border-b-4 border-indigo-500">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-3">
-              <div className="bg-indigo-600 text-white p-2 rounded-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
-                </svg>
-              </div>
-              <h1 className="text-2xl font-bold text-gray-800">Alumni Connect</h1>
-            </div>
-            <div className="text-sm text-gray-600">
-              Complete Your {isAlumni ? 'Alumni' : 'Student'} Profile
-            </div>
-          </div>
-        </div>
-      </header>
+  const removeSkill = (skill) => {
+    setSkills(prev => prev.filter(s => s !== skill));
+  };
+  
+  const selectSkill = (skill) => {
+    if (!skills.includes(skill)) {
+      setSkills(prev => [...prev, skill]);
+    }
+    setSkillInput('');
+    setShowSkillDropdown(false);
+  };
+  
+  // Interests management
+  const handleInterestInputChange = (e) => {
+    const value = e.target.value;
+    setInterestInput(value);
+    
+    if (value.trim() === '') {
+      setShowInterestDropdown(false);
+      return;
+    }
+    
+    const filtered = interestSuggestions.filter(interest => 
+      interest.toLowerCase().startsWith(value.toLowerCase()) && 
+      !interests.includes(interest)
+    );
+    
+    setFilteredInterests(filtered.slice(0, 8));
+    setShowInterestDropdown(true);
+  };
+  
+  const addInterest = () => {
+    if (interestInput.trim() && !interests.includes(interestInput.trim())) {
+      setInterests(prev => [...prev, interestInput.trim()]);
+      setInterestInput('');
+      setShowInterestDropdown(false);
+    }
+  };
+  
+  const removeInterest = (interest) => {
+    setInterests(prev => prev.filter(i => i !== interest));
+  };
+  
+  const selectInterest = (interest) => {
+    if (!interests.includes(interest)) {
+      setInterests(prev => [...prev, interest]);
+    }
+    setInterestInput('');
+    setShowInterestDropdown(false);
+  };
+  
+  // Location management - Personal Info
+  const handleLocationInputChange = (e) => {
+    const value = e.target.value;
+    setLocationInput(value);
+    setPersonalInfo(prev => ({ ...prev, location: value }));
+    
+    // Clear error when user starts typing
+    if (errors.location) {
+      setErrors(prev => ({ ...prev, location: '' }));
+    }
+    
+    if (value.trim() === '') {
+      setShowLocationDropdown(false);
+      return;
+    }
+    
+    const filtered = locationOptions.filter(location => 
+      location.toLowerCase().includes(value.toLowerCase())
+    );
+    
+    setFilteredLocations(filtered.slice(0, 8));
+    setShowLocationDropdown(true);
+  };
+  
+  // Location management - Company Location
+  const handleCompanyLocationInputChange = (e) => {
+    const value = e.target.value;
+    setCareerDetails(prev => ({ ...prev, companyLocation: value }));
+    
+    if (value.trim() === '') {
+      setShowLocationDropdown(false);
+      return;
+    }
+    
+    const filtered = locationOptions.filter(location => 
+      location.toLowerCase().includes(value.toLowerCase())
+    );
+    
+    setFilteredLocations(filtered.slice(0, 8));
+    setShowLocationDropdown(true);
+  };
+  
+  // Location management - Institution Location
+  const handleInstitutionLocationInputChange = (e) => {
+    const value = e.target.value;
+    setCareerDetails(prev => ({ ...prev, institutionLocation: value }));
+    
+    if (value.trim() === '') {
+      setShowLocationDropdown(false);
+      return;
+    }
+    
+    const filtered = locationOptions.filter(location => 
+      location.toLowerCase().includes(value.toLowerCase())
+    );
+    
+    setFilteredLocations(filtered.slice(0, 8));
+    setShowLocationDropdown(true);
+  };
+  
+  // Location management - Experience Location
+  const handleExperienceLocationInputChange = (e) => {
+    const value = e.target.value;
+    setCurrentExperience(prev => ({ ...prev, location: value }));
+    
+    if (value.trim() === '') {
+      setShowLocationDropdown(false);
+      return;
+    }
+    
+    const filtered = locationOptions.filter(location => 
+      location.toLowerCase().includes(value.toLowerCase())
+    );
+    
+    setFilteredLocations(filtered.slice(0, 8));
+    setShowLocationDropdown(true);
+  };
+  
+  const selectLocation = (location, type = 'personal') => {
+    if (type === 'personal') {
+      setLocationInput(location);
+      setPersonalInfo(prev => ({ ...prev, location }));
       
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome Message */}
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-gray-800 mb-4">Welcome to Alumni Connect!</h2>
-          <p className="text-lg text-gray-600 mb-2">
-            Let's complete your {isAlumni ? 'alumni' : 'student'} profile to connect you with the community
-          </p>
-          <p className="text-sm text-gray-500">
-            This information helps us create meaningful connections within our alumni network
-          </p>
-        </div>
-        
-        {/* Progress Bar */}
-        <div className="mb-8">
-          <div className="bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-indigo-600 h-2 rounded-full transition-all duration-300" 
-              style={{ width: `${progress}%` }}
-            ></div>
-          </div>
-          <p className="text-sm text-gray-600 mt-2 text-center">
-            {progress}% Complete
-          </p>
-        </div>
-        
-        {/* Form Container */}
-        <form 
-          ref={formRef}
-          onSubmit={handleSubmit}
-          className="bg-white rounded-xl shadow-lg p-8"
-        >
-          {/* Message Display */}
-          {message.text && (
-            <div className={`mb-6 p-3 rounded-lg ${
-              message.type === 'error'
-                ? 'bg-red-100 text-red-700 border-l-4 border-red-500'
-                : 'bg-green-100 text-green-700 border-l-4 border-green-500'
-            }`}>
-              {message.text}
-            </div>
-          )}
-          
-          {/* Personal Details Section */}
-          <div className="mb-8">
-            <div className="flex items-center mb-6">
-              <div className="bg-indigo-100 p-2 rounded-lg mr-3">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
+      // Clear error when user selects a location
+      if (errors.location) {
+        setErrors(prev => ({ ...prev, location: '' }));
+      }
+    } else if (type === 'company') {
+      setCareerDetails(prev => ({ ...prev, companyLocation: location }));
+    } else if (type === 'institution') {
+      setCareerDetails(prev => ({ ...prev, institutionLocation: location }));
+    } else if (type === 'experience') {
+      setCurrentExperience(prev => ({ ...prev, location }));
+    }
+    setShowLocationDropdown(false);
+  };
+  
+  // File upload handling
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setResumeFile(file);
+    }
+  };
+  
+  const triggerFileInput = () => {
+    fileInputRef.current.click();
+  };
+  
+  const removeResumeFile = () => {
+    setResumeFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+  
+  // Form submission
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    // Validate form
+    const isValid = validateForm();
+    
+    if (!isValid) {
+      // Scroll to the first error
+      const firstErrorField = Object.keys(errors)[0];
+      const element = document.querySelector(`[name="${firstErrorField}"]`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        element.focus();
+      }
+      return;
+    }
+    
+    // Form data
+    const formData = {
+      personalInfo,
+      academicInfo,
+      professionalInfo,
+      careerStatus,
+      careerDetails,
+      otherInfo,
+      experiences,
+      skills,
+      interests,
+      resumeFile
+    };
+    
+    console.log('Form submitted:', formData);
+    setShowSuccess(true);
+    
+    // Hide notification after 5 seconds
+    setTimeout(() => {
+      setShowSuccess(false);
+    }, 5000);
+    // Here you would typically send the data to a server
+  };
+  
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setShowSkillDropdown(false);
+      setShowInterestDropdown(false);
+      setShowLocationDropdown(false);
+    };
+    
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, []);
+  
+return (
+    <div className="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen py-8 relative">
+      {/* Success Notification */}
+      {showSuccess && (
+        <div className="fixed top-4 right-4 z-50 animate-fade-in">
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4 shadow-lg max-w-md">
+            <div className="flex items-start space-x-3">
+              <div className="bg-green-100 p-2 rounded-full">
+                <FaCheckCircle className="text-green-600 text-xl" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-800">Personal Details</h3>
+              <div className="flex-1">
+                <h3 className="font-semibold text-green-800">Registration Successful!</h3>
+                <p className="text-green-700 text-sm mt-1">
+                  Your alumni profile has been created successfully. You can now connect with other alumni.
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowSuccess(false)}
+                className="text-green-600 hover:text-green-800 transition-colors duration-200"
+              >
+                <FaTimes />
+              </button>
             </div>
+          </div>
+        </div>
+      )}
+      
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">Alumni Profile Setup</h1>
+          <p className="text-lg text-gray-600">Complete your profile to connect with the alumni network</p>
+        </div>
+        
+        {/* Registration Form */}
+        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xl p-8 space-y-12">
+          
+          {/* Section 1: Personal Information */}
+          <div className="space-y-6">
+            <div className="flex items-center space-x-4 mb-6">
+              <div className="bg-blue-100 p-3 rounded-full">
+                <FaUser className="text-blue-600 text-xl" />
+              </div>
+              <h2 className="text-2xl font-semibold text-gray-900">Personal Information</h2>
+            </div>
+            <div className="section-divider mb-8"></div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
-                <input
-                  type="text"
-                  name="firstName"
-                  value={formData.firstName}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
-                <input
-                  type="text"
-                  name="lastName"
-                  value={formData.lastName}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  required
-                  readOnly
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
-                <input
-                  type="date"
-                  name="dob"
-                  value={formData.dob}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-                <select
-                  name="gender"
-                  value={formData.gender}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                >
-                  <option value="">Select Gender</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="other">Other</option>
-                  <option value="prefer-not-to-say">Prefer not to say</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          
-          {/* Educational Details Section */}
-          {/* Educational Details Section */}
-<div className="mb-8">
-  <div className="flex items-center mb-6">
-    <div className="bg-indigo-100 p-2 rounded-lg mr-3">
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path d="M12 14l9-5-9-5-9 5 9 5z" />
-        <path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
-      </svg>
-    </div>
-    <h3 className="text-xl font-semibold text-gray-800">Educational Details</h3>
-  </div>
-  
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">Degree Type *</label>
-      <select
-        name="degreeType"
-        value={formData.degreeType}
-        onChange={handleInputChange}
-        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-        required
-      >
-        <option value="">Select Degree</option>
-        <option value="bachelor">Bachelor's</option>
-        <option value="master">Master's</option>
-        <option value="doctorate">Doctorate</option>
-        <option value="diploma">Diploma</option>
-        <option value="certificate">Certificate</option>
-      </select>
-    </div>
-    
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">Field of Study *</label>
-      <input
-        type="text"
-        name="fieldOfStudy"
-        value={formData.fieldOfStudy}
-        onChange={handleInputChange}
-        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-        placeholder="e.g., Computer Science"
-        required
-      />
-    </div>
-    
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {isAlumni ? 'Graduation Year' : 'Expected Graduation Year'} *
-      </label>
-      <select
-        name="graduationYear"
-        value={formData.graduationYear}
-        onChange={handleInputChange}
-        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-        required
-      >
-        <option value="">Select Year</option>
-        {graduationYears.map(year => (
-          <option key={year} value={year}>{year}</option>
-        ))}
-      </select>
-    </div>
-    
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">GPA</label>
-      <input
-        type="text"
-        name="gpa"
-        value={formData.gpa}
-        onChange={handleInputChange}
-        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-        placeholder="e.g., 3.8"
-      />
-    </div>
-    
-    {/* Only show Student ID field for students */}
-    {!isAlumni && (
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Student ID *</label>
-        <input
-          type="text"
-          name="studentId"
-          value={formData.studentId}
-          onChange={handleInputChange}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          required
-        />
-      </div>
-    )}
-    
-    {/* For alumni, we'll add a hidden field for studentId that will be populated on the backend */}
-    {isAlumni && (
-      <input
-        type="hidden"
-        name="studentId"
-        value={formData.studentId}
-      />
-    )}
-    
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">Activities & Societies</label>
-      <textarea
-        name="activities"
-        value={formData.activities}
-        onChange={handleInputChange}
-        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-        rows="2"
-        placeholder="e.g., Debate Club, Football Team"
-      ></textarea>
-    </div>
-  </div>
-</div>
-          
-          {/* Professional Experience Section - Only for Alumni */}
-          {isAlumni && (
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center">
-                  <div className="bg-indigo-100 p-2 rounded-lg mr-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-800">Professional Experience</h3>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Full Name *</label>
+                <div className="relative">
+                  <FaUser className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input 
+                    type="text" 
+                    name="fullName"
+                    value={personalInfo.fullName}
+                    onChange={handlePersonalInfoChange}
+                    onBlur={handleBlur}
+                    className={`w-full pl-10 pr-4 py-3 border ${errors.fullName ? 'border-red-500' : 'border-gray-300'} rounded-xl input-focus transition-all duration-200`} 
+                    placeholder="Enter your full name"
+                  />
                 </div>
-                
-                {formData.experiences.length < 5 && (
-                  <button
-                    type="button"
-                    onClick={addExperience}
-                    className="text-indigo-600 hover:text-indigo-800 text-sm font-medium flex items-center"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-                    </svg>
-                    Add Experience
-                  </button>
+                {errors.fullName && (
+                  <p className="text-red-500 text-sm flex items-center mt-1">
+                    <FaExclamationCircle className="mr-1" />
+                    {errors.fullName}
+                  </p>
                 )}
               </div>
               
-              {formData.experiences.map((experience, index) => (
-                <div key={index} className="border border-gray-200 rounded-lg p-4 mb-4">
-                  <div className="flex justify-between items-center mb-4">
-                    <h4 className="font-medium text-gray-800">Experience {index + 1}</h4>
-                    {formData.experiences.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeExperience(index)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Job Title</label>
-                      <input
-                        type="text"
-                        name="jobTitle[]"
-                        value={experience.jobTitle}
-                        onChange={(e) => handleExperienceChange(index, e)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        placeholder="e.g., Software Engineer"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
-                      <input
-                        type="text"
-                        name="company[]"
-                        value={experience.company}
-                        onChange={(e) => handleExperienceChange(index, e)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        placeholder="e.g., Tech Company"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                      <input
-                        type="month"
-                        name="startDate[]"
-                        value={experience.startDate}
-                        onChange={(e) => handleExperienceChange(index, e)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                      <input
-                        type="month"
-                        name="endDate[]"
-                        value={experience.endDate}
-                        onChange={(e) => handleExperienceChange(index, e)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Industry</label>
-                      <input
-                        type="text"
-                        name="industry[]"
-                        value={experience.industry}
-                        onChange={(e) => handleExperienceChange(index, e)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        placeholder="e.g., Technology"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Work Location</label>
-                      <input
-                        type="text"
-                        name="workLocation[]"
-                        value={experience.workLocation}
-                        onChange={(e) => handleExperienceChange(index, e)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        placeholder="e.g., New York, USA"
-                      />
-                    </div>
-                    
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Job Description</label>
-                      <textarea
-                        name="jobDescription[]"
-                        value={experience.jobDescription}
-                        onChange={(e) => handleExperienceChange(index, e)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        rows="2"
-                        placeholder="Brief description of your role and responsibilities"
-                      ></textarea>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          
-          {/* Skills Section */}
-          <div className="mb-8">
-            <div className="flex items-center mb-6">
-              <div className="bg-indigo-100 p-2 rounded-lg mr-3">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-800">Skills</h3>
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Add Skills</label>
-              <div className="flex">
-                <input
-                  type="text"
-                  value={skillInput}
-                  onChange={(e) => setSkillInput(e.target.value)}
-                  className="flex-grow px-4 py-2 border border-gray-300 rounded-l-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  placeholder="e.g., JavaScript, Project Management"
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addSkill(skillInput);
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => addSkill(skillInput)}
-                  className="bg-indigo-600 text-white px-4 py-2 rounded-r-lg hover:bg-indigo-700"
-                >
-                  Add
-                </button>
-              </div>
-            </div>
-            
-            <div className="flex flex-wrap gap-2">
-              {formData.skills.map((skill, index) => (
-                <div key={index} className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full flex items-center">
-                  <span>{skill}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeSkill(index)}
-                    className="ml-2 text-indigo-600 hover:text-indigo-900"
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Gender *</label>
+                <div className="relative">
+                  <FaVenusMars className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <select 
+                    name="gender"
+                    value={personalInfo.gender}
+                    onChange={handlePersonalInfoChange}
+                    onBlur={handleBlur}
+                    className={`w-full pl-10 pr-4 py-3 border ${errors.gender ? 'border-red-500' : 'border-gray-300'} rounded-xl input-focus transition-all duration-200 appearance-none bg-white`}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
-                  </button>
+                    <option value="">Select Gender</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                    <option value="prefer-not-to-say">Prefer not to say</option>
+                  </select>
                 </div>
-              ))}
+                {errors.gender && (
+                  <p className="text-red-500 text-sm flex items-center mt-1">
+                    <FaExclamationCircle className="mr-1" />
+                    {errors.gender}
+                  </p>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Date of Birth *</label>
+                <div className="relative">
+                  <FaCalendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input 
+                    type="date" 
+                    name="dob"
+                    value={personalInfo.dob}
+                    onChange={handlePersonalInfoChange}
+                    onBlur={handleBlur}
+                    className={`w-full pl-10 pr-4 py-3 border ${errors.dob ? 'border-red-500' : 'border-gray-300'} rounded-xl input-focus transition-all duration-200`}
+                  />
+                </div>
+                {errors.dob && (
+                  <p className="text-red-500 text-sm flex items-center mt-1">
+                    <FaExclamationCircle className="mr-1" />
+                    {errors.dob}
+                  </p>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Personal Email *</label>
+                <div className="relative">
+                  <FaEnvelope className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input 
+                    type="email" 
+                    name="personalEmail"
+                    value={personalInfo.personalEmail}
+                    onChange={handlePersonalInfoChange}
+                    onBlur={handleBlur}
+                    className={`w-full pl-10 pr-4 py-3 border ${errors.personalEmail ? 'border-red-500' : 'border-gray-300'} rounded-xl input-focus transition-all duration-200`} 
+                    placeholder="your.email@example.com"
+                  />
+                </div>
+                {errors.personalEmail && (
+                  <p className="text-red-500 text-sm flex items-center mt-1">
+                    <FaExclamationCircle className="mr-1" />
+                    {errors.personalEmail}
+                  </p>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Phone Number *</label>
+                <div className="relative">
+                  <FaPhone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input 
+                    type="tel" 
+                    name="phone"
+                    value={personalInfo.phone}
+                    onChange={handlePersonalInfoChange}
+                    onBlur={handleBlur}
+                    className={`w-full pl-10 pr-4 py-3 border ${errors.phone ? 'border-red-500' : 'border-gray-300'} rounded-xl input-focus transition-all duration-200`} 
+                    placeholder="+1 (555) 123-4567"
+                  />
+                </div>
+                {errors.phone && (
+                  <p className="text-red-500 text-sm flex items-center mt-1">
+                    <FaExclamationCircle className="mr-1" />
+                    {errors.phone}
+                  </p>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Location *</label>
+                <div className="relative">
+                  <FaMapMarkerAlt className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input 
+                    type="text" 
+                    name="location"
+                    value={personalInfo.location}
+                    onChange={handleLocationInputChange}
+                    onClick={(e) => e.stopPropagation()}
+                    onBlur={handleBlur}
+                    className={`w-full pl-10 pr-4 py-3 border ${errors.location ? 'border-red-500' : 'border-gray-300'} rounded-xl input-focus transition-all duration-200`} 
+                    placeholder="City, State, Country"
+                  />
+                  {showLocationDropdown && (
+                    <div 
+                      className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto mt-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {filteredLocations.map(location => (
+                        <div 
+                          key={location}
+                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0" 
+                          onClick={() => selectLocation(location, 'personal')}
+                        >
+                          {location}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {errors.location && (
+                  <p className="text-red-500 text-sm flex items-center mt-1">
+                    <FaExclamationCircle className="mr-1" />
+                    {errors.location}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
           
-          {/* Additional Information Section */}
-          <div className="mb-8">
-            <div className="flex items-center mb-6">
-              <div className="bg-indigo-100 p-2 rounded-lg mr-3">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+          {/* Section 2: Academic Information */}
+          <div className="space-y-6">
+            <div className="flex items-center space-x-4 mb-6">
+              <div className="bg-green-100 p-3 rounded-full">
+                <FaGraduationCap className="text-green-600 text-xl" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-800">Additional Information</h3>
+              <h2 className="text-2xl font-semibold text-gray-900">Academic Information</h2>
             </div>
+            <div className="section-divider mb-8"></div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
-                <textarea
-                  name="bio"
-                  value={formData.bio}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  rows="3"
-                  placeholder="Tell us about yourself, your achievements, and goals"
-                ></textarea>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">College Email *</label>
+                <div className="relative">
+                  <FaUniversity className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input 
+                    type="email" 
+                    name="collegeEmail"
+                    value={academicInfo.collegeEmail}
+                    onChange={handleAcademicInfoChange}
+                    onBlur={handleBlur}
+                    className={`w-full pl-10 pr-4 py-3 border ${errors.collegeEmail ? 'border-red-500' : 'border-gray-300'} rounded-xl input-focus transition-all duration-200`} 
+                    placeholder="student@university.edu"
+                  />
+                </div>
+                {errors.collegeEmail && (
+                  <p className="text-red-500 text-sm flex items-center mt-1">
+                    <FaExclamationCircle className="mr-1" />
+                    {errors.collegeEmail}
+                  </p>
+                )}
               </div>
               
-              {isAlumni && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">LinkedIn Profile</label>
-                    <input
-                      type="text"
-                      name="linkedin"
-                      value={formData.linkedin}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                      placeholder="https://linkedin.com/in/yourprofile"
-                    />
-                  </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Enrollment Number *</label>
+                <div className="relative">
+                  <FaIdCard className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input 
+                    type="text" 
+                    name="enrollmentNumber"
+                    value={academicInfo.enrollmentNumber}
+                    onChange={handleAcademicInfoChange}
+                    onBlur={handleBlur}
+                    className={`w-full pl-10 pr-4 py-3 border ${errors.enrollmentNumber ? 'border-red-500' : 'border-gray-300'} rounded-xl input-focus transition-all duration-200`} 
+                    placeholder="Enter enrollment number"
+                  />
+                </div>
+                {errors.enrollmentNumber && (
+                  <p className="text-red-500 text-sm flex items-center mt-1">
+                    <FaExclamationCircle className="mr-1" />
+                    {errors.enrollmentNumber}
+                  </p>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Degree *</label>
+                <div className="relative">
+                  <FaCertificate className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <select 
+                    name="degree"
+                    value={academicInfo.degree}
+                    onChange={handleAcademicInfoChange}
+                    onBlur={handleBlur}
+                    className={`w-full pl-10 pr-4 py-3 border ${errors.degree ? 'border-red-500' : 'border-gray-300'} rounded-xl input-focus transition-all duration-200 appearance-none bg-white`}
+                  >
+                    <option value="">Select Degree</option>
+                    {degreeOptions.map(degree => (
+                      <option key={degree} value={degree.toLowerCase().replace(/\s+/g, '-')}>
+                        {degree}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {errors.degree && (
+                  <p className="text-red-500 text-sm flex items-center mt-1">
+                    <FaExclamationCircle className="mr-1" />
+                    {errors.degree}
+                  </p>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Branch *</label>
+                <div className="relative">
+                  <FaCodeBranch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <select 
+                    name="branch"
+                    value={academicInfo.branch}
+                    onChange={handleAcademicInfoChange}
+                    onBlur={handleBlur}
+                    className={`w-full pl-10 pr-4 py-3 border ${errors.branch ? 'border-red-500' : 'border-gray-300'} rounded-xl input-focus transition-all duration-200 appearance-none bg-white`}
+                  >
+                    <option value="">Select Branch</option>
+                    {branchOptions.map(branch => (
+                      <option key={branch} value={branch.toLowerCase().replace(/\s+/g, '-')}>
+                        {branch}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {errors.branch && (
+                  <p className="text-red-500 text-sm flex items-center mt-1">
+                    <FaExclamationCircle className="mr-1" />
+                    {errors.branch}
+                  </p>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Graduation Year *</label>
+                <div className="relative">
+                  <FaCalendarAlt className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <select 
+                    name="graduationYear"
+                    value={academicInfo.graduationYear}
+                    onChange={handleAcademicInfoChange}
+                    onBlur={handleBlur}
+                    className={`w-full pl-10 pr-4 py-3 border ${errors.graduationYear ? 'border-red-500' : 'border-gray-300'} rounded-xl input-focus transition-all duration-200 appearance-none bg-white`}
+                  >
+                    <option value="">Select Year</option>
+                    {Array.from({ length: 30 }, (_, i) => {
+                      const year = new Date().getFullYear() - i;
+                      return (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      );
+                    })}
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                {errors.graduationYear && (
+                  <p className="text-red-500 text-sm flex items-center mt-1">
+                    <FaExclamationCircle className="mr-1" />
+                    {errors.graduationYear}
+                  </p>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">CGPA (Optional)</label>
+                <div className="relative">
+                  <FaGraduationCap className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input 
+                    type="text" 
+                    name="cgpa"
+                    value={academicInfo.cgpa}
+                    onChange={handleAcademicInfoChange}
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl input-focus transition-all duration-200" 
+                    placeholder="e.g., 8.5 or 3.8"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Section 3: Career Status */}
+          <div className="space-y-8">
+            <div className="flex items-center space-x-4 mb-6">
+              <div className="bg-purple-100 p-3 rounded-full">
+                <FaBriefcase className="text-purple-600 text-xl" />
+              </div>
+              <h2 className="text-2xl font-semibold text-gray-900">Career Status</h2>
+            </div>
+            <div className="section-divider mb-8"></div>
+            
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Current Career Status *</label>
+                {errors.careerStatus && (
+                  <p className="text-red-500 text-sm flex items-center mb-2">
+                    <FaExclamationCircle className="mr-1" />
+                    {errors.careerStatus}
+                  </p>
+                )}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCareerStatus('working');
+                      if (errors.careerStatus) {
+                        setErrors(prev => ({ ...prev, careerStatus: '' }));
+                      }
+                    }}
+                    className={`py-3 px-4 rounded-xl border transition-all duration-200 flex flex-col items-center justify-center ${
+                      careerStatus === 'working'
+                        ? 'bg-blue-50 border-blue-500 text-blue-700'
+                        : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <FaBuilding className="text-lg mb-1" />
+                    <span className="text-sm font-medium">Currently Working</span>
+                  </button>
                   
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Personal Website</label>
-                    <input
-                      type="text"
-                      name="website"
-                      value={formData.website}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                      placeholder="https://yourwebsite.com"
-                    />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCareerStatus('entrepreneur');
+                      if (errors.careerStatus) {
+                        setErrors(prev => ({ ...prev, careerStatus: '' }));
+                      }
+                    }}
+                    className={`py-3 px-4 rounded-xl border transition-all duration-200 flex flex-col items-center justify-center ${
+                      careerStatus === 'entrepreneur'
+                        ? 'bg-blue-50 border-blue-500 text-blue-700'
+                        : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <FaLightbulb className="text-lg mb-1" />
+                    <span className="text-sm font-medium">Entrepreneur</span>
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCareerStatus('studies');
+                      if (errors.careerStatus) {
+                        setErrors(prev => ({ ...prev, careerStatus: '' }));
+                      }
+                    }}
+                    className={`py-3 px-4 rounded-xl border transition-all duration-200 flex flex-col items-center justify-center ${
+                      careerStatus === 'studies'
+                        ? 'bg-blue-50 border-blue-500 text-blue-700'
+                        : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <FaGraduation className="text-lg mb-1" />
+                    <span className="text-sm font-medium">Higher Studies</span>
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCareerStatus('not-working');
+                      if (errors.careerStatus) {
+                        setErrors(prev => ({ ...prev, careerStatus: '' }));
+                      }
+                    }}
+                    className={`py-3 px-4 rounded-xl border transition-all duration-200 flex flex-col items-center justify-center ${
+                      careerStatus === 'not-working'
+                        ? 'bg-blue-50 border-blue-500 text-blue-700'
+                        : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <FaSearch className="text-lg mb-1" />
+                    <span className="text-sm font-medium">Not Working</span>
+                  </button>
+                </div>
+              </div>
+              
+              {/* Conditional Fields Based on Career Status */}
+              {careerStatus === 'working' && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <FaBuilding className="text-blue-600 mr-2" />
+                    Currently Working Details
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">Company Name *</label>
+                      <input 
+                        type="text" 
+                        name="companyName"
+                        value={careerDetails.companyName}
+                        onChange={handleCareerDetailsChange}
+                        onBlur={handleBlur}
+                        className={`w-full px-4 py-2 border ${errors.companyName ? 'border-red-500' : 'border-gray-300'} rounded-lg input-focus transition-all duration-200`} 
+                        placeholder="Company name"
+                      />
+                      {errors.companyName && (
+                        <p className="text-red-500 text-sm flex items-center mt-1">
+                          <FaExclamationCircle className="mr-1" />
+                          {errors.companyName}
+                        </p>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">Job Title/Role *</label>
+                      <input 
+                        type="text" 
+                        name="jobTitle"
+                        value={careerDetails.jobTitle}
+                        onChange={handleCareerDetailsChange}
+                        onBlur={handleBlur}
+                        className={`w-full px-4 py-2 border ${errors.jobTitle ? 'border-red-500' : 'border-gray-300'} rounded-lg input-focus transition-all duration-200`} 
+                        placeholder="Your role/position"
+                      />
+                      {errors.jobTitle && (
+                        <p className="text-red-500 text-sm flex items-center mt-1">
+                          <FaExclamationCircle className="mr-1" />
+                          {errors.jobTitle}
+                        </p>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">Company Location</label>
+                      <div className="relative">
+                        <FaMapMarkerAlt className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                        <input 
+                          type="text" 
+                          name="companyLocation"
+                          value={careerDetails.companyLocation}
+                          onChange={handleCompanyLocationInputChange}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg input-focus transition-all duration-200" 
+                          placeholder="City, State/Country"
+                        />
+                        {showLocationDropdown && (
+                          <div 
+                            className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto mt-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {filteredLocations.map(location => (
+                              <div 
+                                key={location}
+                                className="px-4 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0" 
+                                onClick={() => selectLocation(location, 'company')}
+                              >
+                                {location}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">Years of Experience</label>
+                      <select 
+                        name="yearsOfExperience"
+                        value={careerDetails.yearsOfExperience}
+                        onChange={handleCareerDetailsChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus transition-all duration-200 appearance-none bg-white"
+                      >
+                        <option value="">Select Experience</option>
+                        <option value="0-1">0-1 years</option>
+                        <option value="1-3">1-3 years</option>
+                        <option value="3-5">3-5 years</option>
+                        <option value="5-10">5-10 years</option>
+                        <option value="10+">10+ years</option>
+                      </select>
+                    </div>
                   </div>
-                </>
+                </div>
+              )}
+              
+              {careerStatus === 'entrepreneur' && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <FaLightbulb className="text-blue-600 mr-2" />
+                    Entrepreneur Details
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">Startup/Business Name *</label>
+                      <input 
+                        type="text" 
+                        name="startupName"
+                        value={careerDetails.startupName}
+                        onChange={handleCareerDetailsChange}
+                        onBlur={handleBlur}
+                        className={`w-full px-4 py-2 border ${errors.startupName ? 'border-red-500' : 'border-gray-300'} rounded-lg input-focus transition-all duration-200`} 
+                        placeholder="Startup or business name"
+                      />
+                      {errors.startupName && (
+                        <p className="text-red-500 text-sm flex items-center mt-1">
+                          <FaExclamationCircle className="mr-1" />
+                          {errors.startupName}
+                        </p>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">Industry/Domain *</label>
+                      <select 
+                        name="industry"
+                        value={careerDetails.industry}
+                        onChange={handleCareerDetailsChange}
+                        onBlur={handleBlur}
+                        className={`w-full px-4 py-2 border ${errors.industry ? 'border-red-500' : 'border-gray-300'} rounded-lg input-focus transition-all duration-200 appearance-none bg-white`}
+                      >
+                        <option value="">Select Industry</option>
+                        {industryOptions.map(industry => (
+                          <option key={industry} value={industry.toLowerCase().replace(/\s+/g, '-')}>
+                            {industry}
+                          </option>
+                        ))}
+                      </select>
+                      {errors.industry && (
+                        <p className="text-red-500 text-sm flex items-center mt-1">
+                          <FaExclamationCircle className="mr-1" />
+                          {errors.industry}
+                        </p>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">Role in the Startup *</label>
+                      <input 
+                        type="text" 
+                        name="roleInStartup"
+                        value={careerDetails.roleInStartup}
+                        onChange={handleCareerDetailsChange}
+                        onBlur={handleBlur}
+                        className={`w-full px-4 py-2 border ${errors.roleInStartup ? 'border-red-500' : 'border-gray-300'} rounded-lg input-focus transition-all duration-200`} 
+                        placeholder="Your role (e.g., CEO, Founder, CTO)"
+                      />
+                      {errors.roleInStartup && (
+                        <p className="text-red-500 text-sm flex items-center mt-1">
+                          <FaExclamationCircle className="mr-1" />
+                          {errors.roleInStartup}
+                        </p>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">Years Running the Startup</label>
+                      <select 
+                        name="yearsRunning"
+                        value={careerDetails.yearsRunning}
+                        onChange={handleCareerDetailsChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus transition-all duration-200 appearance-none bg-white"
+                      >
+                        <option value="">Select Duration</option>
+                        <option value="0-1">Less than 1 year</option>
+                        <option value="1-2">1-2 years</option>
+                        <option value="2-5">2-5 years</option>
+                        <option value="5+">5+ years</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {careerStatus === 'studies' && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <FaGraduation className="text-blue-600 mr-2" />
+                    Higher Studies / Research Details
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">Institution/University Name *</label>
+                      <input 
+                        type="text" 
+                        name="institutionName"
+                        value={careerDetails.institutionName}
+                        onChange={handleCareerDetailsChange}
+                        onBlur={handleBlur}
+                        className={`w-full px-4 py-2 border ${errors.institutionName ? 'border-red-500' : 'border-gray-300'} rounded-lg input-focus transition-all duration-200`} 
+                        placeholder="University or institution name"
+                      />
+                      {errors.institutionName && (
+                        <p className="text-red-500 text-sm flex items-center mt-1">
+                          <FaExclamationCircle className="mr-1" />
+                          {errors.institutionName}
+                        </p>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">Course/Research Area *</label>
+                      <input 
+                        type="text" 
+                        name="courseArea"
+                        value={careerDetails.courseArea}
+                        onChange={handleCareerDetailsChange}
+                        onBlur={handleBlur}
+                        className={`w-full px-4 py-2 border ${errors.courseArea ? 'border-red-500' : 'border-gray-300'} rounded-lg input-focus transition-all duration-200`} 
+                        placeholder="Course name or research area"
+                      />
+                      {errors.courseArea && (
+                        <p className="text-red-500 text-sm flex items-center mt-1">
+                          <FaExclamationCircle className="mr-1" />
+                          {errors.courseArea}
+                        </p>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">Location</label>
+                      <div className="relative">
+                        <FaMapMarkerAlt className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                        <input 
+                          type="text" 
+                          name="institutionLocation"
+                          value={careerDetails.institutionLocation}
+                          onChange={handleInstitutionLocationInputChange}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg input-focus transition-all duration-200" 
+                          placeholder="City, State/Country"
+                        />
+                        {showLocationDropdown && (
+                          <div 
+                            className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto mt-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {filteredLocations.map(location => (
+                              <div 
+                                key={location}
+                                className="px-4 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0" 
+                                onClick={() => selectLocation(location, 'institution')}
+                              >
+                                {location}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">Expected Graduation Year</label>
+                      <select 
+                        name="expectedGraduationYear"
+                        value={careerDetails.expectedGraduationYear}
+                        onChange={handleCareerDetailsChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus transition-all duration-200 appearance-none bg-white"
+                      >
+                        <option value="">Select Year</option>
+                        {Array.from({ length: 10 }, (_, i) => {
+                          const year = new Date().getFullYear() + i;
+                          return (
+                            <option key={year} value={year}>
+                              {year}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {careerStatus === 'not-working' && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <FaSearch className="text-blue-600 mr-2" />
+                    Career Focus Details
+                  </h3>
+                  
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">Career Goal/Focus *</label>
+                      <textarea 
+                        name="careerGoal"
+                        value={careerDetails.careerGoal}
+                        onChange={handleCareerDetailsChange}
+                        onBlur={handleBlur}
+                        className={`w-full px-4 py-2 border ${errors.careerGoal ? 'border-red-500' : 'border-gray-300'} rounded-lg input-focus transition-all duration-200 resize-none`} 
+                        rows="3" 
+                        placeholder="Describe your career goals or focus areas..."
+                      ></textarea>
+                      {errors.careerGoal && (
+                        <p className="text-red-500 text-sm flex items-center mt-1">
+                          <FaExclamationCircle className="mr-1" />
+                          {errors.careerGoal}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           </div>
           
-          {/* Privacy Settings Section */}
-          <div className="mb-8">
-            <div className="flex items-center mb-6">
-              <div className="bg-indigo-100 p-2 rounded-lg mr-3">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
+          {/* Section 4: Professional Experience */}
+          <div className="space-y-8">
+            <div className="flex items-center space-x-4 mb-6">
+              <div className="bg-purple-100 p-3 rounded-full">
+                <FaBriefcase className="text-purple-600 text-xl" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-800">Privacy Settings</h3>
+              <h2 className="text-2xl font-semibold text-gray-900">Professional Experience</h2>
             </div>
+            <div className="section-divider mb-8"></div>
             
-            <div className="space-y-3">
-              <label className="flex items-start">
-                <input
-                  type="checkbox"
-                  name="privacy[]"
-                  value="profile-visible"
-                  checked={formData.privacy.includes('profile-visible')}
-                  onChange={handleInputChange}
-                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
-                />
-                <span className="ml-2 text-sm text-gray-700">
-                  Make my profile visible to other alumni and students
-                </span>
-              </label>
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <h3 className="text-lg font-semibold text-gray-900">Work Experience</h3>
+                  <span className="text-sm text-gray-500">(Optional)</span>
+                </div>
+              </div>
               
-              <label className="flex items-start">
-                <input
-                  type="checkbox"
-                  name="privacy[]"
-                  value="email-notifications"
-                  checked={formData.privacy.includes('email-notifications')}
-                  onChange={handleInputChange}
-                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
-                />
-                <span className="ml-2 text-sm text-gray-700">
-                  Send me email notifications about events and opportunities
-                </span>
-              </label>
+              {/* Experience Input Form */}
+              <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Company Name</label>
+                    <input 
+                      type="text" 
+                      name="company"
+                      value={currentExperience.company}
+                      onChange={handleExperienceInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg input-focus transition-all duration-200" 
+                      placeholder="Company name"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Job Title</label>
+                    <input 
+                      type="text" 
+                      name="title"
+                      value={currentExperience.title}
+                      onChange={handleExperienceInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg input-focus transition-all duration-200" 
+                      placeholder="Your role/position"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Location</label>
+                    <div className="relative">
+                      <FaMapMarkerAlt className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                      <input 
+                        type="text" 
+                        name="location"
+                        value={currentExperience.location}
+                        onChange={handleExperienceLocationInputChange}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg input-focus transition-all duration-200" 
+                        placeholder="City, State/Country"
+                      />
+                      {showLocationDropdown && (
+                        <div 
+                          className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto mt-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {filteredLocations.map(location => (
+                            <div 
+                              key={location}
+                              className="px-4 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0" 
+                              onClick={() => selectLocation(location, 'experience')}
+                            >
+                              {location}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Duration</label>
+                    <input 
+                      type="text" 
+                      name="duration"
+                      value={currentExperience.duration}
+                      onChange={handleExperienceInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg input-focus transition-all duration-200" 
+                      placeholder="e.g., Jan 2020 - Present"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Description</label>
+                  <textarea 
+                    name="description"
+                    value={currentExperience.description}
+                    onChange={handleExperienceInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg input-focus transition-all duration-200 resize-none" 
+                    rows="2" 
+                    placeholder="Brief description of your role and achievements..."
+                  ></textarea>
+                </div>
+                
+                <div className="flex justify-end">
+                  <button 
+                    type="button" 
+                    onClick={addExperience}
+                    disabled={!currentExperience.company.trim() || !currentExperience.title.trim()}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center space-x-2 ${
+                      !currentExperience.company.trim() || !currentExperience.title.trim()
+                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                        : 'bg-purple-600 hover:bg-purple-700 text-white'
+                    }`}
+                  >
+                    <FaPlus />
+                    <span>Add Experience</span>
+                  </button>
+                </div>
+              </div>
               
-              <label className="flex items-start">
-                <input
-                  type="checkbox"
-                  name="privacy[]"
-                  value="contact-alumni"
-                  checked={formData.privacy.includes('contact-alumni')}
-                  onChange={handleInputChange}
-                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
-                />
-                <span className="ml-2 text-sm text-gray-700">
-                  Allow other alumni to contact me for mentorship opportunities
-                </span>
-              </label>
+              {/* Added Experiences Display */}
+              <div className="space-y-4">
+                {experiences.map(exp => (
+                  <div key={exp.id} className="bg-white border border-gray-200 rounded-lg p-4 relative">
+                    <button 
+                      type="button" 
+                      onClick={() => removeExperience(exp.id)}
+                      className="absolute top-3 right-3 text-red-500 hover:text-red-700 transition-colors duration-200"
+                    >
+                      <FaTimes />
+                    </button>
+                    
+                    <div className="flex items-start space-x-3">
+                      <div className="bg-purple-100 p-2 rounded-lg">
+                        <FaBriefcase className="text-purple-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900">{exp.title}</h4>
+                        <p className="text-gray-700">{exp.company}</p>
+                        {exp.location && (
+                          <div className="flex items-center text-sm text-gray-600 mt-1">
+                            <FaMapMarkerAlt className="mr-1" />
+                            <span>{exp.location}</span>
+                          </div>
+                        )}
+                        {exp.duration && (
+                          <div className="flex items-center text-sm text-gray-600 mt-1">
+                            <FaCalendar className="mr-1" />
+                            <span>{exp.duration}</span>
+                          </div>
+                        )}
+                        {exp.description && (
+                          <p className="text-gray-600 mt-2 text-sm">{exp.description}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                {experiences.length === 0 && (
+                  <p className="text-sm text-gray-600 italic">No experiences added yet. This section is optional.</p>
+                )}
+              </div>
             </div>
           </div>
           
-          {/* Terms and Submit */}
-          <div className="border-t pt-8">
-            <div className="mb-6">
-              <label className="flex items-start">
+          {/* Section 5: Skills & Interests */}
+          <div className="space-y-8">
+            <div className="flex items-center space-x-4 mb-6">
+              <div className="bg-purple-100 p-3 rounded-full">
+                <FaTools className="text-purple-600 text-xl" />
+              </div>
+              <h2 className="text-2xl font-semibold text-gray-900">Skills & Interests</h2>
+            </div>
+            <div className="section-divider mb-8"></div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Skills Section */}
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 space-y-4">
+                <div className="flex items-center space-x-3">
+                  <FaTools className="text-purple-600 text-lg" />
+                  <h3 className="text-lg font-semibold text-gray-900">Skills & Technologies</h3>
+                </div>
+                
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <div className="relative flex-1">
+                      <FaWrench className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" />
+                      <input 
+                        type="text" 
+                        value={skillInput}
+                        onChange={handleSkillInputChange}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg input-focus transition-all duration-200" 
+                        placeholder="Type a skill and press Enter" 
+                        autoComplete="off"
+                      />
+                      {showSkillDropdown && (
+                        <div 
+                          className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {filteredSkills.map(skill => (
+                            <div 
+                              key={skill}
+                              className="px-4 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0" 
+                              onClick={() => selectSkill(skill)}
+                            >
+                              {skill}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={addSkill}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors duration-200"
+                    >
+                      <FaPlus />
+                    </button>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-2 min-h-[40px] p-3 border border-gray-200 rounded-lg bg-white">
+                    {skills.length === 0 ? (
+                      <span className="text-gray-500 text-sm">No skills added yet. Type above and press Enter or click + to add.</span>
+                    ) : (
+                      skills.map(skill => (
+                        <span key={skill} className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                          {skill}
+                          <button 
+                            type="button" 
+                            onClick={() => removeSkill(skill)}
+                            className="ml-2 text-blue-600 hover:text-blue-800 transition-colors duration-200"
+                          >
+                            <FaTimes className="text-xs" />
+                          </button>
+                        </span>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Areas of Interest Section */}
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 space-y-4">
+                <div className="flex items-center space-x-3">
+                  <FaStar className="text-purple-600 text-lg" />
+                  <h3 className="text-lg font-semibold text-gray-900">Areas of Interest</h3>
+                </div>
+                
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <div className="relative flex-1">
+                      <FaHeart className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" />
+                      <input 
+                        type="text" 
+                        value={interestInput}
+                        onChange={handleInterestInputChange}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg input-focus transition-all duration-200" 
+                        placeholder="Type an interest and press Enter" 
+                        autoComplete="off"
+                      />
+                      {showInterestDropdown && (
+                        <div 
+                          className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {filteredInterests.map(interest => (
+                            <div 
+                              key={interest}
+                              className="px-4 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0" 
+                              onClick={() => selectInterest(interest)}
+                            >
+                              {interest}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={addInterest}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-medium transition-colors duration-200"
+                    >
+                      <FaPlus />
+                    </button>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-2 min-h-[40px] p-3 border border-gray-200 rounded-lg bg-white">
+                    {interests.length === 0 ? (
+                      <span className="text-gray-500 text-sm">No interests added yet. Type above and press Enter or click + to add.</span>
+                    ) : (
+                      interests.map(interest => (
+                        <span key={interest} className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 border border-green-200">
+                          {interest}
+                          <button 
+                            type="button" 
+                            onClick={() => removeInterest(interest)}
+                            className="ml-2 text-green-600 hover:text-green-800 transition-colors duration-200"
+                          >
+                            <FaTimes className="text-xs" />
+                          </button>
+                        </span>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Section 6: Other Essentials */}
+          <div className="space-y-6">
+            <div className="flex items-center space-x-4 mb-6">
+              <div className="bg-orange-100 p-3 rounded-full">
+                <FaStar className="text-orange-600 text-xl" />
+              </div>
+              <h2 className="text-2xl font-semibold text-gray-900">Other Essentials</h2>
+            </div>
+            <div className="section-divider mb-8"></div>
+            
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Bio</label>
+                <div className="relative">
+                  <FaUserEdit className="absolute left-3 top-4 text-gray-400" />
+                  <textarea 
+                    name="bio"
+                    value={otherInfo.bio}
+                    onChange={handleOtherInfoChange}
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl input-focus transition-all duration-200 resize-none" 
+                    rows="4" 
+                    placeholder="Tell us about yourself, your interests, and what you're passionate about..."
+                  ></textarea>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">LinkedIn ID</label>
+                  <div className="relative">
+                    <FaLinkedin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input 
+                      type="url" 
+                      name="linkedin"
+                      value={otherInfo.linkedin}
+                      onChange={handleOtherInfoChange}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl input-focus transition-all duration-200" 
+                      placeholder="https://linkedin.com/in/yourprofile"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">GitHub ID</label>
+                  <div className="relative">
+                    <FaGithub className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input 
+                      type="url" 
+                      name="github"
+                      value={otherInfo.github}
+                      onChange={handleOtherInfoChange}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl input-focus transition-all duration-200" 
+                      placeholder="https://github.com/yourusername"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Portfolio</label>
+                  <div className="relative">
+                    <FaGlobe className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input 
+                      type="url" 
+                      name="portfolio"
+                      value={otherInfo.portfolio}
+                      onChange={handleOtherInfoChange}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl input-focus transition-all duration-200" 
+                      placeholder="https://yourportfolio.com"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Resume Upload</label>
+                  <div className="relative">
+                    <input 
+                      type="file" 
+                      ref={fileInputRef}
+                      onChange={handleFileUpload}
+                      accept=".pdf,.doc,.docx" 
+                      className="hidden"
+                    />
+                    <div className="flex items-center">
+                      <button 
+                        type="button" 
+                        onClick={triggerFileInput}
+                        className="flex-1 flex items-center justify-center h-12 border-2 border-dashed border-gray-300 rounded-l-xl hover:border-blue-400 transition-colors duration-200"
+                      >
+                        <div className="flex items-center space-x-2 text-gray-500">
+                          <FaUpload />
+                          <span className="text-sm">
+                            {resumeFile ? resumeFile.name : 'Choose file or drag here'}
+                          </span>
+                        </div>
+                      </button>
+                      {resumeFile && (
+                        <button 
+                          type="button" 
+                          onClick={removeResumeFile}
+                          className="bg-red-100 hover:bg-red-200 text-red-600 h-12 px-4 rounded-r-xl transition-colors duration-200"
+                          title="Remove file"
+                        >
+                          <FaTimes />
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Accepted formats: PDF, DOC, DOCX (Max 5MB)</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Terms and Policy Agreement */}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 space-y-4">
+            <div className="flex items-center space-x-3">
+              <FaShieldAlt className="text-blue-600 text-lg" />
+              <h3 className="text-lg font-semibold text-gray-900">Terms & Privacy</h3>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex items-start space-x-3">
                 <input 
                   type="checkbox" 
-                  name="terms" 
-                  required 
-                  checked={formData.terms}
-                  onChange={handleInputChange}
-                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1" 
+                  id="termsAccept"
+                  name="termsAccept"
+                  checked={otherInfo.termsAccept}
+                  onChange={handleOtherInfoChange}
+                  onBlur={handleBlur}
+                  className={`mt-1 h-4 w-4 text-blue-600 ${errors.termsAccept ? 'border-red-500' : 'border-gray-300'} rounded focus:ring-blue-500 focus:ring-2`}
                 />
-                <span className="ml-2 text-sm text-gray-700">
+                <label htmlFor="termsAccept" className="text-sm text-gray-700 leading-relaxed">
                   I agree to the{' '}
                   <button 
-                    type="button" 
-                    className="text-indigo-600 hover:text-indigo-800 underline bg-transparent border-none p-0 cursor-pointer"
-                    onClick={() => alert('Terms of Service would open here')}
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      // Handle terms of service click
+                    }}
+                    className="text-blue-600 hover:text-blue-800 underline font-medium"
                   >
                     Terms of Service
                   </button>{' '}
                   and{' '}
                   <button 
-                    type="button" 
-                    className="text-indigo-600 hover:text-indigo-800 underline bg-transparent border-none p-0 cursor-pointer"
-                    onClick={() => alert('Privacy Policy would open here')}
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      // Handle privacy policy click
+                    }}
+                    className="text-blue-600 hover:text-blue-800 underline font-medium"
                   >
                     Privacy Policy
-                  </button>{' '}
-                  *
-                </span>
-              </label>
+                  </button>
+                  . I understand that my information will be used to connect me with the alumni network and may be shared with other verified alumni members. *
+                </label>
+              </div>
+              {errors.termsAccept && (
+                <p className="text-red-500 text-sm flex items-center mt-1">
+                  <FaExclamationCircle className="mr-1" />
+                  {errors.termsAccept}
+                </p>
+              )}
+              
+              <div className="flex items-start space-x-3">
+                <input 
+                  type="checkbox" 
+                  id="emailConsent"
+                  name="emailConsent"
+                  checked={otherInfo.emailConsent}
+                  onChange={handleOtherInfoChange}
+                  className="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                />
+                <label htmlFor="emailConsent" className="text-sm text-gray-700 leading-relaxed">
+                  I would like to receive updates about alumni events, networking opportunities, and relevant career information via email. (Optional)
+                </label>
+              </div>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start space-x-2">
+                  <FaInfoCircle className="text-blue-600 mt-0.5" />
+                  <div className="text-sm text-blue-800">
+                    <p className="font-medium mb-1">Your Privacy Matters</p>
+                    <p>We protect your personal information and only share it with verified alumni members for networking purposes. You can update your privacy preferences anytime after registration.</p>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="flex justify-between items-center">
-              <button 
-                type="button" 
-                onClick={saveAsDraft}
-                className="bg-gray-300 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-400 transition-colors"
-              >
-                Save as Draft
-              </button>
-              <button 
-                type="submit" 
-                disabled={loading}
-                className="bg-indigo-600 text-white px-8 py-3 rounded-lg hover:bg-indigo-700 transition-colors font-semibold disabled:opacity-50"
-              >
-                {loading ? 'Registering...' : 'Complete Registration'}
-              </button>
-            </div>
+          </div>
+          
+          {/* Submit Button */}
+          <div className="flex justify-end pt-8">
+            <button 
+              type="submit" 
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-12 py-4 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center space-x-3"
+            >
+              <span className="text-lg">Complete Registration</span>
+              <FaArrowRight />
+            </button>
           </div>
         </form>
       </div>
+      
+      <style jsx>{`
+        .section-divider {
+          background: linear-gradient(90deg, #3b82f6 0%, #e5e7eb 50%, #3b82f6 100%);
+          height: 2px;
+        }
+        .input-focus:focus {
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.3s ease-out forwards;
+        }
+      `}</style>
     </div>
   );
 };
