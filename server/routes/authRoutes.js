@@ -8,38 +8,23 @@ import {
   login,
   verifyResetOtp,
   resetPassword,
-<<<<<<< HEAD
-  forgotPassword ,// ✅ Import the dedicated forgot password function
-  completeRegistration 
-} from '../controllers/authController.js';
-import bcrypt from 'bcryptjs';
-import User from '../models/User.js';
-import Alumni from '../models/Alumni.js';
-=======
   forgotPassword,
   completeProfile
 } from '../controllers/authController.js';
 import auth from '../middleware/authMiddleware.js';
 
->>>>>>> 19cc2c4ecbf68ede9d2ab0a007d85dbec2df3aaf
 const router = express.Router();
 
 // Registration & Login Routes
 router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
 router.post('/login', login);
-<<<<<<< HEAD
-router.post('/complete-registration', completeRegistration);
-// ✅ Password Reset Routes
-router.post('/forgot-password', forgotPassword); // Use dedicated function
-=======
 
 // Profile completion route
 router.post('/complete-profile', auth, completeProfile);
 
 // Password Reset Routes
 router.post('/forgot-password', forgotPassword);
->>>>>>> 19cc2c4ecbf68ede9d2ab0a007d85dbec2df3aaf
 router.post('/verify-reset-otp', verifyResetOtp);
 router.post('/reset-password', resetPassword);
 
