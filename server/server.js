@@ -11,10 +11,14 @@ import protectedRoutes from './routes/protectedRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
 // Load Google OAuth config
 import './config/googleAuth.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ✅ Middleware
 app.use(cors({
@@ -33,6 +37,7 @@ app.use(
     maxAge: 24 * 60 * 60 * 1000  } // ✅ Use true only in HTTPS
   })
 );
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ✅ Add TEST ENDPOINT here - BEFORE API routes
 app.get('/api/test', (req, res) => {
