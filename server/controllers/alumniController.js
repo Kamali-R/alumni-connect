@@ -90,15 +90,20 @@ export const saveAlumniProfile = async (req, res) => {
     }
     
     // Handle file uploads
-    if (req.files) {
-      if (req.files.profileImage) {
-        profileData.profileImage = req.files.profileImage[0].filename;
-      }
-      if (req.files.resume) {
-        profileData.resumeFileName = req.files.resume[0].originalname;
-        profileData.resumeFile = req.files.resume[0].filename;
-      }
-    }
+// In saveAlumniProfile function, update the file handling:
+if (req.files) {
+  if (req.files.profileImage) {
+    profileData.profileImage = req.files.profileImage[0].filename;
+    
+    // Also store the full path for easier frontend access
+    profileData.profileImageUrl = `/uploads/${req.files.profileImage[0].filename}`;
+  }
+  if (req.files.resume) {
+    profileData.resumeFileName = req.files.resume[0].originalname;
+    profileData.resumeFile = req.files.resume[0].filename;
+    profileData.resumeUrl = `/uploads/${req.files.resume[0].filename}`;
+  }
+}
     
     console.log('Processed profile data:', {
       personalInfo: profileData.personalInfo ? 'present' : 'missing',

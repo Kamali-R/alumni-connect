@@ -236,17 +236,33 @@ const debugAchievements = () => {
 };
 
 
-  const handleProfileImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setProfileImage(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProfileImagePreview(reader.result);
-      };
-      reader.readAsDataURL(file);
+ const handleProfileImageChange = (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    // Check file size (max 2MB for profile images)
+    if (file.size > 2 * 1024 * 1024) {
+      setMessage({ text: 'Profile image must be less than 2MB', type: 'error' });
+      return;
     }
-  };
+    
+    // Check file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setMessage({ text: 'Only JPEG, PNG, GIF, and WebP images are allowed', type: 'error' });
+      return;
+    }
+    
+    setProfileImage(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setProfileImagePreview(reader.result);
+    };
+    reader.onerror = () => {
+      setMessage({ text: 'Error reading image file', type: 'error' });
+    };
+    reader.readAsDataURL(file);
+  }
+};
 
   const handleResumeUpload = (e) => {
     const file = e.target.files[0];
@@ -448,14 +464,14 @@ const debugAchievements = () => {
     formData.append('recognitions', JSON.stringify(recognitions));
     
     // Append files if they exist
-    if (profileImage) {
+    if (profileImage && typeof profileImage !== 'string') {
+      // Only append if it's a new file (File object), not a string URL
       formData.append('profileImage', profileImage);
     }
     
-    if (resumeFile) {
+    if (resumeFile && typeof resumeFile !== 'string') {
       formData.append('resume', resumeFile);
     }
-
     console.log('Sending profile data to backend...');
     console.log('FormData contents:');
     for (let pair of formData.entries()) {
@@ -481,6 +497,13 @@ const debugAchievements = () => {
     const result = await response.json();
     console.log('Profile saved successfully:', result);
     
+        // Update profile image preview with the new image from server
+    if (result.alumni?.profileImage) {
+      setProfileImagePreview(
+        `http://localhost:5000/uploads/${result.alumni.profileImage}`
+      );
+    }
+
     setMessage({ text: 'Profile updated successfully!', type: 'success' });
     setIsEditing(false);
     
@@ -678,19 +701,33 @@ const debugAchievements = () => {
         <div className="bg-white rounded-xl shadow-md p-6 mb-8">
           <div className="flex items-center space-x-6">
             <div className="relative">
-              <div className="w-32 h-32 rounded-full bg-gray-200 overflow-hidden">
-                {profileImagePreview ? (
-                  <img 
-                    src={profileImagePreview} 
-                    alt="Profile" 
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gray-200">
-                    <FaUser className="text-gray-400 text-4xl" />
-                  </div>
-                )}
-              </div>
+<div className="w-32 h-32 rounded-full bg-gray-200 overflow-hidden">
+  {profileImagePreview ? (
+    <img 
+      src={profileImagePreview} 
+      alt="Profile" 
+      className="w-full h-full object-cover"
+    />
+  ) : profileData?.profileImage ? (
+    <img 
+      src={
+        profileData.profileImage.startsWith('http') 
+          ? profileData.profileImage 
+          : `http://localhost:5000/uploads/${profileData.profileImage}`
+      } 
+      alt="Profile" 
+      className="w-full h-full object-cover"
+      onError={(e) => {
+        e.target.style.display = 'none';
+        e.target.nextSibling.style.display = 'flex';
+      }}
+    />
+  ) : (
+    <div className="w-full h-full flex items-center justify-center bg-gray-200">
+      <FaUser className="text-gray-400 text-4xl" />
+    </div>
+  )}
+</div>
               {isEditing && (
                 <label className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full cursor-pointer">
                   <FaCamera />
