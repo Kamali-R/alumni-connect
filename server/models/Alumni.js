@@ -64,6 +64,7 @@ const AlumniSchema = new mongoose.Schema({
   
   // Experiences
   experiences: [{
+    id: { type: Number },
     company: { type: String },
     title: { type: String },
     location: { type: String },
@@ -75,6 +76,28 @@ const AlumniSchema = new mongoose.Schema({
   skills: [{ type: String }],
   interests: [{ type: String }],
   
+  // Achievements, Awards & Recognitions - FIXED SECTION
+  achievements: [{
+    id: { type: Number },
+    title: { type: String, required: true },
+    description: { type: String },
+    year: { type: String, required: true }
+  }],
+  
+  awards: [{
+    id: { type: Number },
+    title: { type: String, required: true },
+    organization: { type: String, required: true },
+    year: { type: String, required: true }
+  }],
+  
+  recognitions: [{
+    id: { type: Number },
+    title: { type: String, required: true },
+    description: { type: String },
+    year: { type: String, required: true }
+  }],
+  
   // Other Information
   otherInfo: {
     bio: { type: String },
@@ -85,7 +108,9 @@ const AlumniSchema = new mongoose.Schema({
   },
   
   // File uploads
+  profileImage: { type: String },
   resumeFileName: { type: String },
+  resumeFile: { type: String },
   
   status: { 
     type: String, 
@@ -98,7 +123,7 @@ const AlumniSchema = new mongoose.Schema({
 
 // Add indexes for better query performance
 AlumniSchema.index({ userId: 1 });
-AlumniSchema.index({ 'personalInfo.email': 1 });
+AlumniSchema.index({ 'personalInfo.personalEmail': 1 });
 AlumniSchema.index({ 'academicInfo.collegeEmail': 1 });
 
 export default mongoose.model('Alumni', AlumniSchema);

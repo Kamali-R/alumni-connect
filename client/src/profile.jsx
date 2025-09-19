@@ -129,55 +129,112 @@ const AlumniProfilePage = () => {
     fetchProfileData();
   }, []);
 
-  const fetchProfileData = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/alumni/profile', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      const data = response.data;
-      setProfileData(data);
-      
-      // Populate form fields with existing data
-      if (data.personalInfo) {
-        setPersonalInfo(data.personalInfo);
-      }
-      
-      if (data.academicInfo) {
-        setAcademicInfo(data.academicInfo);
-      }
-      
-      if (data.careerStatus) setCareerStatus(data.careerStatus);
-      
-      if (data.careerDetails) {
-        setCareerDetails(data.careerDetails);
-      }
-      
-      if (data.otherInfo) setOtherInfo(data.otherInfo);
-      if (data.experiences) setExperiences(data.experiences || []);
-      if (data.skills) setSkills(data.skills || []);
-      if (data.interests) setInterests(data.interests || []);
-      if (data.achievements) setAchievements(data.achievements || []);
-      if (data.awards) setAwards(data.awards || []);
-      if (data.recognitions) setRecognitions(data.recognitions || []);
-      if (data.profileImage) setProfileImagePreview(data.profileImage);
-      if (data.resume) setResumeName(data.resume);
-      
-      // Initialize location inputs with existing data
-      setLocationInputs({
-        personal: data.personalInfo?.location || '',
-        company: data.careerDetails?.companyLocation || '',
-        institution: data.careerDetails?.institutionLocation || ''
-      });
-      
-    } catch (error) {
-      console.error('Error fetching profile data:', error);
-      setMessage({ text: 'Failed to load profile data', type: 'error' });
+ 
+const fetchProfileData = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.error('No authentication token found');
+      return;
     }
-  };
+
+    console.log('Fetching profile data from backend...');
+    
+    const response = await fetch('http://localhost:5000/api/alumni/profile', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    if (response.status === 404) {
+      // Profile doesn't exist yet - this is normal for new users
+      console.log('Alumni profile not found - user needs to complete profile');
+      setProfileData(null);
+      return;
+    }
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Profile data fetched successfully');
+    console.log('Fetched achievements:', data.achievements);
+    console.log('Fetched awards:', data.awards);
+    console.log('Fetched recognitions:', data.recognitions);
+    
+    setProfileData(data);
+    
+    // Populate form fields with existing data
+    if (data.personalInfo) {
+      setPersonalInfo(data.personalInfo);
+      setLocationInputs(prev => ({
+        ...prev,
+        personal: data.personalInfo.location || ''
+      }));
+    }
+    
+    if (data.academicInfo) {
+      setAcademicInfo(data.academicInfo);
+    }
+    
+    if (data.careerStatus) {
+      setCareerStatus(data.careerStatus);
+    }
+    
+    if (data.careerDetails) {
+      setCareerDetails(data.careerDetails);
+      setLocationInputs(prev => ({
+        ...prev,
+        company: data.careerDetails.companyLocation || '',
+        institution: data.careerDetails.institutionLocation || ''
+      }));
+    }
+    
+    if (data.otherInfo) {
+      setOtherInfo(data.otherInfo);
+    }
+    
+    // Set arrays with fallback to empty arrays
+    setExperiences(data.experiences || []);
+    setSkills(data.skills || []);
+    setInterests(data.interests || []);
+    
+    // CRITICAL: Properly set achievements, awards, and recognitions
+    console.log('Setting achievements state:', data.achievements || []);
+    console.log('Setting awards state:', data.awards || []);
+    console.log('Setting recognitions state:', data.recognitions || []);
+    
+    setAchievements(data.achievements || []);
+    setAwards(data.awards || []);
+    setRecognitions(data.recognitions || []);
+    
+    // Set file data
+    if (data.profileImage) {
+      setProfileImagePreview(data.profileImage.startsWith('http') ? 
+        data.profileImage : 
+        `http://localhost:5000/uploads/${data.profileImage}`
+      );
+    }
+    if (data.resumeFileName) {
+      setResumeName(data.resumeFileName);
+    }
+    
+  } catch (error) {
+    console.error('Error fetching profile data:', error);
+    setMessage({ 
+      text: 'Failed to load profile data. Please refresh the page.', 
+      type: 'error' 
+    });
+  }
+};
+// Also add these debug functions to help troubleshoot:
+const debugAchievements = () => {
+  console.log('Current achievements state:', achievements);
+  console.log('Current awards state:', awards);
+  console.log('Current recognitions state:', recognitions);
+};
+
 
   const handleProfileImageChange = (e) => {
     const file = e.target.files[0];
@@ -342,96 +399,187 @@ const AlumniProfilePage = () => {
     }
   };
 
-  const handleSave = async () => {
-    // Validate URLs
-    if (otherInfo.linkedin && !validateUrl(otherInfo.linkedin)) {
-      setMessage({ text: 'Please enter a valid LinkedIn URL', type: 'error' });
+ const handleSave = async () => {
+  // Validate URLs
+  if (otherInfo.linkedin && !validateUrl(otherInfo.linkedin)) {
+    setMessage({ text: 'Please enter a valid LinkedIn URL', type: 'error' });
+    return;
+  }
+  
+  if (otherInfo.github && !validateUrl(otherInfo.github)) {
+    setMessage({ text: 'Please enter a valid GitHub URL', type: 'error' });
+    return;
+  }
+  
+  if (otherInfo.portfolio && !validateUrl(otherInfo.portfolio)) {
+    setMessage({ text: 'Please enter a valid Portfolio URL', type: 'error' });
+    return;
+  }
+  
+  setLoading(true);
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setMessage({ text: 'Authentication token not found. Please login again.', type: 'error' });
       return;
     }
+
+    // Create FormData to handle file uploads
+    const formData = new FormData();
     
-    if (otherInfo.github && !validateUrl(otherInfo.github)) {
-      setMessage({ text: 'Please enter a valid GitHub URL', type: 'error' });
-      return;
+    // Debug log to check achievements data before sending
+    console.log('Achievements before sending:', achievements);
+    console.log('Awards before sending:', awards);
+    console.log('Recognitions before sending:', recognitions);
+    
+    // Append JSON data as strings - ENSURE achievements, awards, recognitions are included
+    formData.append('personalInfo', JSON.stringify(personalInfo));
+    formData.append('academicInfo', JSON.stringify(academicInfo));
+    formData.append('careerStatus', careerStatus);
+    formData.append('careerDetails', JSON.stringify(careerDetails));
+    formData.append('otherInfo', JSON.stringify(otherInfo));
+    formData.append('experiences', JSON.stringify(experiences));
+    formData.append('skills', JSON.stringify(skills));
+    formData.append('interests', JSON.stringify(interests));
+    
+    // CRITICAL: Ensure these are properly stringified and appended
+    formData.append('achievements', JSON.stringify(achievements));
+    formData.append('awards', JSON.stringify(awards));
+    formData.append('recognitions', JSON.stringify(recognitions));
+    
+    // Append files if they exist
+    if (profileImage) {
+      formData.append('profileImage', profileImage);
     }
     
-    if (otherInfo.portfolio && !validateUrl(otherInfo.portfolio)) {
-      setMessage({ text: 'Please enter a valid Portfolio URL', type: 'error' });
-      return;
+    if (resumeFile) {
+      formData.append('resume', resumeFile);
+    }
+
+    console.log('Sending profile data to backend...');
+    console.log('FormData contents:');
+    for (let pair of formData.entries()) {
+      console.log(pair[0] + ': ' + pair[1]);
     }
     
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      const formData = new FormData();
-      
-      // Append all profile data
-      formData.append('personalInfo', JSON.stringify(personalInfo));
-      formData.append('academicInfo', JSON.stringify(academicInfo));
-      formData.append('careerStatus', careerStatus);
-      formData.append('careerDetails', JSON.stringify(careerDetails));
-      formData.append('otherInfo', JSON.stringify(otherInfo));
-      formData.append('experiences', JSON.stringify(experiences));
-      formData.append('skills', JSON.stringify(skills));
-      formData.append('interests', JSON.stringify(interests));
-      formData.append('achievements', JSON.stringify(achievements));
-      formData.append('awards', JSON.stringify(awards));
-      formData.append('recognitions', JSON.stringify(recognitions));
-      
-      if (profileImage) {
-        formData.append('profileImage', profileImage);
-      }
-      
-      if (resumeFile) {
-        formData.append('resume', resumeFile);
-      }
-      
-      const response = await axios.put('http://localhost:5000/api/alumni/profile', formData, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      setMessage({ text: 'Profile updated successfully!', type: 'success' });
-      setIsEditing(false);
-      fetchProfileData(); // Refresh data
-      
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      setMessage({ text: 'Failed to update profile', type: 'error' });
-    } finally {
-      setLoading(false);
+    // Use PUT for updates, POST for creation
+    const method = profileData ? 'PUT' : 'POST';
+    const response = await fetch('http://localhost:5000/api/alumni/profile', {
+      method: method,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        // Don't set Content-Type header - let browser set it for FormData
+      },
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
     }
-  };
+    
+    const result = await response.json();
+    console.log('Profile saved successfully:', result);
+    
+    setMessage({ text: 'Profile updated successfully!', type: 'success' });
+    setIsEditing(false);
+    
+    // Update local storage to reflect profile completion
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      const userData = JSON.parse(storedUser);
+      userData.profileCompleted = true;
+      localStorage.setItem('user', JSON.stringify(userData));
+    }
+    
+    // Refresh profile data from backend
+    await fetchProfileData();
+    
+    // Clear the message after 3 seconds
+    setTimeout(() => {
+      setMessage({ text: '', type: '' });
+    }, 3000);
+    
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    setMessage({ 
+      text: error.message || 'Failed to update profile. Please try again.', 
+      type: 'error' 
+    });
+    
+    // Clear error message after 5 seconds
+    setTimeout(() => {
+      setMessage({ text: '', type: '' });
+    }, 5000);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const addAchievement = () => {
-    if (newAchievement.title && newAchievement.year) {
-      setAchievements([...achievements, { ...newAchievement, id: Date.now() }]);
-      setNewAchievement({ title: '', description: '', year: '' });
-    }
-  };
+  if (newAchievement.title && newAchievement.year) {
+    const achievementToAdd = { 
+      ...newAchievement, 
+      id: Date.now() // Ensure unique ID
+    };
+    console.log('Adding achievement:', achievementToAdd);
+    setAchievements([...achievements, achievementToAdd]);
+    setNewAchievement({ title: '', description: '', year: '' });
+    
+    // Debug log after adding
+    setTimeout(() => {
+      console.log('Achievements after adding:', achievements);
+    }, 100);
+  } else {
+    console.warn('Cannot add achievement - missing required fields:', newAchievement);
+  }
+};
 
   const removeAchievement = (id) => {
     setAchievements(achievements.filter(a => a.id !== id));
   };
 
   const addAward = () => {
-    if (newAward.title && newAward.organization && newAward.year) {
-      setAwards([...awards, { ...newAward, id: Date.now() }]);
-      setNewAward({ title: '', organization: '', year: '' });
-    }
-  };
+  if (newAward.title && newAward.organization && newAward.year) {
+    const awardToAdd = { 
+      ...newAward, 
+      id: Date.now() // Ensure unique ID
+    };
+    console.log('Adding award:', awardToAdd);
+    setAwards([...awards, awardToAdd]);
+    setNewAward({ title: '', organization: '', year: '' });
+    
+    // Debug log after adding
+    setTimeout(() => {
+      console.log('Awards after adding:', awards);
+    }, 100);
+  } else {
+    console.warn('Cannot add award - missing required fields:', newAward);
+  }
+};
 
   const removeAward = (id) => {
     setAwards(awards.filter(a => a.id !== id));
   };
 
   const addRecognition = () => {
-    if (newRecognition.title && newRecognition.year) {
-      setRecognitions([...recognitions, { ...newRecognition, id: Date.now() }]);
-      setNewRecognition({ title: '', description: '', year: '' });
-    }
-  };
+  if (newRecognition.title && newRecognition.year) {
+    const recognitionToAdd = { 
+      ...newRecognition, 
+      id: Date.now() // Ensure unique ID
+    };
+    console.log('Adding recognition:', recognitionToAdd);
+    setRecognitions([...recognitions, recognitionToAdd]);
+    setNewRecognition({ title: '', description: '', year: '' });
+    
+    // Debug log after adding
+    setTimeout(() => {
+      console.log('Recognitions after adding:', recognitions);
+    }, 100);
+  } else {
+    console.warn('Cannot add recognition - missing required fields:', newRecognition);
+  }
+};
 
   const removeRecognition = (id) => {
     setRecognitions(recognitions.filter(r => r.id !== id));
