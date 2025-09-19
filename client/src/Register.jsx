@@ -56,72 +56,51 @@ const Register = ({setUserData}) => {
       setErrors((prev) => ({ ...prev, [name]: '' }));
     }
   };
-  const checkUserExists = async (email) => {
+
+  // REMOVED the checkUserExists function - let backend handle this
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
     try {
-      const response = await axios.get(`http://localhost:5000/api/check-user?email=${email}`);
-      return response.data.exists;
-    } catch (error) {
-      console.error('Error checking user:', error);
-      return false;
-    }
-  };
+      setLoading(true);
+      setMessage({ text: '', type: '' });
 
- // In Register component, update the handleSubmit function
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (!validateForm()) return;
-
-  try {
-    setLoading(true);
-    setMessage({ text: '', type: '' });
-    const userExists = await checkUserExists(form.email);
-      if (userExists) {
-        setMessage({
-          text: 'User already exists with this email address',
-          type: 'error',
-        });
-        setLoading(false);
-        return;
-      }
-
-
-    const response = await axios.post('http://localhost:5000/send-otp', {
-      ...form,
-      purpose: 'register'
-    });
-
-    setMessage({
-      text: response.data.message || 'OTP sent successfully!',
-      type: 'success',
-    });
-
-    // Store user data for profile completion
-    setUserData(form);
-
-    setTimeout(() => {
-      navigate('/VerifyOtp', {
-        state: {
-          userData: form,
-          email: form.email,
-        },
+      // Send OTP directly without checking user existence first
+      // The backend will handle the duplicate check
+      const response = await axios.post('http://localhost:5000/send-otp', {
+        ...form,
+        purpose: 'register'
       });
-    }, 1500);
-  } catch (error) {
-    if (error.response?.status === 400 && error.response?.data?.message === 'User already exists') {
-        setMessage({
-          text: 'User already exists with this email address',
-          type: 'error',
+
+      setMessage({
+        text: response.data.message || 'OTP sent successfully!',
+        type: 'success',
+      });
+
+      // Store user data for profile completion
+      setUserData(form);
+
+      setTimeout(() => {
+        navigate('/VerifyOtp', {
+          state: {
+            userData: form,
+            email: form.email,
+          },
         });
-      } else {
-        const errorMessage =
-          error.response?.data?.message ||
-          error.message ||
-          'Failed to send OTP. Please try again.';
-        setMessage({
-          text: errorMessage,
-          type: 'error',
-        });
-      }
+      }, 1500);
+    } catch (error) {
+      console.error('Registration error:', error.response?.data || error.message);
+      
+      const errorMessage = error.response?.data?.message || 
+                          error.message || 
+                          'Failed to send OTP. Please try again.';
+      
+      setMessage({
+        text: errorMessage,
+        type: 'error',
+      });
     } finally {
       setLoading(false);
     }
@@ -255,4 +234,4 @@ const handleSubmit = async (e) => {
   );
 };
 
-export default Register; 
+export default Register;
