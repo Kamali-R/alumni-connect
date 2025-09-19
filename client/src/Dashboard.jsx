@@ -1,56 +1,117 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import AlumniProfilePage from './profile';
+
 const AlumniConnectDashboard = () => {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('dashboard');
   const [fadeAnimation, setFadeAnimation] = useState(false);
   const [userRole, setUserRole] = useState('');
-  const [userName, setUserName] = useState('John Doe');
-  const [userGraduation, setUserGraduation] = useState('Class of 2018');
+  const [userName, setUserName] = useState('');
+  const [userGraduation, setUserGraduation] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [profileCompleted, setProfileCompleted] = useState(false);
   
-  // Check authentication on component mount
+  // Check authentication and fetch user data on component mount
   useEffect(() => {
-  const storedToken = localStorage.getItem('token');
-  const storedUser = localStorage.getItem('user');
-  const profileCompleted = localStorage.getItem('profileCompleted') === 'true';
-  
-  if (!storedToken) {
-    // Redirect to login if no token found
-    navigate('/login');
-    return;
-  }
-  
-  // Get user data from localStorage
-  if (storedUser) {
-    const userData = JSON.parse(storedUser);
-    setUserRole(userData.role);
-    setUserName(userData.name || 'John Doe');
-    
-    // Set graduation year if available
-    if (userData.graduationYear) {
-      setUserGraduation(`Class of ${userData.graduationYear}`);
-    }
-    
-    // If profile is not completed, redirect to profile completion
-    if (!profileCompleted && userData.role === 'alumni') {
-      navigate('/alumni-profile', {
-        state: {
-          userData: userData,
-          verified: true,
-          role: userData.role
+    const initializeUser = async () => {
+      try {
+        const storedToken = localStorage.getItem('token');
+        
+        if (!storedToken) {
+          console.log('No token found, redirecting to login');
+          navigate('/login');
+          return;
         }
-      });
-      return;
-    }
-  }
+
+        // Fetch current user data from backend
+        const response = await fetch('http://localhost:5000/user', {
+          headers: {
+            'Authorization': `Bearer ${storedToken}`
+          }
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            console.log('Token expired, redirecting to login');
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            navigate('/login');
+            return;
+          }
+          throw new Error('Failed to fetch user data');
+        }
+
+        const userData = response.data;
+        console.log('User data fetched:', userData);
+
+        // Update state with fresh user data
+        setUserRole(userData.role);
+        setUserName(userData.name || 'User');
+        setProfileCompleted(userData.profileCompleted);
+        
+        // Set graduation year if available
+        if (userData.graduationYear) {
+          setUserGraduation(`Class of ${userData.graduationYear}`);
+        } else {
+          setUserGraduation('Alumni');
+        }
+
+        // Update localStorage with fresh data
+        localStorage.setItem('user', JSON.stringify(userData));
+
+        // Check if profile completion is required
+        if (!userData.profileCompleted && userData.role === 'alumni') {
+          console.log('Profile not completed, redirecting to profile setup');
+          navigate('/alumni-profile', {
+            state: {
+              userData: userData,
+              verified: true,
+              role: userData.role
+            }
+          });
+          return;
+        }
+
+        // Redirect students to student dashboard if needed
+        if (userData.role === 'student') {
+          console.log('Student user, should redirect to student dashboard');
+          // navigate('/student-dashboard'); // Uncomment when student dashboard is ready
+        }
+
+      } catch (error) {
+        console.error('Error initializing user:', error);
+        // If error fetching user data, try using stored data as fallback
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          try {
+            const userData = JSON.parse(storedUser);
+            setUserRole(userData.role);
+            setUserName(userData.name || 'User');
+            setProfileCompleted(userData.profileCompleted || false);
+            
+            if (userData.graduationYear) {
+              setUserGraduation(`Class of ${userData.graduationYear}`);
+            } else {
+              setUserGraduation('Alumni');
+            }
+          } catch (parseError) {
+            console.error('Error parsing stored user data:', parseError);
+            navigate('/login');
+            return;
+          }
+        } else {
+          navigate('/login');
+          return;
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeUser();
+  }, [navigate]);
   
-  // Only redirect if user is a student (not alumni)
-  if (storedUser && JSON.parse(storedUser).role === 'student') {
-    navigate('/student-dashboard');
-  }
-}, [navigate]);
   // Navigation items
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: (
@@ -106,6 +167,7 @@ const AlumniConnectDashboard = () => {
       ), action: () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        localStorage.removeItem('profileCompleted');
         navigate('/login');
       } },
   ];
@@ -210,6 +272,23 @@ const AlumniConnectDashboard = () => {
   // Handle quick action click
   const handleQuickActionClick = (label) => {
     console.log('Quick action clicked:', label);
+    // Add specific navigation logic for each quick action
+    switch (label) {
+      case 'Find Alumni':
+        setActiveSection('networking');
+        break;
+      case 'Browse Jobs':
+        setActiveSection('jobs');
+        break;
+      case 'View Events':
+        setActiveSection('events');
+        break;
+      case 'Send Message':
+        setActiveSection('messages');
+        break;
+      default:
+        break;
+    }
   };
   
   // Stat cards data
@@ -252,6 +331,18 @@ const AlumniConnectDashboard = () => {
       )
     },
   ];
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="flex h-screen bg-gray-100">
@@ -272,13 +363,18 @@ const AlumniConnectDashboard = () => {
           <div className="flex items-center mb-6 p-3 bg-gray-50 rounded-lg border border-gray-200">
             <div className="w-12 h-12 bg-blue-700 rounded-full flex items-center justify-center">
               <span className="text-white font-semibold">
-                {userName.split(' ').map(n => n[0]).join('')}
+                {userName.split(' ').map(n => n[0]).join('').toUpperCase()}
               </span>
             </div>
             <div className="ml-3">
               <p className="font-semibold text-gray-900">{userName}</p>
               <p className="text-sm text-gray-600">{userGraduation}</p>
-              <p className="text-xs text-blue-600 mt-1">{userRole === 'alumni' ? 'Alumni' : 'Student'}</p>
+              <p className="text-xs text-blue-600 mt-1">
+                {userRole === 'alumni' ? 'Alumni' : 'Student'}
+                {!profileCompleted && (
+                  <span className="ml-2 text-red-600">• Profile Incomplete</span>
+                )}
+              </p>
             </div>
           </div>
           
@@ -312,14 +408,45 @@ const AlumniConnectDashboard = () => {
               {/* Welcome Header */}
               <div className="mb-8">
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                  Welcome to Alumni Connect, {userName}! 👋
+                  Welcome to Alumni Connect, {userName}!
                 </h1>
                 <p className="text-gray-600">
                   {userRole === 'alumni' 
-                    ? "Let's get you started with connecting to your alumni network."
+                    ? profileCompleted 
+                      ? "Your profile is complete! Start connecting with other alumni." 
+                      : "Please complete your profile to get the most out of Alumni Connect."
                     : "Explore opportunities and connect with alumni from your institution."}
                 </p>
               </div>
+
+              {/* Profile Completion Alert */}
+              {!profileCompleted && userRole === 'alumni' && (
+                <div className="mb-8 bg-yellow-50 border border-yellow-200 rounded-xl p-6">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3 flex-1">
+                      <h3 className="text-sm font-medium text-yellow-800">
+                        Complete Your Alumni Profile
+                      </h3>
+                      <p className="mt-1 text-sm text-yellow-700">
+                        Add your academic and professional information to connect with other alumni and access all features.
+                      </p>
+                    </div>
+                    <div className="ml-6 flex-shrink-0">
+                      <button
+                        onClick={() => navigate('/alumni-profile')}
+                        className="bg-yellow-50 text-yellow-800 hover:bg-yellow-100 font-medium py-2 px-4 rounded-lg border border-yellow-200 transition-colors"
+                      >
+                        Complete Profile
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
               
               {/* Stat Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -375,22 +502,10 @@ const AlumniConnectDashboard = () => {
                   ))}
                 </div>
               </div>
-              
-              {/* Call to Action */}
-              <div className="mt-8 p-6 bg-gradient-to-r from-blue-700 to-blue-900 rounded-xl text-white">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-xl font-bold mb-2">Complete Your Profile</h3>
-                    <p className="opacity-90">Add your information to get the most out of Alumni Connect</p>
-                  </div>
-                  <button className="bg-white text-blue-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-100 transition-colors">
-                    Get Started
-                  </button>
-                </div>
-              </div>
             </div>
           )}
-                  {/* Add the Profile Section right after the Dashboard section */}
+          
+          {/* Profile Section */}
           {activeSection === 'profile' && (
             <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
               <AlumniProfilePage />
@@ -398,13 +513,13 @@ const AlumniConnectDashboard = () => {
           )}
           
           {/* Other Sections (Placeholders) */}
-          {activeSection !== 'dashboard' && (
+          {activeSection !== 'dashboard' && activeSection !== 'profile' && (
             <div className="content-section">
               <h1 className="text-3xl font-bold text-gray-900 mb-6">
                 {navItems.find(item => item.id === activeSection)?.label}
               </h1>
               <div className="bg-white rounded-xl shadow p-8">
-                
+                <p className="text-gray-600">This section is under development. Coming soon!</p>
               </div>
             </div>
           )}
