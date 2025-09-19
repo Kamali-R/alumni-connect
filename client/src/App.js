@@ -14,7 +14,7 @@ function App() {
   const [userData, setUserData] = useState(null);
   
   return (
-    <Router>c
+    <Router>
       <div className="App">
         <Routes>
           <Route path="/" element={<HomePage />} />
