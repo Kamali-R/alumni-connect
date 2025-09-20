@@ -1,12 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useNavigate,useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 
-
-
-
-const Register = () => {
+const Register = ({setUserData}) => {
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -18,17 +14,22 @@ const Register = () => {
   const [errors, setErrors] = useState({});
   const navigate = useNavigate();
   const location = useLocation(); 
+  
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const error = params.get('error');
-
     if (error === 'not_found') {
       setMessage({
         text: 'No account found for this Google email. Please complete your signup.',
         type: 'error',
       });
     }
-  }, [location.search]);
+    
+    // Check if role is passed in location state (from homepage buttons)
+    if (location.state?.role) {
+      setForm(prev => ({ ...prev, role: location.state.role }));
+    }
+  }, [location.search, location.state]);
   
   const validateForm = () => {
     const newErrors = {};
@@ -44,11 +45,10 @@ const Register = () => {
       newErrors.password = 'Password must be at least 6 characters';
     }
     if (!form.role) newErrors.role = 'Please select a role';
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
+  
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -56,6 +56,8 @@ const Register = () => {
       setErrors((prev) => ({ ...prev, [name]: '' }));
     }
   };
+
+  // REMOVED the checkUserExists function - let backend handle this
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -65,12 +67,20 @@ const Register = () => {
       setLoading(true);
       setMessage({ text: '', type: '' });
 
-      const response = await axios.post('http://localhost:5000/api/send-otp', form);
+      // Send OTP directly without checking user existence first
+      // The backend will handle the duplicate check
+      const response = await axios.post('http://localhost:5000/send-otp', {
+        ...form,
+        purpose: 'register'
+      });
 
       setMessage({
         text: response.data.message || 'OTP sent successfully!',
         type: 'success',
       });
+
+      // Store user data for profile completion
+      setUserData(form);
 
       setTimeout(() => {
         navigate('/VerifyOtp', {
@@ -81,10 +91,12 @@ const Register = () => {
         });
       }, 1500);
     } catch (error) {
-      const errorMessage =
-        error.response?.data?.message ||
-        error.message ||
-        'Failed to send OTP. Please try again.';
+      console.error('Registration error:', error.response?.data || error.message);
+      
+      const errorMessage = error.response?.data?.message || 
+                          error.message || 
+                          'Failed to send OTP. Please try again.';
+      
       setMessage({
         text: errorMessage,
         type: 'error',
@@ -101,7 +113,7 @@ const Register = () => {
           <h2 className="text-3xl font-bold text-gray-800 mb-2">Register to Alumni Connect</h2>
           <p className="text-gray-600">Enter your details to continue</p>
         </div>
-
+        
         {message.text && (
           <div
             className={`mb-6 p-3 rounded-lg ${
@@ -113,7 +125,7 @@ const Register = () => {
             {message.text}
           </div>
         )}
-
+        
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <input
@@ -127,7 +139,7 @@ const Register = () => {
             />
             {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
           </div>
-
+          
           <div>
             <input
               name="email"
@@ -141,7 +153,7 @@ const Register = () => {
             />
             {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
           </div>
-
+          
           <div>
             <input
               name="password"
@@ -155,7 +167,7 @@ const Register = () => {
             />
             {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
           </div>
-
+          
           <div>
             <select
               name="role"
@@ -171,7 +183,7 @@ const Register = () => {
             </select>
             {errors.role && <p className="mt-1 text-sm text-red-600">{errors.role}</p>}
           </div>
-
+          
           <button
             type="submit"
             disabled={loading}
@@ -207,7 +219,7 @@ const Register = () => {
               'Send OTP'
             )}
           </button>
-
+          
           <div className="text-center mt-4">
             <p className="text-gray-600">
               Already have an account?{' '}

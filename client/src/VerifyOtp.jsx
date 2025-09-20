@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+ import React, { useState, useRef } from 'react';
 import axios from 'axios';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -12,28 +12,28 @@ const VerifyOtp = () => {
   const [loading, setLoading] = useState(false);
   const [showResend, setShowResend] = useState(false);
   const inputsRef = useRef([]);
-
+  
   const handleChange = (index, value) => {
     if (!/^\d?$/.test(value)) return;
     const newOtp = [...otp];
     newOtp[index] = value;
     setOtp(newOtp);
-
     if (value && index < 5) {
       inputsRef.current[index + 1].focus();
     }
   };
-
- const handleVerify = async (e) => {
+  
+  // In VerifyOtp component, update the handleVerify function
+const handleVerify = async (e) => {
   e.preventDefault();
   const fullOtp = otp.join('');
   
   try {
     setLoading(true);
-    const response = await axios.post('http://localhost:5000/api/verify-otp', {
+    const response = await axios.post('http://localhost:5000/verify-otp', {
       ...userData,
       otp: fullOtp,
-      purpose: 'register' // Add this for signup flow
+      purpose: 'register'
     });
     
     setMessage({ 
@@ -42,9 +42,40 @@ const VerifyOtp = () => {
     });
     setShowResend(false);
     
-    // Redirect to home/dashboard after 2 seconds
+    // Store token and user data
+    if (response.data.token) {
+      localStorage.setItem('token', response.data.token);
+    }
+    
+    if (response.data.user) {
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+      localStorage.setItem('userRole', response.data.user.role);
+      localStorage.setItem('profileCompleted', response.data.user.profileCompleted ? 'true' : 'false');
+    }
+    
+    // Store verification status
+    localStorage.setItem('otpVerified', 'true');
+    localStorage.setItem('userEmail', userData.email);
+    
     setTimeout(() => {
-      navigate('/');
+      // Check if profile needs to be completed
+      if (response.data.user && response.data.user.profileCompleted) {
+        // Profile already completed, go to dashboard
+        if (response.data.user.role === 'student') {
+          navigate('/student-dashboard');
+        } else {
+          navigate('/dashboard');
+        }
+      } else {
+        // Navigate to profile completion page
+        navigate('/alumni-profile', { 
+          state: { 
+            userData: userData || response.data.user, 
+            verified: true,
+            role: userData?.role || response.data.user?.role 
+          } 
+        });
+      }
     }, 2000);
     
   } catch (error) {
@@ -57,30 +88,31 @@ const VerifyOtp = () => {
     setLoading(false);
   }
 };
-
-const handleResend = async () => {
-  try {
-    setLoading(true);
-    await axios.post('http://localhost:5000/api/send-otp', {
-      ...userData,
-      purpose: 'register' // Add this for signup flow
-    });
-    setOtp(['', '', '', '', '', '']);
-    inputsRef.current[0].focus();
-    setMessage({ 
-      text: 'OTP resent successfully!', 
-      type: 'success' 
-    });
-    setShowResend(false);
-  } catch (error) {
-    setMessage({ 
-      text: error.response?.data?.message || 'Failed to resend OTP.', 
-      type: 'error' 
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+  
+  const handleResend = async () => {
+    try {
+      setLoading(true);
+      await axios.post('http://localhost:5000/send-otp', {
+        ...userData,
+        purpose: 'register'
+      });
+      setOtp(['', '', '', '', '', '']);
+      inputsRef.current[0].focus();
+      setMessage({ 
+        text: 'OTP resent successfully!', 
+        type: 'success' 
+      });
+      setShowResend(false);
+    } catch (error) {
+      setMessage({ 
+        text: error.response?.data?.message || 'Failed to resend OTP.', 
+        type: 'error' 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -151,4 +183,4 @@ const handleResend = async () => {
   );
 };
 
-export default VerifyOtp;
+export default VerifyOtp
