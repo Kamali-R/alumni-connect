@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AlumniProfilePage from './profile';
-
+import AlumniEventPortal from './EventsAndReunions';
 const AlumniConnectDashboard = () => {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -10,7 +10,7 @@ const AlumniConnectDashboard = () => {
   const [userName, setUserName] = useState('');
   const [userGraduation, setUserGraduation] = useState('');
   const [loading, setLoading] = useState(true);
-  const [profileCompleted, setProfileCompleted] = useState(false);
+  const [profileCompleted, setProfileCidompleted] = useState(false);
   
   // Check authentication and fetch user data on component mount
   useEffect(() => {
@@ -509,6 +509,13 @@ const AlumniConnectDashboard = () => {
           {activeSection === 'profile' && (
             <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
               <AlumniProfilePage />
+            </div>
+          )}
+
+          {/* Events and Reunions Section */}
+          {activeSection === 'events' && (
+            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
+              <AlumniEventPortal />
             </div>
           )}
           
