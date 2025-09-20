@@ -212,6 +212,54 @@ export const verifyResetOtp = async (req, res) => {
   }
 };
 
+<<<<<<< HEAD
+=======
+// In your login function
+export const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    // 1. Check if user exists
+   const user = await User.findOne({ email }).select('+password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // 2. Compare password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+    
+    // 3. Create JWT token
+    const token = jwt.sign(
+      {
+        id: user._id,
+        role: user.role,
+        profileCompleted: user.profileCompleted // Include this in the token
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '2h' }
+    );
+    
+    // 4. Return token and user info
+    res.status(200).json({
+      message: 'Login successful',
+      token,
+      user: {
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        profileCompleted: user.profileCompleted // Make sure this is included
+      },
+    });
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ message: 'Server error:' + err.message });
+  }
+};
+
+>>>>>>> d431110357f454fe65e25758d4ae930762d0454a
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;

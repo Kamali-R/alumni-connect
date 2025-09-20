@@ -62,7 +62,7 @@ const userSchema = new mongoose.Schema({
   },
   graduationYear: { type: Number },
   lastLogin: { type: Date },
-  otp: String,
+  otp : String,
   otpExpiry: Date,
   authProvider: {
     type: String,
