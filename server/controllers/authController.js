@@ -3,7 +3,7 @@ import Otp from '../models/otp.js';
 import bcrypt from 'bcryptjs';
 import sendEmail from '../utils/sendEmail.js';
 import jwt from 'jsonwebtoken';
-import Alumni from '../models/Alumni.js';
+//import Alumni from '../models/Alumni.js';
 
 // Check if user exists (for frontend validation only)
 export const checkUser = async (req, res) => {
@@ -212,10 +212,8 @@ export const verifyResetOtp = async (req, res) => {
   }
 };
 
-<<<<<<< HEAD
-=======
 // In your login function
-export const login = async (req, res) => {
+export const Login = async (req, res) => {
   try {
     const { email, password } = req.body;
     
@@ -259,7 +257,6 @@ export const login = async (req, res) => {
   }
 };
 
->>>>>>> d431110357f454fe65e25758d4ae930762d0454a
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;

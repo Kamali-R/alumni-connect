@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AlumniProfilePage from './profile';
+import AlumniMentorshipPlatform from './AlumniMentorshipPlatform';
 
 const AlumniConnectDashboard = () => {
   const navigate = useNavigate();
@@ -511,9 +512,14 @@ const AlumniConnectDashboard = () => {
               <AlumniProfilePage />
             </div>
           )}
-          
+          {/* Mentorship section */}
+          {activeSection === 'mentorship' && (
+            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
+              <AlumniMentorshipPlatform/>
+            </div>
+          )}
           {/* Other Sections (Placeholders) */}
-          {activeSection !== 'dashboard' && activeSection !== 'profile' && (
+          {activeSection !== 'dashboard' && activeSection !== 'profile' && activeSection!='mentorship' && (
             <div className="content-section">
               <h1 className="text-3xl font-bold text-gray-900 mb-6">
                 {navItems.find(item => item.id === activeSection)?.label}
