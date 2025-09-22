@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AlumniProfilePage from './profile';
 import AlumniJobDashboard from './AlumniJobDashboard';
-
+import NetworkingHub from './NetworkingHub';
 const AlumniConnectDashboard = () => {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -518,6 +518,11 @@ const AlumniConnectDashboard = () => {
             </div>
           )}
           
+          {activeSection === 'networking' && (
+            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
+              <NetworkingHub/>
+            </div>
+          )}
           
         </main>
       </div>

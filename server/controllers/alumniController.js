@@ -1,8 +1,13 @@
+// controllers/alumniController.js
 import Alumni from '../models/Alumni.js';
 import User from '../models/User.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -62,7 +67,6 @@ export const saveAlumniProfile = async (req, res) => {
     const userId = req.user.id;
     
     console.log('Creating/Updating alumni profile for user:', userId);
-    console.log('Request body keys:', Object.keys(req.body));
     
     // Parse JSON strings from FormData
     const profileData = {};
@@ -90,38 +94,17 @@ export const saveAlumniProfile = async (req, res) => {
     }
     
     // Handle file uploads
-// In saveAlumniProfile function, update the file handling:
-if (req.files) {
-  if (req.files.profileImage) {
-    profileData.profileImage = req.files.profileImage[0].filename;
-    
-    // Also store the full path for easier frontend access
-    profileData.profileImageUrl = `/uploads/${req.files.profileImage[0].filename}`;
-  }
-  if (req.files.resume) {
-    profileData.resumeFileName = req.files.resume[0].originalname;
-    profileData.resumeFile = req.files.resume[0].filename;
-    profileData.resumeUrl = `/uploads/${req.files.resume[0].filename}`;
-  }
-}
-    
-    console.log('Processed profile data:', {
-      personalInfo: profileData.personalInfo ? 'present' : 'missing',
-      academicInfo: profileData.academicInfo ? 'present' : 'missing',
-      careerStatus: profileData.careerStatus,
-      skills: profileData.skills ? profileData.skills.length : 0,
-      interests: profileData.interests ? profileData.interests.length : 0,
-      achievements: profileData.achievements ? profileData.achievements.length : 0,
-      awards: profileData.awards ? profileData.awards.length : 0,
-      recognitions: profileData.recognitions ? profileData.recognitions.length : 0
-    });
-    // Add this after parsing the JSON fields
-console.log('Raw achievements data:', req.body.achievements);
-console.log('Parsed achievements data:', profileData.achievements);
-console.log('Raw awards data:', req.body.awards);
-console.log('Parsed awards data:', profileData.awards);
-console.log('Raw recognitions data:', req.body.recognitions);
-console.log('Parsed recognitions data:', profileData.recognitions);
+    if (req.files) {
+      if (req.files.profileImage) {
+        profileData.profileImage = req.files.profileImage[0].filename;
+        profileData.profileImageUrl = `/uploads/${req.files.profileImage[0].filename}`;
+      }
+      if (req.files.resume) {
+        profileData.resumeFileName = req.files.resume[0].originalname;
+        profileData.resumeFile = req.files.resume[0].filename;
+        profileData.resumeUrl = `/uploads/${req.files.resume[0].filename}`;
+      }
+    }
     
     // Validation
     if (!profileData.personalInfo || !profileData.academicInfo || !profileData.careerStatus) {
@@ -337,7 +320,7 @@ export const getAllAlumni = async (req, res) => {
     
     // Execute query with pagination
     const alumni = await Alumni.find(searchQuery)
-      .select('-userId -__v') // Don't expose user IDs
+      .select('-userId -__v')
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .sort({ createdAt: -1 });
@@ -355,6 +338,60 @@ export const getAllAlumni = async (req, res) => {
     console.error('Get all alumni error:', error);
     res.status(500).json({ 
       message: 'Server error during alumni fetch',
+      error: error.message 
+    });
+  }
+};
+
+// Get alumni profile by user ID (for public viewing)
+export const getAlumniProfileById = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log('Fetching alumni profile for user ID:', userId);
+    
+    // Find alumni profile with user details
+    const alumniProfile = await Alumni.findOne({ userId })
+      .populate('userId', 'name email graduationYear role')
+      .lean();
+    
+    if (!alumniProfile) {
+      console.log('Alumni profile not found for user:', userId);
+      return res.status(404).json({ 
+        message: 'Alumni profile not found'
+      });
+    }
+    
+    // Return public profile data (exclude sensitive information)
+    const publicProfile = {
+      id: alumniProfile.userId._id,
+      name: alumniProfile.userId.name,
+      email: alumniProfile.userId.email,
+      graduationYear: alumniProfile.userId.graduationYear,
+      role: alumniProfile.userId.role,
+      personalInfo: alumniProfile.personalInfo,
+      academicInfo: alumniProfile.academicInfo,
+      careerStatus: alumniProfile.careerStatus,
+      careerDetails: alumniProfile.careerDetails,
+      experiences: alumniProfile.experiences,
+      skills: alumniProfile.skills,
+      interests: alumniProfile.interests,
+      achievements: alumniProfile.achievements,
+      awards: alumniProfile.awards,
+      recognitions: alumniProfile.recognitions,
+      otherInfo: alumniProfile.otherInfo,
+      profileImage: alumniProfile.profileImage,
+      profileImageUrl: alumniProfile.profileImage ? `/uploads/${alumniProfile.profileImage}` : null
+    };
+    
+    console.log('Alumni profile found and returned');
+    
+    res.status(200).json(publicProfile);
+    
+  } catch (error) {
+    console.error('Get alumni profile by ID error:', error);
+    res.status(500).json({ 
+      message: 'Server error during profile fetch',
       error: error.message 
     });
   }

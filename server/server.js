@@ -14,7 +14,7 @@ import './config/googleAuth.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import jobRoutes from './routes/jobRoutes.js';
-
+import networkingRoutes from './routes/networkingRoutes.js';
 dotenv.config();
 
 const app = express();
@@ -59,6 +59,7 @@ app.use('/api', protectedRoutes);
 app.use('/api', contactRoutes);
 app.use('/api', alumniRoutes);
 app.use('/api', jobRoutes);
+app.use('/api', networkingRoutes);
 
 // ✅ Root Route
 app.get('/', (req, res) => {
