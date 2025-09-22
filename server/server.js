@@ -13,6 +13,7 @@ import contactRoutes from './routes/contactRoutes.js';
 import './config/googleAuth.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import jobRoutes from './routes/jobRoutes.js';
 
 dotenv.config();
 
@@ -57,6 +58,7 @@ app.use('/', authRoutes);
 app.use('/api', protectedRoutes);
 app.use('/api', contactRoutes);
 app.use('/api', alumniRoutes);
+app.use('/api', jobRoutes);
 
 // ✅ Root Route
 app.get('/', (req, res) => {

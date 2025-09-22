@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AlumniProfilePage from './profile';
+import AlumniJobDashboard from './AlumniJobDashboard';
 
 const AlumniConnectDashboard = () => {
   const navigate = useNavigate();
@@ -511,18 +512,13 @@ const AlumniConnectDashboard = () => {
               <AlumniProfilePage />
             </div>
           )}
-          
-          {/* Other Sections (Placeholders) */}
-          {activeSection !== 'dashboard' && activeSection !== 'profile' && (
-            <div className="content-section">
-              <h1 className="text-3xl font-bold text-gray-900 mb-6">
-                {navItems.find(item => item.id === activeSection)?.label}
-              </h1>
-              <div className="bg-white rounded-xl shadow p-8">
-                <p className="text-gray-600">This section is under development. Coming soon!</p>
-              </div>
+          {activeSection === 'jobs' && (
+            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
+              <AlumniJobDashboard />
             </div>
           )}
+          
+          
         </main>
       </div>
     </div>
