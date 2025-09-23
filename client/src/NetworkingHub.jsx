@@ -15,7 +15,7 @@ const NetworkingHub = () => {
     year: '',
     branch: '',
     page: 1,
-    limit: 20
+    limit: 12
   });
 
   // Navigation items
@@ -25,50 +25,40 @@ const NetworkingHub = () => {
   ];
 
   // Fetch alumni directory from backend
- // In NetworkingHub.jsx - update fetchAlumniDirectory
-const fetchAlumniDirectory = async () => {
-  setLoading(true);
-  try {
-    const token = localStorage.getItem('token');
-    const queryParams = new URLSearchParams({
-      page: filters.page,
-      limit: filters.limit,
-      ...(filters.search && { search: filters.search }),
-      ...(filters.year && { graduationYear: filters.year }),
-      ...(filters.branch && { branch: filters.branch })
-    });
+  const fetchAlumniDirectory = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const queryParams = new URLSearchParams({
+        page: filters.page,
+        limit: filters.limit,
+        ...(filters.search && { search: filters.search }),
+        ...(filters.year && { graduationYear: filters.year }),
+        ...(filters.branch && { branch: filters.branch })
+      });
 
-    console.log('🔄 Fetching alumni from:', `http://localhost:5000/api/alumni-directory?${queryParams}`);
+      const response = await fetch(`http://localhost:5000/api/alumni-directory?${queryParams}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-    const response = await fetch(`http://localhost:5000/api/alumni-directory?${queryParams}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+      if (!response.ok) {
+        throw new Error('Failed to fetch alumni directory');
       }
-    });
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch alumni directory');
+      const data = await response.json();
+      setAlumniData(data.alumni);
+      setFilteredAlumni(data.alumni);
+    } catch (error) {
+      console.error('Error fetching alumni directory:', error);
+      toast.error('Failed to load alumni directory');
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const data = await response.json();
-    console.log('✅ Received alumni data:', {
-      total: data.total,
-      currentPage: data.currentPage,
-      totalPages: data.totalPages,
-      alumniCount: data.alumni.length,
-      alumni: data.alumni.map(a => ({ name: a.name, id: a.id }))
-    });
-
-    setAlumniData(data.alumni);
-    setFilteredAlumni(data.alumni);
-  } catch (error) {
-    console.error('❌ Error fetching alumni directory:', error);
-    toast.error('Failed to load alumni directory');
-  } finally {
-    setLoading(false);
-  }
-};
   // Fetch alumni profile for viewing
   const fetchAlumniProfile = async (userId) => {
     try {
@@ -358,17 +348,17 @@ const fetchAlumniDirectory = async () => {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Branch</label>
             <select 
-  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-  value={filters.branch}
-  onChange={(e) => handleFilterChange('branch', e.target.value)}
->
-  <option value="">All Branches</option>
-  <option value="computer science">Computer Science</option>
-  <option value="electrical engineering">Electrical Engineering</option>
-  <option value="mechanical engineering">Mechanical Engineering</option>
-  <option value="electronics communication">Electronics & Communication</option>
-  <option value="business administration">Business Administration</option>
-</select>
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              value={filters.branch}
+              onChange={(e) => handleFilterChange('branch', e.target.value)}
+            >
+              <option value="">All Branches</option>
+              <option value="computer-science">Computer Science</option>
+              <option value="electrical-engineering">Electrical Engineering</option>
+              <option value="mechanical-engineering">Mechanical Engineering</option>
+              <option value="electronics-communication">Electronics & Communication</option>
+              <option value="business-administration">Business Administration</option>
+            </select>
           </div>
         </div>
         <button onClick={clearFilters} className="text-blue-600 hover:text-blue-800 font-medium">
@@ -407,29 +397,6 @@ const fetchAlumniDirectory = async () => {
     </div>
   );
 
-  // Add this debug function to networkinghub.jsx
-const testAlumniFetch = async () => {
-  try {
-    const token = localStorage.getItem('token');
-    const response = await fetch('http://localhost:5000/api/alumni/all', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    
-    console.log('Alumni fetch response status:', response.status);
-    const data = await response.json();
-    console.log('Alumni fetch data:', data);
-    
-    if (!response.ok) {
-      console.error('Alumni fetch error:', data);
-    }
-    
-    return data;
-  } catch (error) {
-    console.error('Alumni fetch exception:', error);
-  }
-};
   // Render Connections
   const renderConnections = () => (
     <div className="mb-8">
@@ -481,191 +448,174 @@ const testAlumniFetch = async () => {
 
   // AlumniCard Component
   const AlumniCard = ({ alumni, onConnect, onCancel, onViewProfile }) => {
-  const getConnectionButton = () => {
-    switch (alumni.connectionStatus) {
-      case 'connected':
-        return (
-          <button 
-            className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium text-sm flex-1 cursor-not-allowed"
-            disabled
-          >
-            Connected
-          </button>
-        );
-      case 'pending_sent':
-        return (
-          <button 
-            onClick={() => onCancel(alumni.id)}
-            className="bg-yellow-600 text-white px-4 py-2 rounded-lg font-medium text-sm flex-1 hover:bg-yellow-700"
-          >
-            Cancel Request
-          </button>
-        );
-      case 'pending_received':
-        return (
-          <button 
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium text-sm flex-1 cursor-not-allowed"
-            disabled
-          >
-            Respond to Request
-          </button>
-        );
-      default:
-        return (
-          <button 
-            onClick={() => onConnect(alumni.id)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm flex-1"
-          >
-            Connect
-          </button>
-        );
-    }
-  };
+    const getConnectionButton = () => {
+      switch (alumni.connectionStatus) {
+        case 'connected':
+          return (
+            <button 
+              className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium text-sm flex-1 cursor-not-allowed"
+              disabled
+            >
+              Connected
+            </button>
+          );
+        case 'pending_sent':
+          return (
+            <button 
+              onClick={() => onCancel(alumni.id)}
+              className="bg-yellow-600 text-white px-4 py-2 rounded-lg font-medium text-sm flex-1 hover:bg-yellow-700"
+            >
+              Cancel Request
+            </button>
+          );
+        case 'pending_received':
+          return (
+            <button 
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium text-sm flex-1 cursor-not-allowed"
+              disabled
+            >
+              Respond to Request
+            </button>
+          );
+        default:
+          return (
+            <button 
+              onClick={() => onConnect(alumni.id)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm flex-1"
+            >
+              Connect
+            </button>
+          );
+      }
+    };
 
-  return (
-    <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center">
-          {/* Profile Image with fallback to initial */}
-          {alumni.profileImageUrl ? (
-            <img 
-              src={alumni.profileImageUrl} 
-              alt={alumni.name}
-              className="w-12 h-12 rounded-full object-cover mr-4"
-            />
-          ) : (
+    return (
+      <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center">
             <div className="bg-blue-100 rounded-full w-12 h-12 flex items-center justify-center mr-4">
               <span className="text-blue-600 font-semibold text-lg">
                 {alumni.name.charAt(0)}
               </span>
             </div>
-          )}
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">{alumni.name}</h3>
-            <p className="text-gray-600 text-sm">{alumni.email}</p>
-            <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs mt-1">
-              Alumni
-            </span>
-          </div>
-        </div>
-      </div>
-      
-      {/* Enhanced Profile Information */}
-      <div className="space-y-2 mb-4">
-        {alumni.graduationYear && (
-          <div className="flex items-center text-sm text-gray-600">
-            <span className="font-medium w-20">Batch:</span>
-            <span>Class of {alumni.graduationYear}</span>
-          </div>
-        )}
-        {alumni.alumniProfile?.academicInfo?.branch && (
-          <div className="flex items-center text-sm text-gray-600">
-            <span className="font-medium w-20">Branch:</span>
-            <span className="capitalize">{alumni.alumniProfile.academicInfo.branch.replace(/-/g, ' ')}</span>
-          </div>
-        )}
-        {alumni.alumniProfile?.careerDetails?.companyName && (
-          <div className="flex items-center text-sm text-gray-600">
-            <span className="font-medium w-20">Company:</span>
-            <span>{alumni.alumniProfile.careerDetails.companyName}</span>
-          </div>
-        )}
-        {alumni.alumniProfile?.careerDetails?.jobTitle && (
-          <div className="flex items-center text-sm text-gray-600">
-            <span className="font-medium w-20">Role:</span>
-            <span>{alumni.alumniProfile.careerDetails.jobTitle}</span>
-          </div>
-        )}
-        {alumni.alumniProfile?.personalInfo?.location && (
-          <div className="flex items-center text-sm text-gray-600">
-            <span className="font-medium w-20">Location:</span>
-            <span>{alumni.alumniProfile.personalInfo.location}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Skills Preview */}
-      {alumni.alumniProfile?.skills && alumni.alumniProfile.skills.length > 0 && (
-        <div className="mb-4">
-          <p className="text-sm text-gray-600 mb-2">Skills:</p>
-          <div className="flex flex-wrap gap-1">
-            {alumni.alumniProfile.skills.slice(0, 3).map((skill, index) => (
-              <span key={index} className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
-                {skill}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">{alumni.name}</h3>
+              <p className="text-gray-600 text-sm">{alumni.email}</p>
+              <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs mt-1">
+                Alumni
               </span>
-            ))}
-            {alumni.alumniProfile.skills.length > 3 && (
-              <span className="text-gray-500 text-xs">+{alumni.alumniProfile.skills.length - 3} more</span>
-            )}
+            </div>
           </div>
         </div>
-      )}
-      
-      <div className="flex space-x-2">
-        {getConnectionButton()}
-        <button 
-          onClick={() => onViewProfile(alumni.id)}
-          className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium text-sm"
-        >
-          View Profile
-        </button>
-      </div>
-    </div>
-  );
-};
+        
+        {/* Enhanced Profile Information */}
+        <div className="space-y-2 mb-4">
+          {alumni.graduationYear && (
+            <div className="flex items-center text-sm text-gray-600">
+              <span className="font-medium w-20">Batch:</span>
+              <span>Class of {alumni.graduationYear}</span>
+            </div>
+          )}
+          {alumni.alumniProfile?.academicInfo?.branch && (
+            <div className="flex items-center text-sm text-gray-600">
+              <span className="font-medium w-20">Branch:</span>
+              <span className="capitalize">{alumni.alumniProfile.academicInfo.branch.replace(/-/g, ' ')}</span>
+            </div>
+          )}
+          {alumni.alumniProfile?.careerDetails?.companyName && (
+            <div className="flex items-center text-sm text-gray-600">
+              <span className="font-medium w-20">Company:</span>
+              <span>{alumni.alumniProfile.careerDetails.companyName}</span>
+            </div>
+          )}
+          {alumni.alumniProfile?.careerDetails?.jobTitle && (
+            <div className="flex items-center text-sm text-gray-600">
+              <span className="font-medium w-20">Role:</span>
+              <span>{alumni.alumniProfile.careerDetails.jobTitle}</span>
+            </div>
+          )}
+          {alumni.alumniProfile?.personalInfo?.location && (
+            <div className="flex items-center text-sm text-gray-600">
+              <span className="font-medium w-20">Location:</span>
+              <span>{alumni.alumniProfile.personalInfo.location}</span>
+            </div>
+          )}
+        </div>
 
-// Update ProfileModal component to display images properly
-const ProfileModal = ({ profile, onClose }) => {
-  if (!profile) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex justify-between items-start mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Alumni Profile</h2>
-            <button 
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 text-2xl"
-            >
-              ×
-            </button>
+        {/* Skills Preview */}
+        {alumni.alumniProfile?.skills && alumni.alumniProfile.skills.length > 0 && (
+          <div className="mb-4">
+            <p className="text-sm text-gray-600 mb-2">Skills:</p>
+            <div className="flex flex-wrap gap-1">
+              {alumni.alumniProfile.skills.slice(0, 3).map((skill, index) => (
+                <span key={index} className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
+                  {skill}
+                </span>
+              ))}
+              {alumni.alumniProfile.skills.length > 3 && (
+                <span className="text-gray-500 text-xs">+{alumni.alumniProfile.skills.length - 3} more</span>
+              )}
+            </div>
           </div>
-          
-          {/* Profile Header with Image */}
-          <div className="bg-gray-50 rounded-lg p-6 mb-6">
-            <div className="flex items-center">
-              {/* Profile Image */}
-              {profile.profileImageUrl ? (
-                <img 
-                  src={profile.profileImageUrl} 
-                  alt={profile.name}
-                  className="w-20 h-20 rounded-full object-cover mr-6"
-                />
-              ) : (
+        )}
+        
+        <div className="flex space-x-2">
+          {getConnectionButton()}
+          <button 
+            onClick={() => onViewProfile(alumni.id)}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium text-sm"
+          >
+            View Profile
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Profile Modal Component
+  const ProfileModal = ({ profile, onClose }) => {
+    if (!profile) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6">
+            <div className="flex justify-between items-start mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Alumni Profile</h2>
+              <button 
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-600 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            {/* Profile Header */}
+            <div className="bg-gray-50 rounded-lg p-6 mb-6">
+              <div className="flex items-center">
                 <div className="bg-blue-100 rounded-full w-20 h-20 flex items-center justify-center mr-6">
                   <span className="text-blue-600 font-semibold text-2xl">
                     {profile.name.charAt(0)}
                   </span>
                 </div>
-              )}
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">{profile.name}</h1>
-                <p className="text-gray-600">{profile.email}</p>
-                <p className="text-gray-600">Class of {profile.graduationYear}</p>
-                {profile.otherInfo?.linkedin && (
-                  <a 
-                    href={profile.otherInfo.linkedin} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 text-sm"
-                  >
-                    LinkedIn Profile
-                  </a>
-                )}
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900">{profile.name}</h1>
+                  <p className="text-gray-600">{profile.email}</p>
+                  <p className="text-gray-600">Class of {profile.graduationYear}</p>
+                  {profile.otherInfo?.linkedin && (
+                    <a 
+                      href={profile.otherInfo.linkedin} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 text-sm"
+                    >
+                      LinkedIn Profile
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+
             {/* Academic Information */}
             {profile.academicInfo && (
               <div className="mb-6">
