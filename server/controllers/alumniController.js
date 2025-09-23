@@ -344,17 +344,18 @@ export const getAllAlumni = async (req, res) => {
 };
 
 // Get alumni profile by user ID (for public viewing)
+// controllers/alumniController.js - Updated getAlumniProfileById
 export const getAlumniProfileById = async (req, res) => {
   try {
     const { userId } = req.params;
     
     console.log('Fetching alumni profile for user ID:', userId);
     
-    // Find alumni profile with user details
+    // Find alumni profile by userId with user details
     const alumniProfile = await Alumni.findOne({ userId })
       .populate('userId', 'name email graduationYear role')
       .lean();
-    
+
     if (!alumniProfile) {
       console.log('Alumni profile not found for user:', userId);
       return res.status(404).json({ 
@@ -362,26 +363,46 @@ export const getAlumniProfileById = async (req, res) => {
       });
     }
     
-    // Return public profile data (exclude sensitive information)
+    // Return complete alumni profile data
     const publicProfile = {
       id: alumniProfile.userId._id,
-      name: alumniProfile.userId.name,
-      email: alumniProfile.userId.email,
-      graduationYear: alumniProfile.userId.graduationYear,
+      name: alumniProfile.personalInfo.fullName || alumniProfile.userId.name,
+      email: alumniProfile.personalInfo.personalEmail || alumniProfile.userId.email,
+      graduationYear: alumniProfile.academicInfo.graduationYear,
       role: alumniProfile.userId.role,
+      
+      // Personal Information
       personalInfo: alumniProfile.personalInfo,
+      
+      // Academic Information
       academicInfo: alumniProfile.academicInfo,
+      
+      // Career Information
       careerStatus: alumniProfile.careerStatus,
       careerDetails: alumniProfile.careerDetails,
+      
+      // Professional Details
       experiences: alumniProfile.experiences,
       skills: alumniProfile.skills,
       interests: alumniProfile.interests,
+      
+      // Achievements
       achievements: alumniProfile.achievements,
       awards: alumniProfile.awards,
       recognitions: alumniProfile.recognitions,
+      
+      // Other Information
       otherInfo: alumniProfile.otherInfo,
+      
+      // File URLs
       profileImage: alumniProfile.profileImage,
-      profileImageUrl: alumniProfile.profileImage ? `/uploads/${alumniProfile.profileImage}` : null
+      profileImageUrl: alumniProfile.profileImage ? 
+        `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${alumniProfile.profileImage}` : 
+        null,
+      
+      resumeUrl: alumniProfile.resumeFile ? 
+        `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${alumniProfile.resumeFile}` : 
+        null
     };
     
     console.log('Alumni profile found and returned');

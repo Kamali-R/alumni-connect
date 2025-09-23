@@ -4,44 +4,104 @@ import User from '../models/User.js';
 import Alumni from '../models/Alumni.js';
 
 // Get all alumni for directory (excluding current user and existing connections)
+// controllers/networkingController.js - Updated getAlumniDirectory function
+// controllers/networkingController.js - Updated with debugging
 export const getAlumniDirectory = async (req, res) => {
   try {
     const currentUserId = req.user.id;
     const { page = 1, limit = 12, search = '', branch = '', graduationYear = '' } = req.query;
 
-    // Build search query for alumni users
-    let userQuery = { 
-      role: 'alumni',
-      _id: { $ne: currentUserId }, // Exclude current user
-      profileCompleted: true // Only show alumni with completed profiles
-    };
+    console.log('🔍 Fetching alumni directory with filters:', {
+      currentUserId,
+      page,
+      limit,
+      search,
+      branch,
+      graduationYear
+    });
 
+    // Build search query for alumni profiles
+    let alumniQuery = { 
+  // Remove status filter or include multiple statuses
+  $or: [
+    { status: 'complete' },
+    { status: 'draft' },
+    { status: { $exists: false } } // Include profiles without status field
+  ]
+};
+    // Exclude current user's profile
+    const currentUserAlumniProfile = await Alumni.findOne({ userId: currentUserId });
+    console.log('👤 Current user alumni profile:', currentUserAlumniProfile ? 'Found' : 'Not found');
+    
+    if (currentUserAlumniProfile) {
+      alumniQuery._id = { $ne: currentUserAlumniProfile._id };
+    }
+
+    // Add search filters
     if (search) {
-      userQuery.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
+      alumniQuery.$or = [
+        { 'personalInfo.fullName': { $regex: search, $options: 'i' } },
+        { 'personalInfo.personalEmail': { $regex: search, $options: 'i' } },
+        { 'academicInfo.collegeEmail': { $regex: search, $options: 'i' } },
+        { 'academicInfo.branch': { $regex: search, $options: 'i' } },
+        { 'careerDetails.companyName': { $regex: search, $options: 'i' } }
       ];
     }
 
     if (graduationYear) {
-      userQuery.graduationYear = parseInt(graduationYear);
+      alumniQuery['academicInfo.graduationYear'] = parseInt(graduationYear);
     }
 
-    // Get alumni users with pagination
-    const users = await User.find(userQuery)
-      .select('name email role graduationYear alumniProfile')
-      .populate('alumniProfile')
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
-      .sort({ name: 1 });
+    if (branch) {
+  // Use case-insensitive regex and handle different formats
+  alumniQuery['academicInfo.branch'] = { 
+    $regex: branch.replace(/[-\s]/g, '.*'), // Handle spaces and dashes
+    $options: 'i' 
+  };
+}
 
-    // Get connection status for each user and complete profile data
-    const alumniWithConnections = await Promise.all(
-      users.map(async (user) => {
+    console.log('📋 Final query:', JSON.stringify(alumniQuery, null, 2));
+
+    // Get total count first
+    const total = await Alumni.countDocuments(alumniQuery);
+    console.log('📊 Total alumni found:', total);
+
+    // Get alumni profiles with pagination
+   const alumniProfiles = await Alumni.find(alumniQuery)
+  .populate({
+    path: 'userId',
+    select: 'name email role graduationYear',
+    // Use left join to include alumni even if userId is missing/invalid
+    options: { allowNull: true }
+  })
+  .limit(limit * 1)
+  .skip((page - 1) * limit)
+  .sort({ createdAt: -1 });
+
+// Modified processing to handle missing userId
+const alumniWithConnections = await Promise.all(
+  alumniProfiles.map(async (alumni) => {
+    // If no userId, we can't establish connections but can still show profile
+    if (!alumni.userId) {
+      return {
+        id: alumni._id, // Use alumni ID instead of user ID
+        alumniProfileId: alumni._id,
+        name: alumni.personalInfo.fullName || 'Alumni Member',
+        email: alumni.personalInfo.personalEmail || 'No email',
+        graduationYear: alumni.academicInfo.graduationYear,
+        alumniProfile: alumni.toObject(),
+        connectionStatus: 'not_connected', // Can't connect without userId
+        type: 'alumni',
+        profileImage: alumni.profileImage,
+        profileImageUrl: alumni.profileImage ? `/uploads/${alumni.profileImage}` : null,
+        noUserId: true // Flag to indicate no user account
+      };
+    }
+
         const connection = await Connection.findOne({
           $or: [
-            { requesterId: currentUserId, recipientId: user._id },
-            { requesterId: user._id, recipientId: currentUserId }
+            { requesterId: currentUserId, recipientId: alumni.userId._id },
+            { requesterId: alumni.userId._id, recipientId: currentUserId }
           ]
         });
 
@@ -54,30 +114,27 @@ export const getAlumniDirectory = async (req, res) => {
           }
         }
 
-        // Get complete alumni profile
-        const alumniProfile = await Alumni.findOne({ userId: user._id }).lean();
-
-        return {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          graduationYear: user.graduationYear,
-          alumniProfile: alumniProfile,
+        const alumniData = {
+          id: alumni.userId._id,
+          alumniProfileId: alumni._id,
+          name: alumni.personalInfo.fullName || alumni.userId.name,
+          email: alumni.personalInfo.personalEmail || alumni.userId.email,
+          graduationYear: alumni.academicInfo.graduationYear,
+          alumniProfile: alumni.toObject(),
           connectionStatus: connectionStatus,
-          type: 'alumni'
+          type: 'alumni',
+          profileImage: alumni.profileImage,
+          profileImageUrl: alumni.profileImage ? `/uploads/${alumni.profileImage}` : null
         };
+
+        console.log('👤 Processed alumni:', alumniData.name, 'ID:', alumniData.id);
+        return alumniData;
       })
     );
 
-    // Filter by branch if specified
-    let filteredAlumni = alumniWithConnections;
-    if (branch) {
-      filteredAlumni = alumniWithConnections.filter(alumni => 
-        alumni.alumniProfile?.academicInfo?.branch?.toLowerCase().includes(branch.toLowerCase())
-      );
-    }
-
-    const total = await User.countDocuments(userQuery);
+    // Filter out null values
+    const filteredAlumni = alumniWithConnections.filter(alumni => alumni !== null);
+    console.log('🎯 Final alumni count after filtering:', filteredAlumni.length);
 
     res.status(200).json({
       alumni: filteredAlumni,
@@ -87,14 +144,13 @@ export const getAlumniDirectory = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get alumni directory error:', error);
+    console.error('❌ Get alumni directory error:', error);
     res.status(500).json({ 
       message: 'Server error fetching alumni directory',
       error: error.message 
     });
   }
 };
-
 // Send connection request
 export const sendConnectionRequest = async (req, res) => {
   try {
