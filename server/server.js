@@ -90,10 +90,31 @@ app.get('/api/debug/alumni', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+// Add this temporary test route to server.js - BEFORE your other routes
+app.post('/api/test-connection', async (req, res) => {
+  try {
+    console.log('Test connection endpoint hit');
+    console.log('Request body:', req.body);
+    
+    // Simulate a successful connection request
+    res.status(200).json({
+      message: 'Test connection successful',
+      testData: {
+        recipientId: req.body.recipientId,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Test connection error:', error);
+    res.status(500).json({ message: 'Test connection failed' });
+  }
+});
+
 // ✅ Connect to MongoDB
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
 
+// server.js - Add this after mongoose connection
 mongoose
   .connect(MONGO_URI, {
     useNewUrlParser: true,
@@ -101,6 +122,40 @@ mongoose
   })
   .then(() => {
     console.log('✅ MongoDB Connected');
+    
+    // Create indexes after connection is established
+    const createIndexes = async () => {
+      try {
+        const db = mongoose.connection.db;
+        
+        // Create indexes for Connection model
+        await db.collection('connections').createIndex(
+          { "requesterId": 1, "recipientId": 1 }, 
+          { unique: true }
+        );
+        await db.collection('connections').createIndex(
+          { "requesterId": 1, "status": 1 }
+        );
+        await db.collection('connections').createIndex(
+          { "recipientId": 1, "status": 1 }
+        );
+        await db.collection('connections').createIndex(
+          { "status": 1, "requestedAt": -1 }
+        );
+        
+        // Create indexes for Alumni model (if not already there)
+        await db.collection('alumnis').createIndex({ "userId": 1 });
+        await db.collection('alumnis').createIndex({ "personalInfo.personalEmail": 1 });
+        await db.collection('alumnis').createIndex({ "academicInfo.collegeEmail": 1 });
+        
+        console.log('✅ Database indexes created successfully');
+      } catch (error) {
+        console.log('ℹ️ Indexes may already exist:', error.message);
+      }
+    };
+    
+    createIndexes();
+    
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
     });

@@ -1,11 +1,8 @@
-// controllers/networkingController.js
 import Connection from '../models/Connection.js';
 import User from '../models/User.js';
 import Alumni from '../models/Alumni.js';
 
 // Get all alumni for directory (excluding current user and existing connections)
-// controllers/networkingController.js - Updated getAlumniDirectory function
-// controllers/networkingController.js - Updated with debugging
 export const getAlumniDirectory = async (req, res) => {
   try {
     const currentUserId = req.user.id;
@@ -22,119 +19,104 @@ export const getAlumniDirectory = async (req, res) => {
 
     // Build search query for alumni profiles
     let alumniQuery = { 
-  // Remove status filter or include multiple statuses
-  $or: [
-    { status: 'complete' },
-    { status: 'draft' },
-    { status: { $exists: false } } // Include profiles without status field
-  ]
-};
-    // Exclude current user's profile
-    const currentUserAlumniProfile = await Alumni.findOne({ userId: currentUserId });
-    console.log('👤 Current user alumni profile:', currentUserAlumniProfile ? 'Found' : 'Not found');
-    
-    if (currentUserAlumniProfile) {
-      alumniQuery._id = { $ne: currentUserAlumniProfile._id };
-    }
+      status: 'complete',
+      userId: { $ne: currentUserId } // Exclude current user
+    };
 
     // Add search filters
-    if (search) {
+    if (search && search.trim() !== '') {
       alumniQuery.$or = [
-        { 'personalInfo.fullName': { $regex: search, $options: 'i' } },
-        { 'personalInfo.personalEmail': { $regex: search, $options: 'i' } },
-        { 'academicInfo.collegeEmail': { $regex: search, $options: 'i' } },
-        { 'academicInfo.branch': { $regex: search, $options: 'i' } },
-        { 'careerDetails.companyName': { $regex: search, $options: 'i' } }
+        { 'personalInfo.fullName': { $regex: search.trim(), $options: 'i' } },
+        { 'personalInfo.personalEmail': { $regex: search.trim(), $options: 'i' } },
+        { 'academicInfo.branch': { $regex: search.trim(), $options: 'i' } },
+        { 'careerDetails.companyName': { $regex: search.trim(), $options: 'i' } }
       ];
     }
 
-    if (graduationYear) {
+    if (graduationYear && graduationYear !== '') {
       alumniQuery['academicInfo.graduationYear'] = parseInt(graduationYear);
     }
 
-    if (branch) {
-  // Use case-insensitive regex and handle different formats
-  alumniQuery['academicInfo.branch'] = { 
-    $regex: branch.replace(/[-\s]/g, '.*'), // Handle spaces and dashes
-    $options: 'i' 
-  };
-}
-
-    console.log('📋 Final query:', JSON.stringify(alumniQuery, null, 2));
-
-    // Get total count first
-    const total = await Alumni.countDocuments(alumniQuery);
-    console.log('📊 Total alumni found:', total);
-
-    // Get alumni profiles with pagination
-   const alumniProfiles = await Alumni.find(alumniQuery)
-  .populate({
-    path: 'userId',
-    select: 'name email role graduationYear',
-    // Use left join to include alumni even if userId is missing/invalid
-    options: { allowNull: true }
-  })
-  .limit(limit * 1)
-  .skip((page - 1) * limit)
-  .sort({ createdAt: -1 });
-
-// Modified processing to handle missing userId
-const alumniWithConnections = await Promise.all(
-  alumniProfiles.map(async (alumni) => {
-    // If no userId, we can't establish connections but can still show profile
-    if (!alumni.userId) {
-      return {
-        id: alumni._id, // Use alumni ID instead of user ID
-        alumniProfileId: alumni._id,
-        name: alumni.personalInfo.fullName || 'Alumni Member',
-        email: alumni.personalInfo.personalEmail || 'No email',
-        graduationYear: alumni.academicInfo.graduationYear,
-        alumniProfile: alumni.toObject(),
-        connectionStatus: 'not_connected', // Can't connect without userId
-        type: 'alumni',
-        profileImage: alumni.profileImage,
-        profileImageUrl: alumni.profileImage ? `/uploads/${alumni.profileImage}` : null,
-        noUserId: true // Flag to indicate no user account
+    if (branch && branch !== '') {
+      alumniQuery['academicInfo.branch'] = { 
+        $regex: branch.replace(/[-\s]/g, '.*'), 
+        $options: 'i' 
       };
     }
 
-        const connection = await Connection.findOne({
-          $or: [
-            { requesterId: currentUserId, recipientId: alumni.userId._id },
-            { requesterId: alumni.userId._id, recipientId: currentUserId }
-          ]
-        });
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
+    // Get alumni profiles with pagination
+    const alumniProfiles = await Alumni.find(alumniQuery)
+      .populate('userId', 'name email role graduationYear')
+      .limit(parseInt(limit))
+      .skip(skip)
+      .sort({ createdAt: -1 });
+
+    const total = await Alumni.countDocuments(alumniQuery);
+
+    // Get all connections for the current user
+    const connections = await Connection.find({
+      $or: [
+        { requesterId: currentUserId },
+        { recipientId: currentUserId }
+      ]
+    });
+
+    // Create a map for quick connection lookup
+    const connectionMap = {};
+    connections.forEach(conn => {
+      const otherUserId = conn.requesterId.toString() === currentUserId 
+        ? conn.recipientId.toString() 
+        : conn.requesterId.toString();
+      
+      connectionMap[otherUserId] = {
+        id: conn._id,
+        status: conn.status,
+        isRequester: conn.requesterId.toString() === currentUserId
+      };
+    });
+
+    // Process alumni profiles
+    const alumniWithConnections = await Promise.all(
+      alumniProfiles.map(async (alumni) => {
+        if (!alumni.userId) {
+          console.log('Alumni profile without userId:', alumni._id);
+          return null;
+        }
+
+        const userId = alumni.userId._id.toString();
+        const connection = connectionMap[userId];
+        
         let connectionStatus = 'not_connected';
         if (connection) {
           if (connection.status === 'pending') {
-            connectionStatus = connection.requesterId.toString() === currentUserId ? 'pending_sent' : 'pending_received';
+            connectionStatus = connection.isRequester ? 'pending_sent' : 'pending_received';
           } else if (connection.status === 'accepted') {
             connectionStatus = 'connected';
           }
         }
 
-        const alumniData = {
-          id: alumni.userId._id,
+        // Get complete alumni profile data
+        const alumniData = alumni.toObject();
+        
+        return {
+          id: userId,
           alumniProfileId: alumni._id,
-          name: alumni.personalInfo.fullName || alumni.userId.name,
-          email: alumni.personalInfo.personalEmail || alumni.userId.email,
-          graduationYear: alumni.academicInfo.graduationYear,
-          alumniProfile: alumni.toObject(),
+          name: alumni.personalInfo?.fullName || alumni.userId?.name || 'Unknown',
+          email: alumni.personalInfo?.personalEmail || alumni.userId?.email,
+          graduationYear: alumni.academicInfo?.graduationYear,
+          alumniProfile: alumniData,
           connectionStatus: connectionStatus,
-          type: 'alumni',
-          profileImage: alumni.profileImage,
-          profileImageUrl: alumni.profileImage ? `/uploads/${alumni.profileImage}` : null
+          profileImageUrl: alumni.profileImage ? 
+            `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${alumni.profileImage}` : 
+            null
         };
-
-        console.log('👤 Processed alumni:', alumniData.name, 'ID:', alumniData.id);
-        return alumniData;
       })
     );
 
-    // Filter out null values
-    const filteredAlumni = alumniWithConnections.filter(alumni => alumni !== null);
-    console.log('🎯 Final alumni count after filtering:', filteredAlumni.length);
+    const filteredAlumni = alumniWithConnections.filter(Boolean);
 
     res.status(200).json({
       alumni: filteredAlumni,
@@ -151,24 +133,43 @@ const alumniWithConnections = await Promise.all(
     });
   }
 };
+
 // Send connection request
+// Enhanced sendConnectionRequest function
 export const sendConnectionRequest = async (req, res) => {
   try {
     const currentUserId = req.user.id;
     const { recipientId } = req.body;
 
+    console.log('🔗 [BACKEND] Connection request received:', {
+      currentUserId,
+      recipientId,
+      body: req.body
+    });
+
+    // Validate recipientId
     if (!recipientId) {
+      console.log('❌ [BACKEND] Recipient ID is required');
       return res.status(400).json({ message: 'Recipient ID is required' });
     }
 
-    // Check if recipient exists and is alumni
-    const recipient = await User.findOne({ 
-      _id: recipientId, 
-      role: 'alumni' 
-    });
-    
+    if (currentUserId === recipientId) {
+      console.log('❌ [BACKEND] Cannot connect to self');
+      return res.status(400).json({ message: 'Cannot send connection request to yourself' });
+    }
+
+    // Check if recipient exists as a User
+    const recipient = await User.findById(recipientId);
     if (!recipient) {
-      return res.status(404).json({ message: 'Alumni not found' });
+      console.log('❌ [BACKEND] Recipient user not found:', recipientId);
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if recipient has an alumni profile
+    const recipientAlumniProfile = await Alumni.findOne({ userId: recipientId });
+    if (!recipientAlumniProfile) {
+      console.log('❌ [BACKEND] Recipient alumni profile not found');
+      return res.status(404).json({ message: 'Alumni profile not found for this user' });
     }
 
     // Check if connection already exists
@@ -180,8 +181,9 @@ export const sendConnectionRequest = async (req, res) => {
     });
 
     if (existingConnection) {
+      console.log('ℹ️ [BACKEND] Connection already exists:', existingConnection.status);
       return res.status(400).json({ 
-        message: 'Connection request already exists',
+        message: 'Connection already exists',
         status: existingConnection.status 
       });
     }
@@ -190,25 +192,39 @@ export const sendConnectionRequest = async (req, res) => {
     const connection = new Connection({
       requesterId: currentUserId,
       recipientId: recipientId,
-      status: 'pending'
+      status: 'pending',
+      requestedAt: new Date()
     });
 
     await connection.save();
+    console.log('✅ [BACKEND] Connection request saved to database');
 
+    // Populate the response for better debugging
+    await connection.populate('requesterId', 'name email');
+    await connection.populate('recipientId', 'name email');
+
+    console.log('✅ [BACKEND] Connection request successful');
+    
     res.status(201).json({
       message: 'Connection request sent successfully',
-      connection
+      connection: {
+        id: connection._id,
+        requester: connection.requesterId,
+        recipient: connection.recipientId,
+        status: connection.status,
+        requestedAt: connection.requestedAt
+      }
     });
 
   } catch (error) {
-    console.error('Send connection request error:', error);
+    console.error('❌ [BACKEND] Send connection request error:', error);
     res.status(500).json({ 
       message: 'Server error sending connection request',
-      error: error.message 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
-
 // Get connection requests (pending received)
 export const getConnectionRequests = async (req, res) => {
   try {
@@ -218,12 +234,13 @@ export const getConnectionRequests = async (req, res) => {
       recipientId: currentUserId,
       status: 'pending'
     })
-    .populate('requesterId', 'name email graduationYear alumniProfile')
+    .populate('requesterId', 'name email graduationYear')
     .sort({ requestedAt: -1 });
 
     const formattedRequests = await Promise.all(
       pendingRequests.map(async (request) => {
         const alumniProfile = await Alumni.findOne({ userId: request.requesterId._id });
+        
         return {
           id: request._id,
           person: {
@@ -231,8 +248,7 @@ export const getConnectionRequests = async (req, res) => {
             name: request.requesterId.name,
             email: request.requesterId.email,
             graduationYear: request.requesterId.graduationYear,
-            alumniProfile: alumniProfile,
-            type: 'alumni'
+            alumniProfile: alumniProfile || null
           },
           requestedAt: request.requestedAt
         };
@@ -244,7 +260,7 @@ export const getConnectionRequests = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get connection requests error:', error);
+    console.error('❌ Get connection requests error:', error);
     res.status(500).json({ 
       message: 'Server error fetching connection requests',
       error: error.message 
@@ -269,7 +285,6 @@ export const getMyConnections = async (req, res) => {
 
     const formattedConnections = await Promise.all(
       connections.map(async (connection) => {
-        // Determine which user is the other party (not current user)
         const otherUser = 
           connection.requesterId._id.toString() === currentUserId.toString() 
             ? connection.recipientId 
@@ -284,8 +299,7 @@ export const getMyConnections = async (req, res) => {
             name: otherUser.name,
             email: otherUser.email,
             graduationYear: otherUser.graduationYear,
-            alumniProfile: alumniProfile,
-            type: 'alumni'
+            alumniProfile: alumniProfile || null
           },
           connectedSince: connection.respondedAt
         };
@@ -297,7 +311,7 @@ export const getMyConnections = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get my connections error:', error);
+    console.error('❌ Get my connections error:', error);
     res.status(500).json({ 
       message: 'Server error fetching connections',
       error: error.message 
@@ -335,7 +349,7 @@ export const acceptConnection = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Accept connection error:', error);
+    console.error('❌ Accept connection error:', error);
     res.status(500).json({ 
       message: 'Server error accepting connection',
       error: error.message 
@@ -372,7 +386,7 @@ export const declineConnection = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Decline connection error:', error);
+    console.error('❌ Decline connection error:', error);
     res.status(500).json({ 
       message: 'Server error declining connection',
       error: error.message 
@@ -400,16 +414,54 @@ export const cancelConnectionRequest = async (req, res) => {
       return res.status(404).json({ message: 'Connection request not found' });
     }
 
-    await Connection.deleteOne({ _id: connectionId });
+    await Connection.findByIdAndDelete(connectionId);
 
     res.status(200).json({
       message: 'Connection request cancelled'
     });
 
   } catch (error) {
-    console.error('Cancel connection error:', error);
+    console.error('❌ Cancel connection error:', error);
     res.status(500).json({ 
       message: 'Server error cancelling connection',
+      error: error.message 
+    });
+  }
+};
+
+// Remove connection
+export const removeConnection = async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const { connectionId } = req.body;
+
+    if (!connectionId) {
+      return res.status(400).json({ message: 'Connection ID is required' });
+    }
+
+    const connection = await Connection.findOne({
+      _id: connectionId,
+      status: 'accepted',
+      $or: [
+        { requesterId: currentUserId },
+        { recipientId: currentUserId }
+      ]
+    });
+
+    if (!connection) {
+      return res.status(404).json({ message: 'Connection not found' });
+    }
+
+    await Connection.findByIdAndDelete(connectionId);
+
+    res.status(200).json({
+      message: 'Connection removed successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Remove connection error:', error);
+    res.status(500).json({ 
+      message: 'Server error removing connection',
       error: error.message 
     });
   }
