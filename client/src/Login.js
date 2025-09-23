@@ -29,7 +29,8 @@ const [showPwd, setShowPwd] = useState(false);
     }
   }, [location]);
   
- const handleLogin = async (e) => {
+ // In login.js - update the handleLogin function
+const handleLogin = async (e) => {
   e.preventDefault();
   setLoading(true);
   setMessage('');
@@ -45,44 +46,59 @@ const [showPwd, setShowPwd] = useState(false);
     localStorage.setItem('user', JSON.stringify(response.data.user));
     localStorage.setItem('userRole', response.data.user.role);
     localStorage.setItem('profileCompleted', response.data.user.profileCompleted ? 'true' : 'false');
+    localStorage.setItem('registrationComplete', response.data.user.registrationComplete ? 'true' : 'false');
     
     setMessage('Login successful! Redirecting...');
     
-    // Redirect based on profile completion
+    // Enhanced redirect logic
     setTimeout(() => {
-      if (response.data.user.profileCompleted) {
-        // If profile completed, redirect based on role
+      if (!response.data.user.registrationComplete) {
+        // User exists but hasn't completed alumni profile - redirect to profile completion
+        if (response.data.user.hasAlumniProfile === false) {
+          navigate('/alumni-profile', {
+            state: {
+              userData: response.data.user,
+              verified: true,
+              role: response.data.user.role
+            }
+          });
+        } else {
+          // Should not happen, but fallback
+          navigate('/alumni-profile');
+        }
+      } else {
+        // Registration complete - redirect to dashboard based on role
         if (response.data.user.role === 'student') {
           navigate('/student-dashboard');
         } else {
           navigate('/dashboard');
         }
-      } else {
-        // Redirect to profile completion page
-        navigate('/alumni-profile', {
-          state: {
-            userData: response.data.user,
-            verified: true,
-            role: response.data.user.role
-          }
-        });
       }
     }, 1000);
       
-    } catch (error) {
-      console.error('Login error:', error);
-      if (error.response) {
-        setMessage(error.response.data.message);
-      } else if (error.request) {
-        setMessage("Network error. Please check your connection.");
-      } else {
-        setMessage("Something went wrong. Please try again.");
-      }
-    } finally {
-      setLoading(false);
+  } catch (error) {
+    console.error('Login error:', error);
+    
+    // Enhanced error handling
+    if (error.response?.status === 404) {
+      // User not found - redirect to signup
+      setMessage('Account not found. Redirecting to signup...');
+      setTimeout(() => {
+        navigate('/register', {
+          state: { prefillEmail: email }
+        });
+      }, 1500);
+    } else if (error.response) {
+      setMessage(error.response.data.message);
+    } else if (error.request) {
+      setMessage("Network error. Please check your connection.");
+    } else {
+      setMessage("Something went wrong. Please try again.");
     }
-  };
-  
+  } finally {
+    setLoading(false);
+  }
+};
   const handleGoogleLogin = () => {
     console.log('Initiating Google login...');
     setMessage('Redirecting to Google...');

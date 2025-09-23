@@ -407,6 +407,29 @@ const fetchAlumniDirectory = async () => {
     </div>
   );
 
+  // Add this debug function to networkinghub.jsx
+const testAlumniFetch = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await fetch('http://localhost:5000/api/alumni/all', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    console.log('Alumni fetch response status:', response.status);
+    const data = await response.json();
+    console.log('Alumni fetch data:', data);
+    
+    if (!response.ok) {
+      console.error('Alumni fetch error:', data);
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Alumni fetch exception:', error);
+  }
+};
   // Render Connections
   const renderConnections = () => (
     <div className="mb-8">

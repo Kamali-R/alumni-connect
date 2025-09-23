@@ -65,7 +65,31 @@ app.use('/api', networkingRoutes);
 app.get('/', (req, res) => {
   res.send('API is running...');
 });
-
+// Add this temporary route to your server for debugging
+app.get('/api/debug/alumni', async (req, res) => {
+  try {
+    const Alumni = require('./models/Alumni');
+    const allAlumni = await Alumni.find({})
+      .populate('userId')
+      .lean();
+    
+    console.log('Total alumni in database:', allAlumni.length);
+    
+    res.json({
+      total: allAlumni.length,
+      alumni: allAlumni.map(a => ({
+        id: a._id,
+        userId: a.userId?._id,
+        name: a.personalInfo?.fullName,
+        status: a.status,
+        hasPersonalInfo: !!a.personalInfo,
+        hasAcademicInfo: !!a.academicInfo
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 // ✅ Connect to MongoDB
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;

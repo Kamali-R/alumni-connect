@@ -62,6 +62,7 @@ export const uploadFiles = upload.fields([
 ]);
 
 // Create or update alumni profile
+// Fixed saveAlumniProfile function in alumniController.js
 export const saveAlumniProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -143,9 +144,9 @@ export const saveAlumniProfile = async (req, res) => {
       await alumniProfile.save();
     }
     
-    // Update User model
+    // FIXED: Update User model properly
     const updateData = {
-      profileCompleted: true,
+      profileCompleted: true, // Set to true when profile is saved
       alumniProfile: alumniProfile._id
     };
     
@@ -159,17 +160,27 @@ export const saveAlumniProfile = async (req, res) => {
       updateData.graduationYear = profileData.academicInfo.graduationYear;
     }
     
+    console.log('Updating user with data:', updateData);
+    
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       updateData,
       { new: true }
     ).select('-password');
     
+    console.log('User updated successfully:', {
+      id: updatedUser._id,
+      profileCompleted: updatedUser.profileCompleted
+    });
+    
     console.log('Alumni profile saved successfully');
     
     res.status(200).json({
       message: 'Alumni profile saved successfully',
-      user: updatedUser,
+      user: {
+        ...updatedUser.toObject(),
+        registrationComplete: true // Add this for frontend
+      },
       alumni: alumniProfile
     });
     
@@ -295,54 +306,89 @@ export const updateAlumniProfile = async (req, res) => {
 };
 
 // Get all alumni (for networking/search)
+// Enhanced getAllAlumni function
 export const getAllAlumni = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = '', graduationYear = '', branch = '' } = req.query;
+    const { page = 1, limit = 20, search = '', graduationYear = '', branch = '' } = req.query;
     
-    // Build search query
+    console.log('Fetching alumni with filters:', {
+      page, limit, search, graduationYear, branch
+    });
+    
+    // Build search query - only fetch complete profiles
     let searchQuery = { status: 'complete' };
     
-    if (search) {
+    if (search && search.trim() !== '') {
       searchQuery.$or = [
-        { 'personalInfo.fullName': { $regex: search, $options: 'i' } },
-        { 'academicInfo.branch': { $regex: search, $options: 'i' } },
-        { 'careerDetails.companyName': { $regex: search, $options: 'i' } }
+        { 'personalInfo.fullName': { $regex: search.trim(), $options: 'i' } },
+        { 'academicInfo.branch': { $regex: search.trim(), $options: 'i' } },
+        { 'careerDetails.companyName': { $regex: search.trim(), $options: 'i' } },
+        { 'academicInfo.degree': { $regex: search.trim(), $options: 'i' } }
       ];
     }
     
-    if (graduationYear) {
+    if (graduationYear && graduationYear !== '') {
       searchQuery['academicInfo.graduationYear'] = parseInt(graduationYear);
     }
     
-    if (branch) {
-      searchQuery['academicInfo.branch'] = { $regex: branch, $options: 'i' };
+    if (branch && branch !== '') {
+      searchQuery['academicInfo.branch'] = { $regex: branch.trim(), $options: 'i' };
     }
     
-    // Execute query with pagination
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Execute query with proper population
     const alumni = await Alumni.find(searchQuery)
-      .select('-userId -__v')
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
-      .sort({ createdAt: -1 });
+      .populate('userId', 'name email role') // Populate user data
+      .select('-__v -createdAt -updatedAt') // Exclude unnecessary fields
+      .limit(parseInt(limit))
+      .skip(skip)
+      .sort({ 'personalInfo.fullName': 1 }); // Sort by name
     
     const total = await Alumni.countDocuments(searchQuery);
     
+    console.log(`Found ${alumni.length} alumni profiles out of ${total} total`);
+    
+    // Transform data for frontend
+    const transformedAlumni = alumni.map(alumni => ({
+      id: alumni._id,
+      userId: alumni.userId?._id,
+      name: alumni.personalInfo?.fullName || alumni.userId?.name || 'Unknown',
+      email: alumni.personalInfo?.personalEmail || alumni.userId?.email,
+      graduationYear: alumni.academicInfo?.graduationYear,
+      branch: alumni.academicInfo?.branch,
+      degree: alumni.academicInfo?.degree,
+      location: alumni.personalInfo?.location,
+      careerStatus: alumni.careerStatus,
+      company: alumni.careerDetails?.companyName,
+      jobTitle: alumni.careerDetails?.jobTitle,
+      skills: alumni.skills?.slice(0, 5) || [], // Limit skills for preview
+      profileImage: alumni.profileImage ? 
+        `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${alumni.profileImage}` : 
+        null,
+      bio: alumni.otherInfo?.bio ? 
+        alumni.otherInfo.bio.substring(0, 150) + (alumni.otherInfo.bio.length > 150 ? '...' : '') : 
+        null
+    }));
+    
     res.status(200).json({
-      alumni,
-      totalPages: Math.ceil(total / limit),
-      currentPage: page,
-      total
+      alumni: transformedAlumni,
+      totalPages: Math.ceil(total / parseInt(limit)),
+      currentPage: parseInt(page),
+      total,
+      hasMore: skip + alumni.length < total
     });
     
   } catch (error) {
     console.error('Get all alumni error:', error);
     res.status(500).json({ 
       message: 'Server error during alumni fetch',
-      error: error.message 
+      error: error.message,
+      details: 'Check server logs for more information'
     });
   }
 };
-
 // Get alumni profile by user ID (for public viewing)
 // controllers/alumniController.js - Updated getAlumniProfileById
 export const getAlumniProfileById = async (req, res) => {

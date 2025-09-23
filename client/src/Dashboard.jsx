@@ -14,104 +14,119 @@ const AlumniConnectDashboard = () => {
   const [profileCompleted, setProfileCompleted] = useState(false);
   
   // Check authentication and fetch user data on component mount
-  useEffect(() => {
-    const initializeUser = async () => {
-      try {
-        const storedToken = localStorage.getItem('token');
-        
-        if (!storedToken) {
-          console.log('No token found, redirecting to login');
+ // Fixed dashboard user initialization in dashboard.jsx
+useEffect(() => {
+  const initializeUser = async () => {
+    try {
+      const storedToken = localStorage.getItem('token');
+      
+      if (!storedToken) {
+        console.log('No token found, redirecting to login');
+        navigate('/login');
+        return;
+      }
+
+      // Fetch current user data from backend
+      const response = await fetch('http://localhost:5000/user', {
+        headers: {
+          'Authorization': `Bearer ${storedToken}`
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          console.log('Token expired, redirecting to login');
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
           navigate('/login');
           return;
         }
+        throw new Error('Failed to fetch user data');
+      }
 
-        // Fetch current user data from backend
-        const response = await fetch('http://localhost:5000/user', {
-          headers: {
-            'Authorization': `Bearer ${storedToken}`
+      const userData = await response.json();
+      console.log('User data fetched:', userData);
+
+      // FIXED: Check registration completion based on role
+      let registrationComplete = false;
+      
+      if (userData.role === 'alumni') {
+        // For alumni, check if they have both profileCompleted AND alumni profile
+        registrationComplete = userData.profileCompleted && userData.alumniProfile;
+        
+        // Double-check by trying to fetch alumni profile
+        if (userData.profileCompleted) {
+          try {
+            const alumniResponse = await fetch('http://localhost:5000/api/alumni/profile', {
+              headers: {
+                'Authorization': `Bearer ${storedToken}`
+              }
+            });
+            
+            if (alumniResponse.status === 404) {
+              // No alumni profile found, registration not complete
+              registrationComplete = false;
+              console.log('Alumni profile not found, registration incomplete');
+            } else if (alumniResponse.ok) {
+              const alumniData = await alumniResponse.json();
+              registrationComplete = alumniData.status === 'complete';
+              console.log('Alumni profile status:', alumniData.status);
+            }
+          } catch (error) {
+            console.error('Error checking alumni profile:', error);
+            registrationComplete = false;
+          }
+        }
+      } else {
+        // For students, just check profileCompleted
+        registrationComplete = userData.profileCompleted;
+      }
+      
+      console.log('Registration complete status:', registrationComplete);
+      
+      // If alumni user hasn't completed registration, redirect to profile setup
+      if (!registrationComplete && userData.role === 'alumni') {
+        console.log('Registration not complete, redirecting to profile setup');
+        navigate('/alumni-profile', {
+          state: {
+            userData: userData,
+            verified: true,
+            role: userData.role
           }
         });
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            console.log('Token expired, redirecting to login');
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            navigate('/login');
-            return;
-          }
-          throw new Error('Failed to fetch user data');
-        }
-
-        const userData = response.data;
-        console.log('User data fetched:', userData);
-
-        // Update state with fresh user data
-        setUserRole(userData.role);
-        setUserName(userData.name || 'User');
-        setProfileCompleted(userData.profileCompleted);
-        
-        // Set graduation year if available
-        if (userData.graduationYear) {
-          setUserGraduation(`Class of ${userData.graduationYear}`);
-        } else {
-          setUserGraduation('Alumni');
-        }
-
-        // Update localStorage with fresh data
-        localStorage.setItem('user', JSON.stringify(userData));
-
-        // Check if profile completion is required
-        if (!userData.profileCompleted && userData.role === 'alumni') {
-          console.log('Profile not completed, redirecting to profile setup');
-          navigate('/alumni-profile', {
-            state: {
-              userData: userData,
-              verified: true,
-              role: userData.role
-            }
-          });
-          return;
-        }
-
-        // Redirect students to student dashboard if needed
-        if (userData.role === 'student') {
-          console.log('Student user, should redirect to student dashboard');
-          // navigate('/student-dashboard'); // Uncomment when student dashboard is ready
-        }
-
-      } catch (error) {
-        console.error('Error initializing user:', error);
-        // If error fetching user data, try using stored data as fallback
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-          try {
-            const userData = JSON.parse(storedUser);
-            setUserRole(userData.role);
-            setUserName(userData.name || 'User');
-            setProfileCompleted(userData.profileCompleted || false);
-            
-            if (userData.graduationYear) {
-              setUserGraduation(`Class of ${userData.graduationYear}`);
-            } else {
-              setUserGraduation('Alumni');
-            }
-          } catch (parseError) {
-            console.error('Error parsing stored user data:', parseError);
-            navigate('/login');
-            return;
-          }
-        } else {
-          navigate('/login');
-          return;
-        }
-      } finally {
-        setLoading(false);
+        return;
       }
-    };
 
-    initializeUser();
-  }, [navigate]);
+      // Update state
+      setUserRole(userData.role);
+      setUserName(userData.name || 'User');
+      setProfileCompleted(registrationComplete);
+      
+      if (userData.graduationYear) {
+        setUserGraduation(`Class of ${userData.graduationYear}`);
+      } else {
+        setUserGraduation('Alumni');
+      }
+
+      // Update localStorage with corrected data
+      const updatedUserData = {
+        ...userData,
+        profileCompleted: registrationComplete,
+        registrationComplete: registrationComplete
+      };
+      localStorage.setItem('user', JSON.stringify(updatedUserData));
+      localStorage.setItem('registrationComplete', registrationComplete ? 'true' : 'false');
+
+    } catch (error) {
+      console.error('Error initializing user:', error);
+      navigate('/login');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  initializeUser();
+}, [navigate]);
   
   // Navigation items
   const navItems = [

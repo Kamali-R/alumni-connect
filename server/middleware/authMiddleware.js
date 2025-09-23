@@ -50,5 +50,22 @@ const auth = async (req, res, next) => {
     }
   }
 };
+// authMiddleware.js - Add this function
+export const checkRegistrationComplete = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id).populate('alumniProfile');
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    const hasAlumniProfile = !!user.alumniProfile;
+    req.user.registrationComplete = user.profileCompleted && hasAlumniProfile;
+    
+    next();
+  } catch (error) {
+    res.status(500).json({ message: 'Error checking registration status' });
+  }
+};
 
 export default auth;
