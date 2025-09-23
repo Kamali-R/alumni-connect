@@ -5,7 +5,7 @@ import Register from './Register';
 import VerifyOtp from './VerifyOtp';
 import PasswordResetFlow from './password';
 import Login from './Login';
-import AlumniDashboard from './dashboard';
+import AlumniDashboard from './Dashboard';
 import AlumniConnectProfile from './AlumniProfile';
 import GoogleAuthHandler from './GoogleAuthHandler'; // Make sure to import this
 import './index.css';
