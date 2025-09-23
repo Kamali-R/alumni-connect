@@ -17,14 +17,6 @@ const NetworkingHub = () => {
     page: 1,
     limit: 12
   });
-  const debugConnectionStatus = (alumniId) => {
-    const alumni = alumniData.find(a => a.id === alumniId);
-    console.log('Debug connection status:', {
-      alumniId,
-      connectionStatus: alumni?.connectionStatus,
-      alumniData: alumni
-    });
-  };
 
   // Navigation items
   const navItems = [
@@ -32,11 +24,19 @@ const NetworkingHub = () => {
     { id: 'connections', label: 'My Connections', icon: '🔗' }
   ];
 
+  // Helper function to get auth headers
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('token');
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+  };
+
   // Fetch alumni directory from backend
   const fetchAlumniDirectory = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
       const queryParams = new URLSearchParams({
         page: filters.page,
         limit: filters.limit,
@@ -46,22 +46,20 @@ const NetworkingHub = () => {
       });
 
       const response = await fetch(`http://localhost:5000/api/alumni-directory?${queryParams}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+        headers: getAuthHeaders()
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch alumni directory');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch alumni directory');
       }
 
       const data = await response.json();
-      setAlumniData(data.alumni);
-      setFilteredAlumni(data.alumni);
+      setAlumniData(data.alumni || []);
+      setFilteredAlumni(data.alumni || []);
     } catch (error) {
       console.error('Error fetching alumni directory:', error);
-      toast.error('Failed to load alumni directory');
+      toast.error('Failed to load alumni directory: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -70,66 +68,60 @@ const NetworkingHub = () => {
   // Fetch alumni profile for viewing
   const fetchAlumniProfile = async (userId) => {
     try {
-      const token = localStorage.getItem('token');
       const response = await fetch(`http://localhost:5000/api/alumni/profile/${userId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: getAuthHeaders()
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch alumni profile');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch alumni profile');
       }
 
       const profileData = await response.json();
       setSelectedProfile(profileData);
     } catch (error) {
       console.error('Error fetching alumni profile:', error);
-      toast.error('Failed to load alumni profile');
+      toast.error('Failed to load alumni profile: ' + error.message);
     }
   };
 
   // Fetch connection requests
   const fetchConnectionRequests = async () => {
     try {
-      const token = localStorage.getItem('token');
       const response = await fetch('http://localhost:5000/api/connection-requests', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: getAuthHeaders()
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch connection requests');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch connection requests');
       }
 
       const data = await response.json();
-      setPendingRequests(data.pendingRequests);
+      setPendingRequests(data.pendingRequests || []);
     } catch (error) {
       console.error('Error fetching connection requests:', error);
-      toast.error('Failed to load connection requests');
+      toast.error('Failed to load connection requests: ' + error.message);
     }
   };
 
   // Fetch my connections
   const fetchMyConnections = async () => {
     try {
-      const token = localStorage.getItem('token');
       const response = await fetch('http://localhost:5000/api/my-connections', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: getAuthHeaders()
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch connections');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch connections');
       }
 
       const data = await response.json();
-      setMyConnections(data.connections);
+      setMyConnections(data.connections || []);
     } catch (error) {
       console.error('Error fetching connections:', error);
-      toast.error('Failed to load connections');
+      toast.error('Failed to load connections: ' + error.message);
     }
   };
 
@@ -143,228 +135,140 @@ const NetworkingHub = () => {
     }
   }, [activeSection, filters]);
 
-  // Handle connection request
-   // Handle connection request
-// Enhanced connection handlers in NetworkingHub component
-const sendConnectionRequest = async (alumniId) => {
-  try {
-    console.log('=== STARTING CONNECTION REQUEST ===');
-    console.log('Alumni ID:', alumniId);
-    console.log('Alumni ID type:', typeof alumniId);
-    
-    const token = localStorage.getItem('token');
-    console.log('Token available:', !!token);
-    
-    if (!token) {
-      toast.error('Please log in again');
-      window.location.href = '/login';
-      return;
-    }
-
-    // Validate alumniId
-    if (!alumniId || alumniId === 'undefined') {
-      toast.error('Invalid alumni ID');
-      return;
-    }
-
-    console.log('Sending connection request to backend...');
-    
-    const response = await fetch('http://localhost:5000/api/connection-request', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ 
-        recipientId: alumniId 
-      })
-    });
-
-    console.log('Response status:', response.status);
-    
-    const responseText = await response.text();
-    console.log('Raw response:', responseText);
-    
-    let data;
+  // Handle connection request - FIXED VERSION
+  const sendConnectionRequest = async (alumniId) => {
     try {
-      data = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error('Failed to parse JSON response:', parseError);
-      throw new Error('Invalid response from server');
-    }
-
-    if (!response.ok) {
-      console.error('Server returned error:', data);
-      throw new Error(data.message || `Server error: ${response.status}`);
-    }
-
-    console.log('Connection request successful:', data);
-
-    // Update UI state
-    setAlumniData(prev => prev.map(alumni => 
-      alumni.id === alumniId 
-        ? { ...alumni, connectionStatus: 'pending_sent' }
-        : alumni
-    ));
-
-    setFilteredAlumni(prev => prev.map(alumni => 
-      alumni.id === alumniId 
-        ? { ...alumni, connectionStatus: 'pending_sent' }
-        : alumni
-    ));
-
-    toast.success('Connection request sent successfully!');
-    
-  } catch (error) {
-    console.error('=== CONNECTION REQUEST FAILED ===');
-    console.error('Error details:', error);
-    
-    if (error.message.includes('Failed to fetch')) {
-      toast.error('Network error: Could not connect to server');
-    } else if (error.message.includes('401')) {
-      toast.error('Authentication error: Please log in again');
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-    } else {
-      toast.error(error.message || 'Failed to send connection request');
-    }
-  }
-};
-
-const acceptConnection = async (connectionId, alumniId) => {
-  try {
-    const token = localStorage.getItem('token');
-    const response = await fetch('http://localhost:5000/api/accept-connection', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ connectionId })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to accept connection');
-    }
-
-    // Update all relevant states
-    setPendingRequests(prev => prev.filter(req => req.id !== connectionId));
-    
-    setAlumniData(prev => prev.map(alumni => 
-      alumni.id === alumniId 
-        ? { ...alumni, connectionStatus: 'connected' }
-        : alumni
-    ));
-    
-    setFilteredAlumni(prev => prev.map(alumni => 
-      alumni.id === alumniId 
-        ? { ...alumni, connectionStatus: 'connected' }
-        : alumni
-    ));
-
-    // Refresh connections
-    await fetchMyConnections();
-    
-    toast.success('Connection request accepted!');
-  } catch (error) {
-    console.error('Error accepting connection:', error);
-    toast.error(error.message || 'Failed to accept connection request');
-  }
-};
-
-const declineConnection = async (connectionId, alumniId) => {
-  try {
-    const token = localStorage.getItem('token');
-    const response = await fetch('http://localhost:5000/api/decline-connection', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ connectionId })
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to decline connection request');
-    }
-
-    setPendingRequests(prev => prev.filter(req => req.id !== connectionId));
-    
-    setAlumniData(prev => prev.map(alumni => 
-      alumni.id === alumniId 
-        ? { ...alumni, connectionStatus: 'not_connected' }
-        : alumni
-    ));
-    
-    setFilteredAlumni(prev => prev.map(alumni => 
-      alumni.id === alumniId 
-        ? { ...alumni, connectionStatus: 'not_connected' }
-        : alumni
-    ));
-
-    toast.info('Connection request declined.');
-  } catch (error) {
-    console.error('Error declining connection:', error);
-    toast.error('Failed to decline connection request');
-  }
-};
-
-const cancelConnectionRequest = async (alumniId) => {
-  try {
-    const token = localStorage.getItem('token');
-    
-    // Instead of fetching connection requests, we need to find the connection ID
-    // by checking the connections where current user is the requester
-    const connectionsResponse = await fetch('http://localhost:5000/api/my-connections', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-
-    if (connectionsResponse.ok) {
-      const connectionsData = await connectionsResponse.json();
+      console.log('Sending connection request to alumni ID:', alumniId);
       
-      // Also check pending requests to see if we have any sent requests
-      const pendingResponse = await fetch('http://localhost:5000/api/connection-requests', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await fetch('http://localhost:5000/api/connection-request', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ recipientId: alumniId })
       });
+
+      const data = await response.json();
       
+      if (!response.ok) {
+        throw new Error(data.message || `Server error: ${response.status}`);
+      }
+
+      console.log('Connection request successful:', data);
+
+      // Update local state
+      const updateAlumniStatus = (alumni) => 
+        alumni.id === alumniId 
+          ? { ...alumni, connectionStatus: 'pending_sent' }
+          : alumni;
+
+      setAlumniData(prev => prev.map(updateAlumniStatus));
+      setFilteredAlumni(prev => prev.map(updateAlumniStatus));
+
+      toast.success('Connection request sent successfully!');
+      
+    } catch (error) {
+      console.error('Connection request failed:', error);
+      
+      if (error.message.includes('Failed to fetch')) {
+        toast.error('Network error: Please check if the backend is running.');
+      } else if (error.message.includes('401')) {
+        toast.error('Please log in again.');
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      } else {
+        toast.error(error.message || 'Failed to send connection request');
+      }
+    }
+  };
+
+  // Accept connection request
+  const acceptConnection = async (connectionId, alumniId) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/accept-connection', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ connectionId })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to accept connection');
+      }
+
+      // Update states
+      setPendingRequests(prev => prev.filter(req => req.id !== connectionId));
+      
+      const updateAlumniStatus = (alumni) => 
+        alumni.id === alumniId 
+          ? { ...alumni, connectionStatus: 'connected' }
+          : alumni;
+
+      setAlumniData(prev => prev.map(updateAlumniStatus));
+      setFilteredAlumni(prev => prev.map(updateAlumniStatus));
+
+      // Refresh connections
+      await fetchMyConnections();
+      
+      toast.success('Connection request accepted!');
+    } catch (error) {
+      console.error('Error accepting connection:', error);
+      toast.error(error.message || 'Failed to accept connection request');
+    }
+  };
+
+  // Decline connection request
+  const declineConnection = async (connectionId, alumniId) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/decline-connection', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ connectionId })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to decline connection request');
+      }
+
+      setPendingRequests(prev => prev.filter(req => req.id !== connectionId));
+      
+      const updateAlumniStatus = (alumni) => 
+        alumni.id === alumniId 
+          ? { ...alumni, connectionStatus: 'not_connected' }
+          : alumni;
+
+      setAlumniData(prev => prev.map(updateAlumniStatus));
+      setFilteredAlumni(prev => prev.map(updateAlumniStatus));
+
+      toast.info('Connection request declined.');
+    } catch (error) {
+      console.error('Error declining connection:', error);
+      toast.error(error.message || 'Failed to decline connection request');
+    }
+  };
+
+  // Cancel connection request
+  const cancelConnectionRequest = async (alumniId) => {
+    try {
+      // First, find the connection ID by getting all connections
+      const connectionsResponse = await fetch('http://localhost:5000/api/connection-requests', {
+        headers: getAuthHeaders()
+      });
+
       let connectionId = null;
       
-      if (pendingResponse.ok) {
-        const pendingData = await pendingResponse.json();
-        // Look for a request we sent to this alumni
-        const sentRequest = pendingData.pendingRequests.find(req => 
-          req.person.id === alumniId
-        );
-        
+      if (connectionsResponse.ok) {
+        const data = await connectionsResponse.json();
+        // Look for sent requests (where current user is requester)
+        const sentRequest = data.pendingRequests?.find(req => req.person.id === alumniId);
         if (sentRequest) {
           connectionId = sentRequest.id;
         }
       }
-      
-      // If we didn't find it in pending requests, check existing connections
-      if (!connectionId) {
-        const sentConnection = connectionsData.connections.find(conn => 
-          conn.person.id === alumniId
-        );
-        
-        if (sentConnection) {
-          connectionId = sentConnection.id;
-        }
-      }
 
       if (connectionId) {
-        // Cancel the specific connection request
         const cancelResponse = await fetch('http://localhost:5000/api/cancel-connection', {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ connectionId })
         });
 
@@ -372,102 +276,25 @@ const cancelConnectionRequest = async (alumniId) => {
           const errorData = await cancelResponse.json();
           throw new Error(errorData.message || 'Failed to cancel connection request');
         }
-      } else {
-        // If no connection ID found, just update the local state
-        console.log('No connection ID found, updating local state only');
       }
+
+      // Update local state regardless
+      const updateAlumniStatus = (alumni) => 
+        alumni.id === alumniId 
+          ? { ...alumni, connectionStatus: 'not_connected' }
+          : alumni;
+
+      setAlumniData(prev => prev.map(updateAlumniStatus));
+      setFilteredAlumni(prev => prev.map(updateAlumniStatus));
+
+      setPendingRequests(prev => prev.filter(req => req.person.id !== alumniId));
+
+      toast.info('Connection request cancelled.');
+    } catch (error) {
+      console.error('Error cancelling connection:', error);
+      toast.error(error.message || 'Failed to cancel connection request');
     }
-
-    // Update local state regardless
-    setAlumniData(prev => prev.map(alumni => 
-      alumni.id === alumniId 
-        ? { ...alumni, connectionStatus: 'not_connected' }
-        : alumni
-    ));
-    
-    setFilteredAlumni(prev => prev.map(alumni => 
-      alumni.id === alumniId 
-        ? { ...alumni, connectionStatus: 'not_connected' }
-        : alumni
-    ));
-
-    // Remove from pending requests if it exists there
-    setPendingRequests(prev => prev.filter(req => req.person.id !== alumniId));
-
-    toast.info('Connection request cancelled.');
-  } catch (error) {
-    console.error('Error cancelling connection:', error);
-    toast.error(error.message || 'Failed to cancel connection request');
-  }
-};
-// Add this debug function to test the API endpoint directly
-const testConnectionAPI = async () => {
-  try {
-    const token = localStorage.getItem('token');
-    console.log('Testing connection API...');
-    console.log('Token exists:', !!token);
-    
-    // Test if the API endpoint is accessible
-    const testResponse = await fetch('http://localhost:5000/api/alumni-directory?page=1&limit=1', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    
-    console.log('API test response status:', testResponse.status);
-    
-    if (testResponse.ok) {
-      const testData = await testResponse.json();
-      console.log('API test successful, alumni count:', testData.alumni?.length);
-    } else {
-      console.error('API test failed:', testResponse.status);
-    }
-  } catch (error) {
-    console.error('API test error:', error);
-  }
-};
-
-// Call this function when component mounts to test connectivity
-useEffect(() => {
-  testConnectionAPI();
-}, []);
-
-// Add this function to test backend connectivity
-const testBackendConnectivity = async () => {
-  try {
-    const token = localStorage.getItem('token');
-    console.log('🔧 Testing backend connectivity...');
-    
-    // Test basic API endpoint
-    const testResponse = await fetch('http://localhost:5000/api/test');
-    const testData = await testResponse.json();
-    console.log('Basic API test:', testData);
-    
-    // Test with authentication
-    if (token) {
-      const authTestResponse = await fetch('http://localhost:5000/api/alumni-directory?page=1&limit=1', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      console.log('Auth API test status:', authTestResponse.status);
-      
-      if (authTestResponse.ok) {
-        const authTestData = await authTestResponse.json();
-        console.log('Auth API test data:', authTestData);
-      }
-    }
-    
-  } catch (error) {
-    console.error('Backend connectivity test failed:', error);
-  }
-};
-
-// Call this when component mounts
-useEffect(() => {
-  testBackendConnectivity();
-}, []);
-
+  };
 
   // View profile handler
   const handleViewProfile = async (alumniId) => {
@@ -484,7 +311,7 @@ useEffect(() => {
     setFilters(prev => ({ 
       ...prev, 
       [filterName]: value,
-      page: 1 // Reset to first page when filters change
+      page: 1
     }));
   };
 
@@ -504,292 +331,115 @@ useEffect(() => {
     setActiveSection(section);
   };
 
-  // Render Alumni Directory
-  const renderAlumniDirectory = () => (
-    <div className="mb-8">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Alumni Directory</h2>
-        <p className="text-gray-600">Connect with fellow alumni from your institution</p>
-      </div>
-      
-      {/* Search and Filters */}
-      <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Search Alumni</label>
-            <input 
-              type="text" 
-              placeholder="Search by name or email..." 
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              value={filters.search}
-              onChange={(e) => handleFilterChange('search', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Graduation Year</label>
-            <select 
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              value={filters.year}
-              onChange={(e) => handleFilterChange('year', e.target.value)}
+  // Alumni Card Component
+  const AlumniCard = ({ alumni, onConnect, onCancel, onViewProfile }) => {
+    const getConnectionButton = () => {
+      switch (alumni.connectionStatus) {
+        case 'connected':
+          return (
+            <button 
+              className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium text-sm flex-1 cursor-not-allowed"
+              disabled
             >
-              <option value="">All Years</option>
-              <option value="2024">2024</option>
-              <option value="2023">2023</option>
-              <option value="2022">2022</option>
-              <option value="2021">2021</option>
-              <option value="2020">2020</option>
-              <option value="2019">2019</option>
-              <option value="2018">2018</option>
-              <option value="2017">2017</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Branch</label>
-            <select 
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              value={filters.branch}
-              onChange={(e) => handleFilterChange('branch', e.target.value)}
+              ✓ Connected
+            </button>
+          );
+        case 'pending_sent':
+          return (
+            <button 
+              onClick={() => onCancel(alumni.id)}
+              className="bg-yellow-600 text-white px-4 py-2 rounded-lg font-medium text-sm flex-1 hover:bg-yellow-700 transition-colors"
             >
-              <option value="">All Branches</option>
-              <option value="computer-science">Computer Science</option>
-              <option value="electrical-engineering">Electrical Engineering</option>
-              <option value="mechanical-engineering">Mechanical Engineering</option>
-              <option value="electronics-communication">Electronics & Communication</option>
-              <option value="business-administration">Business Administration</option>
-            </select>
-          </div>
-        </div>
-        <button onClick={clearFilters} className="text-blue-600 hover:text-blue-800 font-medium">
-          Clear All Filters
-        </button>
-      </div>
-      
-      {/* Loading State */}
-      {loading && (
-        <div className="flex justify-center items-center py-8">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      )}
-      
-      {/* Alumni Cards */}
-      {!loading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredAlumni.map(alumni => (
-            <AlumniCard 
-              key={alumni.id} 
-              alumni={alumni} 
-              onConnect={sendConnectionRequest}
-              onCancel={cancelConnectionRequest}
-              onViewProfile={handleViewProfile}
-            />
-          ))}
-        </div>
-      )}
-      
-      {/* No Results */}
-      {!loading && filteredAlumni.length === 0 && (
-        <div className="text-center py-8">
-          <p className="text-gray-500">No alumni found matching your criteria.</p>
-        </div>
-      )}
-    </div>
-  );
+              ⏳ Cancel Request
+            </button>
+          );
+        case 'pending_received':
+          return (
+            <button 
+              onClick={() => {
+                setActiveSection('connections');
+                toast.info('Please go to Connections tab to respond to this request');
+              }}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium text-sm flex-1 hover:bg-blue-700 transition-colors"
+            >
+              Respond to Request
+            </button>
+          );
+        default:
+          return (
+            <button 
+              onClick={() => onConnect(alumni.id)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm flex-1 transition-colors"
+            >
+              + Connect
+            </button>
+          );
+      }
+    };
 
-  // Render Connections
-  const renderConnections = () => (
-    <div className="mb-8">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">My Connections</h2>
-        <p className="text-gray-600">Manage your professional network</p>
-      </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Connection Requests */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-xl font-semibold text-gray-900 mb-4">
-            Pending Requests ({pendingRequests.length})
-          </h3>
-          <div className="space-y-4">
-            {pendingRequests.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No pending requests</p>
+    return (
+      <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow duration-200">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center">
+            {alumni.profileImageUrl ? (
+              <img 
+                src={alumni.profileImageUrl} 
+                alt={alumni.name}
+                className="w-12 h-12 rounded-full object-cover mr-4"
+              />
             ) : (
-              pendingRequests.map(request => (
-                <PendingRequestCard 
-                  key={request.id} 
-                  request={request} 
-                  onAccept={acceptConnection}
-                  onDecline={declineConnection}
-                />
-              ))
+              <div className="bg-gradient-to-br from-blue-100 to-blue-200 rounded-full w-12 h-12 flex items-center justify-center mr-4">
+                <span className="text-blue-600 font-semibold text-lg">
+                  {alumni.name?.charAt(0) || 'A'}
+                </span>
+              </div>
             )}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">{alumni.name}</h3>
+              <p className="text-gray-600 text-sm">{alumni.email}</p>
+              <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs mt-1">
+                Alumni
+              </span>
+            </div>
           </div>
         </div>
         
-        {/* My Connections */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-xl font-semibold text-gray-900 mb-4">
-            My Network ({myConnections.length})
-          </h3>
-          <div className="space-y-4">
-            {myConnections.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No connections yet</p>
-            ) : (
-              myConnections.map(connection => (
-                <ConnectionCard key={connection.id} connection={connection} />
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-// Add this useEffect to refresh connection data when switching to connections tab
-useEffect(() => {
-  if (activeSection === 'connections') {
-    fetchConnectionRequests();
-    fetchMyConnections();
-    
-    // Also refresh alumni directory to update connection statuses
-    fetchAlumniDirectory();
-  }
-}, [activeSection]);
-
-const testConnectionFunction = async (alumniId) => {
-  try {
-    console.log('Testing connection with alumni ID:', alumniId);
-    
-    const response = await fetch('http://localhost:5000/api/test-connection', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ recipientId: alumniId })
-    });
-    
-    const data = await response.json();
-    console.log('Test connection response:', data);
-    
-    if (response.ok) {
-      toast.success('Test connection successful! Backend is working.');
-    } else {
-      toast.error('Test connection failed.');
-    }
-  } catch (error) {
-    console.error('Test connection error:', error);
-    toast.error('Test connection failed: ' + error.message);
-  }
-};
-
-  // AlumniCard Component
- // In NetworkingHub.jsx - Update the AlumniCard component
-const AlumniCard = ({ alumni, onConnect, onCancel, onViewProfile }) => {
-  const getConnectionButton = () => {
-    switch (alumni.connectionStatus) {
-      case 'connected':
-        return (
-          <button 
-            className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium text-sm flex-1 cursor-not-allowed"
-            disabled
-          >
-            ✓ Connected
-          </button>
-        );
-      case 'pending_sent':
-        return (
-          <button 
-            onClick={() => onCancel(alumni.id)}
-            className="bg-yellow-600 text-white px-4 py-2 rounded-lg font-medium text-sm flex-1 hover:bg-yellow-700 transition-colors"
-          >
-            ⏳ Cancel Request
-          </button>
-        );
-      case 'pending_received':
-        return (
-          <button 
-            onClick={() => {
-              // Navigate to connections tab to respond
-              setActiveSection('connections');
-              toast.info('Please go to Connections tab to respond to this request');
-            }}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium text-sm flex-1 hover:bg-blue-700 transition-colors"
-          >
-            Respond to Request
-          </button>
-        );
-      default:
-        return (
-          <button 
-            onClick={() => onConnect(alumni.id)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm flex-1 transition-colors"
-          >
-            + Connect
-          </button>
-        );
-    }
-  };
-
-  return (
-    <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow duration-200">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center">
-          {alumni.profileImageUrl ? (
-            <img 
-              src={alumni.profileImageUrl} 
-              alt={alumni.name}
-              className="w-12 h-12 rounded-full object-cover mr-4"
-            />
-          ) : (
-            <div className="bg-gradient-to-br from-blue-100 to-blue-200 rounded-full w-12 h-12 flex items-center justify-center mr-4">
-              <span className="text-blue-600 font-semibold text-lg">
-                {alumni.name?.charAt(0) || 'A'}
-              </span>
+        {/* Profile Information */}
+        <div className="space-y-2 mb-4">
+          {alumni.graduationYear && (
+            <div className="flex items-center text-sm text-gray-600">
+              <span className="font-medium w-20">Batch:</span>
+              <span>Class of {alumni.graduationYear}</span>
             </div>
           )}
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">{alumni.name}</h3>
-            <p className="text-gray-600 text-sm">{alumni.email}</p>
-            <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs mt-1">
-              Alumni
-            </span>
-          </div>
+          {alumni.alumniProfile?.academicInfo?.branch && (
+            <div className="flex items-center text-sm text-gray-600">
+              <span className="font-medium w-20">Branch:</span>
+              <span className="capitalize">{alumni.alumniProfile.academicInfo.branch?.replace(/-/g, ' ')}</span>
+            </div>
+          )}
+          {alumni.alumniProfile?.careerDetails?.companyName && (
+            <div className="flex items-center text-sm text-gray-600">
+              <span className="font-medium w-20">Company:</span>
+              <span>{alumni.alumniProfile.careerDetails.companyName}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex space-x-2">
+          {getConnectionButton()}
+          <button 
+            onClick={() => onViewProfile(alumni.id)}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium text-sm transition-colors"
+          >
+            View Profile
+          </button>
         </div>
       </div>
-      
-      {/* Profile Information */}
-      <div className="space-y-2 mb-4">
-        {alumni.graduationYear && (
-          <div className="flex items-center text-sm text-gray-600">
-            <span className="font-medium w-20">Batch:</span>
-            <span>Class of {alumni.graduationYear}</span>
-          </div>
-        )}
-        {alumni.alumniProfile?.academicInfo?.branch && (
-          <div className="flex items-center text-sm text-gray-600">
-            <span className="font-medium w-20">Branch:</span>
-            <span className="capitalize">{alumni.alumniProfile.academicInfo.branch?.replace(/-/g, ' ')}</span>
-          </div>
-        )}
-        {alumni.alumniProfile?.careerDetails?.companyName && (
-          <div className="flex items-center text-sm text-gray-600">
-            <span className="font-medium w-20">Company:</span>
-            <span>{alumni.alumniProfile.careerDetails.companyName}</span>
-          </div>
-        )}
-      </div>
+    );
+  };
 
-      {/* Action Buttons */}
-      <div className="flex space-x-2">
-        {getConnectionButton()}
-        <button 
-          onClick={() => onViewProfile(alumni.id)}
-          className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium text-sm transition-colors"
-        >
-          View Profile
-        </button>
-      </div>
-    </div>
-  );
-};
   // Profile Modal Component
   const ProfileModal = ({ profile, onClose }) => {
     if (!profile) return null;
@@ -984,52 +634,52 @@ const AlumniCard = ({ alumni, onConnect, onCancel, onViewProfile }) => {
   };
 
   // PendingRequestCard Component
- // PendingRequestCard Component - Fixed to handle navigation properly
-const PendingRequestCard = ({ request, onAccept, onDecline }) => {
-  const handleAccept = () => {
-    onAccept(request.id, request.person.id);
-  };
+  const PendingRequestCard = ({ request, onAccept, onDecline }) => {
+    const handleAccept = () => {
+      onAccept(request.id, request.person.id);
+    };
 
-  const handleDecline = () => {
-    onDecline(request.id, request.person.id);
-  };
+    const handleDecline = () => {
+      onDecline(request.id, request.person.id);
+    };
 
-  return (
-    <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-      <div className="flex items-center">
-        <div className="bg-blue-100 rounded-full w-10 h-10 flex items-center justify-center mr-3">
-          <span className="text-blue-600 font-semibold">
-            {request.person.name.charAt(0)}
-          </span>
+    return (
+      <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+        <div className="flex items-center">
+          <div className="bg-blue-100 rounded-full w-10 h-10 flex items-center justify-center mr-3">
+            <span className="text-blue-600 font-semibold">
+              {request.person.name.charAt(0)}
+            </span>
+          </div>
+          <div>
+            <h4 className="font-medium text-gray-900">{request.person.name}</h4>
+            <p className="text-sm text-gray-600">{request.person.email}</p>
+            {request.person.graduationYear && (
+              <p className="text-xs text-gray-500">Class of {request.person.graduationYear}</p>
+            )}
+            <p className="text-xs text-blue-500 mt-1">
+              Requested on {new Date(request.requestedAt).toLocaleDateString()}
+            </p>
+          </div>
         </div>
-        <div>
-          <h4 className="font-medium text-gray-900">{request.person.name}</h4>
-          <p className="text-sm text-gray-600">{request.person.email}</p>
-          {request.person.graduationYear && (
-            <p className="text-xs text-gray-500">Class of {request.person.graduationYear}</p>
-          )}
-          <p className="text-xs text-blue-500 mt-1">
-            Requested on {new Date(request.requestedAt).toLocaleDateString()}
-          </p>
+        <div className="flex space-x-2">
+          <button 
+            onClick={handleAccept}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors"
+          >
+            Accept
+          </button>
+          <button 
+            onClick={handleDecline}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors"
+          >
+            Decline
+          </button>
         </div>
       </div>
-      <div className="flex space-x-2">
-        <button 
-          onClick={handleAccept}
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors"
-        >
-          Accept
-        </button>
-        <button 
-          onClick={handleDecline}
-          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors"
-        >
-          Decline
-        </button>
-      </div>
-    </div>
-  );
-};
+    );
+  };
+
   // ConnectionCard Component
   const ConnectionCard = ({ connection }) => (
     <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
@@ -1057,6 +707,156 @@ const PendingRequestCard = ({ request, onAccept, onDecline }) => {
       </button>
     </div>
   );
+
+  // Render Alumni Directory
+  const renderAlumniDirectory = () => (
+    <div className="mb-8">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Alumni Directory</h2>
+        <p className="text-gray-600">Connect with fellow alumni from your institution</p>
+      </div>
+      
+      {/* Search and Filters */}
+      <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Search Alumni</label>
+            <input 
+              type="text" 
+              placeholder="Search by name or email..." 
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              value={filters.search}
+              onChange={(e) => handleFilterChange('search', e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Graduation Year</label>
+            <select 
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              value={filters.year}
+              onChange={(e) => handleFilterChange('year', e.target.value)}
+            >
+              <option value="">All Years</option>
+              <option value="2024">2024</option>
+              <option value="2023">2023</option>
+              <option value="2022">2022</option>
+              <option value="2021">2021</option>
+              <option value="2020">2020</option>
+              <option value="2019">2019</option>
+              <option value="2018">2018</option>
+              <option value="2017">2017</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Branch</label>
+            <select 
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              value={filters.branch}
+              onChange={(e) => handleFilterChange('branch', e.target.value)}
+            >
+              <option value="">All Branches</option>
+              <option value="computer-science">Computer Science</option>
+              <option value="electrical-engineering">Electrical Engineering</option>
+              <option value="mechanical-engineering">Mechanical Engineering</option>
+              <option value="electronics-communication">Electronics & Communication</option>
+              <option value="business-administration">Business Administration</option>
+            </select>
+          </div>
+        </div>
+        <button onClick={clearFilters} className="text-blue-600 hover:text-blue-800 font-medium">
+          Clear All Filters
+        </button>
+      </div>
+      
+      {/* Loading State */}
+      {loading && (
+        <div className="flex justify-center items-center py-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      )}
+      
+      {/* Alumni Cards */}
+      {!loading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredAlumni.map(alumni => (
+            <AlumniCard 
+              key={alumni.id} 
+              alumni={alumni} 
+              onConnect={sendConnectionRequest}
+              onCancel={cancelConnectionRequest}
+              onViewProfile={handleViewProfile}
+            />
+          ))}
+        </div>
+      )}
+      
+      {/* No Results */}
+      {!loading && filteredAlumni.length === 0 && (
+        <div className="text-center py-8">
+          <p className="text-gray-500">No alumni found matching your criteria.</p>
+        </div>
+      )}
+    </div>
+  );
+
+  // Render Connections
+  const renderConnections = () => (
+    <div className="mb-8">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">My Connections</h2>
+        <p className="text-gray-600">Manage your professional network</p>
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Connection Requests */}
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-4">
+            Pending Requests ({pendingRequests.length})
+          </h3>
+          <div className="space-y-4">
+            {pendingRequests.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No pending requests</p>
+            ) : (
+              pendingRequests.map(request => (
+                <PendingRequestCard 
+                  key={request.id} 
+                  request={request} 
+                  onAccept={acceptConnection}
+                  onDecline={declineConnection}
+                />
+              ))
+            )}
+          </div>
+        </div>
+        
+        {/* My Connections */}
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-4">
+            My Network ({myConnections.length})
+          </h3>
+          <div className="space-y-4">
+            {myConnections.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No connections yet</p>
+            ) : (
+              myConnections.map(connection => (
+                <ConnectionCard key={connection.id} connection={connection} />
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Refresh connection data when switching to connections tab
+  useEffect(() => {
+    if (activeSection === 'connections') {
+      fetchConnectionRequests();
+      fetchMyConnections();
+      // Also refresh alumni directory to update connection statuses
+      fetchAlumniDirectory();
+    }
+  }, [activeSection]);
 
   return (
     <div className="bg-gray-50 min-h-screen">
