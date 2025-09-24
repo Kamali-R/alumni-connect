@@ -6,9 +6,7 @@ import {
   getConnectionRequests,
   getMyConnections,
   acceptConnection,
-  declineConnection,
-  cancelConnectionRequest,
-  removeConnection
+  declineConnection
 } from '../controllers/networkingController.js';
 import auth from '../middleware/authMiddleware.js';
 
@@ -36,13 +34,5 @@ router.post('/accept-connection', auth, acceptConnection);
 // Decline a connection request
 // Frontend should pass: { connectionId }
 router.post('/decline-connection', auth, declineConnection);
-
-// Cancel a connection request sent by current user
-// Frontend should pass: { connectionId }
-router.post('/cancel-connection', auth, cancelConnectionRequest);
-
-// Remove an accepted connection
-// Frontend should pass: { connectionId }
-router.post('/remove-connection', auth, removeConnection);
 
 export default router;

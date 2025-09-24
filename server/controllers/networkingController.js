@@ -1,178 +1,69 @@
+// controllers/networkingController.js - COMPLETE VERSION
 import Connection from '../models/Connection.js';
 import User from '../models/User.js';
 import Alumni from '../models/Alumni.js';
-
-// Get all alumni for directory (excluding current user and including connection status)
-export const getAlumniDirectory = async (req, res) => {
-  try {
-    const currentUserId = req.user.id;
-    const { page = 1, limit = 12, search = '', branch = '', graduationYear = '' } = req.query;
-
-    console.log('🔍 Fetching alumni directory with filters:', {
-      currentUserId,
-      page,
-      limit,
-      search,
-      branch,
-      graduationYear
-    });
-
-    // Build search query for alumni profiles
-    let alumniQuery = { 
-      status: 'complete',
-      userId: { $ne: currentUserId } // Exclude current user
-    };
-
-    // Add search filters
-    if (search && search.trim() !== '') {
-      alumniQuery.$or = [
-        { 'personalInfo.fullName': { $regex: search.trim(), $options: 'i' } },
-        { 'personalInfo.personalEmail': { $regex: search.trim(), $options: 'i' } },
-        { 'academicInfo.branch': { $regex: search.trim(), $options: 'i' } },
-        { 'careerDetails.companyName': { $regex: search.trim(), $options: 'i' } }
-      ];
-    }
-
-    if (graduationYear && graduationYear !== '') {
-      alumniQuery['academicInfo.graduationYear'] = parseInt(graduationYear);
-    }
-
-    if (branch && branch !== '') {
-      alumniQuery['academicInfo.branch'] = { 
-        $regex: branch.replace(/[-\s]/g, '.*'), 
-        $options: 'i' 
-      };
-    }
-
-    // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    // Get alumni profiles with pagination
-    const alumniProfiles = await Alumni.find(alumniQuery)
-      .populate('userId', 'name email role graduationYear')
-      .limit(parseInt(limit))
-      .skip(skip)
-      .sort({ createdAt: -1 });
-
-    const total = await Alumni.countDocuments(alumniQuery);
-
-    // Get all connections for the current user to determine connection status
-    const connections = await Connection.find({
-      $or: [
-        { requesterId: currentUserId },
-        { recipientId: currentUserId }
-      ]
-    }).lean();
-
-    // Create a map for quick connection lookup
-    const connectionMap = {};
-    connections.forEach(conn => {
-      const otherUserId = conn.requesterId.toString() === currentUserId 
-        ? conn.recipientId.toString() 
-        : conn.requesterId.toString();
-      
-      connectionMap[otherUserId] = {
-        id: conn._id,
-        status: conn.status,
-        isRequester: conn.requesterId.toString() === currentUserId
-      };
-    });
-
-    // Process alumni profiles and add connection status
-    const alumniWithConnections = await Promise.all(
-      alumniProfiles.map(async (alumni) => {
-        if (!alumni.userId) {
-          console.log('Alumni profile without userId:', alumni._id);
-          return null;
-        }
-
-        const userId = alumni.userId._id.toString();
-        const connection = connectionMap[userId];
-        
-        let connectionStatus = 'not_connected';
-        if (connection) {
-          if (connection.status === 'pending') {
-            connectionStatus = connection.isRequester ? 'pending_sent' : 'pending_received';
-          } else if (connection.status === 'accepted') {
-            connectionStatus = 'connected';
-          }
-        }
-
-        return {
-          id: userId,
-          alumniProfileId: alumni._id,
-          name: alumni.personalInfo?.fullName || alumni.userId?.name || 'Unknown',
-          email: alumni.personalInfo?.personalEmail || alumni.userId?.email,
-          graduationYear: alumni.academicInfo?.graduationYear,
-          alumniProfile: alumni.toObject(),
-          connectionStatus: connectionStatus,
-          profileImageUrl: alumni.profileImage ? 
-            `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${alumni.profileImage}` : 
-            null
-        };
-      })
-    );
-
-    const filteredAlumni = alumniWithConnections.filter(Boolean);
-
-    console.log(`✅ Found ${filteredAlumni.length} alumni profiles`);
-
-    res.status(200).json({
-      alumni: filteredAlumni,
-      totalPages: Math.ceil(total / limit),
-      currentPage: parseInt(page),
-      total
-    });
-
-  } catch (error) {
-    console.error('❌ Get alumni directory error:', error);
-    res.status(500).json({ 
-      message: 'Server error fetching alumni directory',
-      error: error.message 
-    });
-  }
-};
+import mongoose from 'mongoose';
 
 // Send connection request
+// Enhanced sendConnectionRequest function
 export const sendConnectionRequest = async (req, res) => {
   try {
     const currentUserId = req.user.id;
     const { recipientId } = req.body;
 
-    console.log('🔗 Processing connection request:', { 
-      currentUserId, 
-      recipientId,
-      userRole: req.user.role 
-    });
+    console.log('🔗 Sending connection request:', { currentUserId, recipientId });
 
-    // Validation
+    // Enhanced validation
     if (!recipientId) {
-      return res.status(400).json({ message: 'Recipient ID is required' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Recipient ID is required' 
+      });
+    }
+
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(recipientId)) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid recipient ID format' 
+      });
     }
 
     if (currentUserId === recipientId) {
-      return res.status(400).json({ message: 'Cannot send connection request to yourself' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Cannot send connection request to yourself' 
+      });
     }
 
-    // Check if recipient exists
+    // Check if recipient exists and is an alumni
     const recipient = await User.findById(recipientId);
     if (!recipient) {
-      return res.status(404).json({ message: 'Recipient not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Recipient not found' 
+      });
     }
 
-    // Check if connection already exists
-    const existingConnection = await Connection.findOne({
-      $or: [
-        { requesterId: currentUserId, recipientId: recipientId },
-        { requesterId: recipientId, recipientId: currentUserId }
-      ]
-    });
+    if (recipient.role !== 'alumni') {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Can only connect with alumni users' 
+      });
+    }
 
+    // Check for existing connection with better error handling
+    const existingConnection = await Connection.findConnection(currentUserId, recipientId);
+    
     if (existingConnection) {
       let message = 'Connection already exists';
+      
       if (existingConnection.status === 'pending') {
-        const isRequester = existingConnection.requesterId.toString() === currentUserId;
-        message = isRequester ? 'Connection request already sent' : 'You have a pending request from this user';
+        if (existingConnection.requesterId.toString() === currentUserId) {
+          message = 'Connection request already sent';
+        } else {
+          message = 'You have a pending request from this user';
+        }
       } else if (existingConnection.status === 'accepted') {
         message = 'Already connected with this user';
       } else if (existingConnection.status === 'declined') {
@@ -180,13 +71,13 @@ export const sendConnectionRequest = async (req, res) => {
       }
       
       return res.status(400).json({ 
+        success: false,
         message,
-        status: existingConnection.status,
-        connectionId: existingConnection._id
+        existingStatus: existingConnection.status 
       });
     }
 
-    // Create new connection request
+    // Create new connection with validation
     const connection = new Connection({
       requesterId: currentUserId,
       recipientId: recipientId,
@@ -194,27 +85,17 @@ export const sendConnectionRequest = async (req, res) => {
       requestedAt: new Date()
     });
 
+    // Validate before saving
+    await connection.validate();
     await connection.save();
-    console.log('✅ Connection request created:', connection._id);
-
-    // Populate the response with user details
-    await connection.populate('requesterId', 'name email');
-    await connection.populate('recipientId', 'name email');
+    
+    console.log('✅ Connection request created successfully:', connection._id);
 
     res.status(201).json({
+      success: true,
       message: 'Connection request sent successfully',
       connection: {
         id: connection._id,
-        requester: {
-          id: connection.requesterId._id,
-          name: connection.requesterId.name,
-          email: connection.requesterId.email
-        },
-        recipient: {
-          id: connection.recipientId._id,
-          name: connection.recipientId.name,
-          email: connection.recipientId.email
-        },
         status: connection.status,
         requestedAt: connection.requestedAt
       }
@@ -222,117 +103,69 @@ export const sendConnectionRequest = async (req, res) => {
 
   } catch (error) {
     console.error('❌ Send connection request error:', error);
+    
+    if (error.code === 11000) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Connection request already exists' 
+      });
+    }
+    
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid connection data',
+        error: error.message 
+      });
+    }
+    
     res.status(500).json({ 
+      success: false,
       message: 'Server error sending connection request',
       error: error.message 
     });
   }
 };
 
-// Get connection requests (pending received by current user)
+// Get connection requests
 export const getConnectionRequests = async (req, res) => {
   try {
     const currentUserId = req.user.id;
-
     console.log('📥 Fetching connection requests for user:', currentUserId);
 
+    // Get pending requests where current user is recipient
     const pendingRequests = await Connection.find({
       recipientId: currentUserId,
       status: 'pending'
     })
     .populate('requesterId', 'name email graduationYear')
-    .sort({ requestedAt: -1 })
-    .lean();
+    .sort({ requestedAt: -1 });
 
-    console.log(`Found ${pendingRequests.length} pending requests`);
+    console.log(`📋 Found ${pendingRequests.length} pending requests`);
 
-    const formattedRequests = await Promise.all(
-      pendingRequests.map(async (request) => {
-        // Get alumni profile for additional details
-        const alumniProfile = await Alumni.findOne({ userId: request.requesterId._id }).lean();
-        
-        return {
-          id: request._id,
-          person: {
-            id: request.requesterId._id,
-            name: request.requesterId.name,
-            email: request.requesterId.email,
-            graduationYear: request.requesterId.graduationYear,
-            alumniProfile: alumniProfile || null
-          },
-          requestedAt: request.requestedAt,
-          message: request.message || null
-        };
-      })
-    );
+    // Format the response
+    const formattedRequests = pendingRequests.map(request => ({
+      id: request._id,
+      person: {
+        id: request.requesterId._id,
+        name: request.requesterId.name,
+        email: request.requesterId.email,
+        graduationYear: request.requesterId.graduationYear
+      },
+      requestedAt: request.requestedAt,
+      status: request.status
+    }));
 
     res.status(200).json({
+      success: true,
       pendingRequests: formattedRequests
     });
 
   } catch (error) {
     console.error('❌ Get connection requests error:', error);
     res.status(500).json({ 
+      success: false,
       message: 'Server error fetching connection requests',
-      error: error.message 
-    });
-  }
-};
-
-// Get my connections (accepted connections)
-export const getMyConnections = async (req, res) => {
-  try {
-    const currentUserId = req.user.id;
-
-    console.log('🤝 Fetching connections for user:', currentUserId);
-
-    const connections = await Connection.find({
-      $or: [
-        { requesterId: currentUserId, status: 'accepted' },
-        { recipientId: currentUserId, status: 'accepted' }
-      ]
-    })
-    .populate('requesterId', 'name email graduationYear')
-    .populate('recipientId', 'name email graduationYear')
-    .sort({ respondedAt: -1 })
-    .lean();
-
-    console.log(`Found ${connections.length} accepted connections`);
-
-    const formattedConnections = await Promise.all(
-      connections.map(async (connection) => {
-        // Determine which user is the "other" person
-        const otherUser = 
-          connection.requesterId._id.toString() === currentUserId.toString() 
-            ? connection.recipientId 
-            : connection.requesterId;
-
-        // Get alumni profile for additional details
-        const alumniProfile = await Alumni.findOne({ userId: otherUser._id }).lean();
-
-        return {
-          id: connection._id,
-          person: {
-            id: otherUser._id,
-            name: otherUser.name,
-            email: otherUser.email,
-            graduationYear: otherUser.graduationYear,
-            alumniProfile: alumniProfile || null
-          },
-          connectedSince: connection.respondedAt,
-          connectionType: connection.requesterId._id.toString() === currentUserId ? 'sent' : 'received'
-        };
-      })
-    );
-
-    res.status(200).json({
-      connections: formattedConnections
-    });
-
-  } catch (error) {
-    console.error('❌ Get my connections error:', error);
-    res.status(500).json({ 
-      message: 'Server error fetching connections',
       error: error.message 
     });
   }
@@ -344,50 +177,44 @@ export const acceptConnection = async (req, res) => {
     const currentUserId = req.user.id;
     const { connectionId } = req.body;
 
-    console.log('✅ Accepting connection:', { currentUserId, connectionId });
+    console.log('✅ Accepting connection request:', connectionId);
 
     if (!connectionId) {
-      return res.status(400).json({ message: 'Connection ID is required' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Connection ID is required' 
+      });
     }
 
-    // Find the connection request
-    const connection = await Connection.findOne({
-      _id: connectionId,
-      recipientId: currentUserId,
-      status: 'pending'
-    });
+    // Find and update the connection
+    const connection = await Connection.findOneAndUpdate(
+      {
+        _id: connectionId,
+        recipientId: currentUserId,
+        status: 'pending'
+      },
+      {
+        status: 'accepted',
+        respondedAt: new Date()
+      },
+      { new: true }
+    ).populate('requesterId', 'name email')
+     .populate('recipientId', 'name email');
 
     if (!connection) {
       return res.status(404).json({ 
+        success: false,
         message: 'Connection request not found or already processed' 
       });
     }
 
-    // Update connection status
-    connection.status = 'accepted';
-    connection.respondedAt = new Date();
-    await connection.save();
-
     console.log('✅ Connection accepted successfully');
 
-    // Populate user details for response
-    await connection.populate('requesterId', 'name email');
-    await connection.populate('recipientId', 'name email');
-
     res.status(200).json({
+      success: true,
       message: 'Connection request accepted successfully',
       connection: {
         id: connection._id,
-        requester: {
-          id: connection.requesterId._id,
-          name: connection.requesterId.name,
-          email: connection.requesterId.email
-        },
-        recipient: {
-          id: connection.recipientId._id,
-          name: connection.recipientId.name,
-          email: connection.recipientId.email
-        },
         status: connection.status,
         connectedAt: connection.respondedAt
       }
@@ -396,6 +223,7 @@ export const acceptConnection = async (req, res) => {
   } catch (error) {
     console.error('❌ Accept connection error:', error);
     res.status(500).json({ 
+      success: false,
       message: 'Server error accepting connection request',
       error: error.message 
     });
@@ -414,7 +242,7 @@ export const declineConnection = async (req, res) => {
       return res.status(400).json({ message: 'Connection ID is required' });
     }
 
-    // Find the connection request
+    // Find the connection request where current user is recipient
     const connection = await Connection.findOne({
       _id: connectionId,
       recipientId: currentUserId,
@@ -448,92 +276,159 @@ export const declineConnection = async (req, res) => {
   }
 };
 
-// Cancel connection request (for requester to cancel their own request)
-export const cancelConnectionRequest = async (req, res) => {
+// Get alumni directory
+export const getAlumniDirectory = async (req, res) => {
   try {
     const currentUserId = req.user.id;
-    const { connectionId } = req.body;
+    const { 
+      page = 1, 
+      limit = 12, 
+      search = '', 
+      graduationYear = '', 
+      branch = '' 
+    } = req.query;
 
-    console.log('🚫 Cancelling connection request:', { currentUserId, connectionId });
-
-    if (!connectionId) {
-      return res.status(400).json({ message: 'Connection ID is required' });
-    }
-
-    // Find the connection request that the current user sent
-    const connection = await Connection.findOne({
-      _id: connectionId,
-      requesterId: currentUserId,
-      status: 'pending'
+    console.log('📋 Fetching alumni directory with filters:', {
+      page, limit, search, graduationYear, branch
     });
 
-    if (!connection) {
-      return res.status(404).json({ 
-        message: 'Connection request not found or cannot be cancelled' 
-      });
+    // Build search query
+    let searchQuery = { 
+      role: 'alumni',
+      _id: { $ne: currentUserId } // Exclude current user
+    };
+
+    if (search && search.trim() !== '') {
+      searchQuery.$or = [
+        { name: { $regex: search.trim(), $options: 'i' } },
+        { email: { $regex: search.trim(), $options: 'i' } }
+      ];
     }
 
-    // Delete the connection request
-    await Connection.findByIdAndDelete(connectionId);
+    if (graduationYear && graduationYear !== '') {
+      searchQuery.graduationYear = parseInt(graduationYear);
+    }
 
-    console.log('✅ Connection request cancelled successfully');
+    if (branch && branch !== '') {
+      searchQuery['alumniProfile.academicInfo.branch'] = { 
+        $regex: branch.trim(), 
+        $options: 'i' 
+      };
+    }
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Get users with alumni profiles
+    const users = await User.find(searchQuery)
+      .populate('alumniProfile')
+      .select('-password')
+      .limit(parseInt(limit))
+      .skip(skip)
+      .sort({ name: 1 });
+
+    const total = await User.countDocuments(searchQuery);
+
+    // Get connection status for each user
+    const alumniWithConnections = await Promise.all(
+      users.map(async (user) => {
+        const connection = await Connection.findConnection(currentUserId, user._id);
+        
+        let connectionStatus = 'not_connected';
+        if (connection) {
+          if (connection.status === 'accepted') {
+            connectionStatus = 'connected';
+          } else if (connection.status === 'pending') {
+            connectionStatus = connection.requesterId.toString() === currentUserId 
+              ? 'pending_sent' 
+              : 'pending_received';
+          }
+        }
+
+        return {
+          id: user._id,
+          userId: user._id,
+          name: user.name,
+          email: user.email,
+          graduationYear: user.graduationYear,
+          alumniProfile: user.alumniProfile,
+          profileImageUrl: user.alumniProfile?.profileImage 
+            ? `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${user.alumniProfile.profileImage}`
+            : null,
+          connectionStatus
+        };
+      })
+    );
+
+    console.log(`📊 Found ${alumniWithConnections.length} alumni profiles`);
 
     res.status(200).json({
-      message: 'Connection request cancelled successfully',
-      connectionId: connectionId
+      success: true,
+      alumni: alumniWithConnections,
+      totalPages: Math.ceil(total / parseInt(limit)),
+      currentPage: parseInt(page),
+      total,
+      hasMore: skip + alumniWithConnections.length < total
     });
 
   } catch (error) {
-    console.error('❌ Cancel connection request error:', error);
+    console.error('❌ Get alumni directory error:', error);
     res.status(500).json({ 
-      message: 'Server error cancelling connection request',
+      success: false,
+      message: 'Server error fetching alumni directory',
       error: error.message 
     });
   }
 };
 
-// Remove existing connection (for users to disconnect)
-export const removeConnection = async (req, res) => {
+// Get my connections
+export const getMyConnections = async (req, res) => {
   try {
     const currentUserId = req.user.id;
-    const { connectionId } = req.body;
+    console.log('🔗 Fetching connections for user:', currentUserId);
 
-    console.log('🗑️ Removing connection:', { currentUserId, connectionId });
-
-    if (!connectionId) {
-      return res.status(400).json({ message: 'Connection ID is required' });
-    }
-
-    // Find the accepted connection
-    const connection = await Connection.findOne({
-      _id: connectionId,
-      status: 'accepted',
+    // Get accepted connections where current user is either requester or recipient
+    const connections = await Connection.find({
       $or: [
         { requesterId: currentUserId },
         { recipientId: currentUserId }
-      ]
+      ],
+      status: 'accepted'
+    })
+    .populate('requesterId', 'name email graduationYear')
+    .populate('recipientId', 'name email graduationYear')
+    .sort({ respondedAt: -1 });
+
+    console.log(`🤝 Found ${connections.length} connections`);
+
+    // Format the response to show the other person in the connection
+    const formattedConnections = connections.map(connection => {
+      const isRequester = connection.requesterId._id.toString() === currentUserId;
+      const otherPerson = isRequester ? connection.recipientId : connection.requesterId;
+
+      return {
+        id: connection._id,
+        person: {
+          id: otherPerson._id,
+          name: otherPerson.name,
+          email: otherPerson.email,
+          graduationYear: otherPerson.graduationYear
+        },
+        connectedSince: connection.respondedAt,
+        status: connection.status
+      };
     });
 
-    if (!connection) {
-      return res.status(404).json({ 
-        message: 'Connection not found or access denied' 
-      });
-    }
-
-    // Delete the connection
-    await Connection.findByIdAndDelete(connectionId);
-
-    console.log('✅ Connection removed successfully');
-
     res.status(200).json({
-      message: 'Connection removed successfully',
-      connectionId: connectionId
+      success: true,
+      connections: formattedConnections
     });
 
   } catch (error) {
-    console.error('❌ Remove connection error:', error);
+    console.error('❌ Get my connections error:', error);
     res.status(500).json({ 
-      message: 'Server error removing connection',
+      success: false,
+      message: 'Server error fetching connections',
       error: error.message 
     });
   }
