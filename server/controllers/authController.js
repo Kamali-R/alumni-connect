@@ -141,7 +141,6 @@ export const verifyOtp = async (req, res) => {
 
 // Login function
 // Updated login function in authController.js
-// Updated login function in authController.js
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -160,37 +159,15 @@ export const login = async (req, res) => {
       }
     }
     
-    // FIXED: Check if user has completed registration properly
-    let hasAlumniProfile = false;
-    let isRegistrationComplete = false;
-    
-    if (user.role === 'alumni') {
-      // Check if Alumni document exists for this user
-      const alumniDocument = await Alumni.findOne({ userId: user._id });
-      hasAlumniProfile = !!alumniDocument;
-      
-      // Registration is complete if:
-      // 1. User has profileCompleted = true in User model
-      // 2. AND Alumni document exists with complete status
-      isRegistrationComplete = user.profileCompleted && hasAlumniProfile && alumniDocument?.status === 'complete';
-      
-      console.log('Alumni registration check:', {
-        userId: user._id,
-        profileCompleted: user.profileCompleted,
-        hasAlumniProfile,
-        alumniStatus: alumniDocument?.status,
-        isRegistrationComplete
-      });
-    } else {
-      // For students, just check profileCompleted
-      isRegistrationComplete = user.profileCompleted;
-    }
+    // Check if user has completed registration (has alumni profile)
+    const hasAlumniProfile = await Alumni.exists({ userId: user._id });
+    const isRegistrationComplete = user.profileCompleted && hasAlumniProfile;
     
     // Update last login
     user.lastLogin = new Date();
     await user.save();
     
-    // Create JWT token with correct registration status
+    // Create JWT token
     const token = jwt.sign(
       {
         id: user._id,
@@ -198,7 +175,7 @@ export const login = async (req, res) => {
         profileCompleted: isRegistrationComplete,
         email: user.email,
         name: user.name,
-        registrationComplete: isRegistrationComplete // This should match profileCompleted
+        registrationComplete: isRegistrationComplete
       },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }

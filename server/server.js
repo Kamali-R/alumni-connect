@@ -72,7 +72,7 @@ app.use('/api', protectedRoutes);           // General protected routes
 app.use('/api', contactRoutes);             // Contact routes
 app.use('/api', alumniRoutes);              // Alumni profile routes
 app.use('/api', jobRoutes);                 // Job routes
-app.use('/api', networkingRoutes);          // Networking routes (IMPORTANT!)
+app.use('/api', networkingRoutes);          // Networking routes
 
 // ✅ Root Route
 app.get('/', (req, res) => {
@@ -107,21 +107,21 @@ app.get('/api/debug/connections', async (req, res) => {
   }
 });
 
+// ✅ 404 Handler - FIXED: Remove the problematic * route
+app.use((req, res) => {
+  res.status(404).json({ 
+    message: 'Route not found',
+    requestedPath: req.originalUrl,
+    method: req.method
+  });
+});
+
 // ✅ Error Handling Middleware
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ 
     message: 'Internal server error',
     error: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
-  });
-});
-
-// ✅ 404 Handler
-app.use('*', (req, res) => {
-  res.status(404).json({ 
-    message: 'Route not found',
-    requestedPath: req.originalUrl,
-    method: req.method
   });
 });
 
