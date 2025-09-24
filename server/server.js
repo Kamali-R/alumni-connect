@@ -12,7 +12,7 @@ import protectedRoutes from './routes/protectedRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
 import jobRoutes from './routes/jobRoutes.js';
 import networkingRoutes from './routes/networkingRoutes.js';
-
+import successStoryRoutes from './routes/successStoryRoutes.js';
 // Load Google OAuth config
 import './config/googleAuth.js';
 import path from 'path';
@@ -66,6 +66,7 @@ app.get('/api/test', (req, res) => {
   });
 });
 
+
 // ✅ API Routes - CORRECTED ORDER
 app.use('/', authRoutes);                    // Auth routes (login, register, etc.)
 app.use('/api', protectedRoutes);           // General protected routes
@@ -73,6 +74,8 @@ app.use('/api', contactRoutes);             // Contact routes
 app.use('/api', alumniRoutes);              // Alumni profile routes
 app.use('/api', jobRoutes);                 // Job routes
 app.use('/api', networkingRoutes);
+app.use('/api', successStoryRoutes);
+
 
 app.delete('/api/debug/fix-connections-completely', async (req, res) => {
   try {

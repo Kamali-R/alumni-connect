@@ -18,10 +18,28 @@ const NetworkingHub = () => {
     limit: 12
   });
 
+  // Success Stories states
+  const [successStories, setSuccessStories] = useState([]);
+  const [filteredStories, setFilteredStories] = useState([]);
+  const [showAddStoryForm, setShowAddStoryForm] = useState(false);
+  const [selectedStory, setSelectedStory] = useState(null);
+  const [storyFilters, setStoryFilters] = useState({
+    category: '',
+    search: ''
+  });
+  const [storyPagination, setStoryPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    hasNext: false,
+    hasPrev: false
+  });
+  const [storyLoading, setStoryLoading] = useState(false);
+
   // Navigation items
   const navItems = [
     { id: 'directory', label: 'Alumni Directory', icon: '👥' },
-    { id: 'connections', label: 'My Connections', icon: '🔗' }
+    { id: 'connections', label: 'My Connections', icon: '🔗' },
+    { id: 'stories', label: 'Success Stories', icon: '🌟' }
   ];
 
   // Helper function to get auth headers
@@ -135,6 +153,136 @@ const NetworkingHub = () => {
     }
   };
 
+  // Fetch success stories
+  const fetchSuccessStories = async (page = 1, filters = {}) => {
+    setStoryLoading(true);
+    try {
+      const queryParams = new URLSearchParams({
+        page: page.toString(),
+        limit: '10',
+        ...filters
+      });
+
+      const response = await fetch(`http://localhost:5000/api/stories?${queryParams}`, {
+        method: 'GET',
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch success stories');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setSuccessStories(data.stories);
+        setFilteredStories(data.stories);
+        setStoryPagination(data.pagination);
+      }
+    } catch (error) {
+      console.error('Error fetching success stories:', error);
+      toast.error('Failed to load success stories');
+    } finally {
+      setStoryLoading(false);
+    }
+  };
+
+  // Create new success story
+  const createSuccessStory = async (storyData) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/stories', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(storyData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create story');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        toast.success('Success story published!');
+        setShowAddStoryForm(false);
+        fetchSuccessStories(); // Refresh the list
+        return true;
+      }
+    } catch (error) {
+      console.error('Error creating story:', error);
+      toast.error(error.message || 'Failed to publish story');
+      return false;
+    }
+  };
+
+  // Like/Unlike story
+  const toggleStoryLike = async (storyId) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/stories/${storyId}/like`, {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update like');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update local state
+        setSuccessStories(prev => prev.map(story => 
+          story._id === storyId 
+            ? { ...story, likeCount: data.likeCount, isLiked: data.isLiked }
+            : story
+        ));
+        
+        setFilteredStories(prev => prev.map(story => 
+          story._id === storyId 
+            ? { ...story, likeCount: data.likeCount, isLiked: data.isLiked }
+            : story
+        ));
+
+        if (selectedStory && selectedStory._id === storyId) {
+          setSelectedStory(prev => ({
+            ...prev,
+            likeCount: data.likeCount,
+            isLiked: data.isLiked
+          }));
+        }
+
+        toast.success(data.message);
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      toast.error('Failed to update like');
+    }
+  };
+
+  // Fetch single story
+  const fetchStoryById = async (storyId) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/stories/${storyId}`, {
+        method: 'GET',
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch story');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setSelectedStory(data.story);
+      }
+    } catch (error) {
+      console.error('Error fetching story:', error);
+      toast.error('Failed to load story');
+    }
+  };
+
   // Load data based on active section
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -148,79 +296,81 @@ const NetworkingHub = () => {
     } else if (activeSection === 'connections') {
       fetchConnectionRequests();
       fetchMyConnections();
+    } else if (activeSection === 'stories') {
+      fetchSuccessStories();
     }
   }, [activeSection, filters]);
 
+  // Filter stories when filters change
+  useEffect(() => {
+    if (activeSection === 'stories') {
+      fetchSuccessStories(1, storyFilters);
+    }
+  }, [storyFilters, activeSection]);
+
   // Send connection request
- // Enhanced sendConnectionRequest function in NetworkingHub.jsx
-// Enhanced sendConnectionRequest function in NetworkingHub.jsx
-const sendConnectionRequest = async (alumniId) => {
-  try {
-    if (!alumniId) {
-      toast.error('Invalid alumni ID');
-      return;
-    }
+  const sendConnectionRequest = async (alumniId) => {
+    try {
+      if (!alumniId) {
+        toast.error('Invalid alumni ID');
+        return;
+      }
 
-    console.log('Sending connection request to:', alumniId);
+      const response = await fetch('http://localhost:5000/api/connection-request', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ recipientId: alumniId })
+      });
 
-    const response = await fetch('http://localhost:5000/api/connection-request', {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ recipientId: alumniId })
-    });
+      const data = await response.json();
 
-    const data = await response.json();
+      if (!response.ok) {
+        if (data.message.includes('already exists') || 
+            data.message.includes('already sent') ||
+            data.message.includes('pending request')) {
+          updateAlumniConnectionStatus(alumniId, 'pending_sent');
+          toast.info(data.message);
+          return;
+        }
+        if (data.message.includes('connected')) {
+          updateAlumniConnectionStatus(alumniId, 'connected');
+          toast.info(data.message);
+          return;
+        }
+        if (data.message.includes('previously declined') || 
+            data.message.includes('cancelled')) {
+          updateAlumniConnectionStatus(alumniId, 'not_connected');
+          toast.info(data.message);
+          return;
+        }
+        throw new Error(data.message || `Request failed with status ${response.status}`);
+      }
 
-    if (!response.ok) {
-      // Handle specific error cases
-      if (data.message.includes('already exists') || 
-          data.message.includes('already sent') ||
-          data.message.includes('pending request')) {
+      if (data.success) {
         updateAlumniConnectionStatus(alumniId, 'pending_sent');
-        toast.info(data.message);
-        return;
+        toast.success('Connection request sent successfully!');
+        
+        if (activeSection === 'connections') {
+          await fetchConnectionRequests();
+        }
+      } else {
+        throw new Error(data.message || 'Request failed');
       }
-      if (data.message.includes('connected')) {
-        updateAlumniConnectionStatus(alumniId, 'connected');
-        toast.info(data.message);
-        return;
-      }
-      if (data.message.includes('previously declined') || 
-          data.message.includes('cancelled')) {
-        updateAlumniConnectionStatus(alumniId, 'not_connected');
-        toast.info(data.message);
-        return;
-      }
-      throw new Error(data.message || `Request failed with status ${response.status}`);
-    }
-
-    if (data.success) {
-      updateAlumniConnectionStatus(alumniId, 'pending_sent');
-      toast.success('Connection request sent successfully!');
       
-      // Refresh connection requests if on connections tab
-      if (activeSection === 'connections') {
-        await fetchConnectionRequests();
+    } catch (error) {
+      console.error('Connection request failed:', error);
+      
+      if (error.message.includes('Invalid recipient ID') || error.message.includes('not found')) {
+        toast.error('Invalid user selected');
+      } else if (error.message.includes('cannot connect to yourself')) {
+        toast.error('Cannot connect to yourself');
+      } else if (error.message.includes('duplicate key')) {
+        toast.error('Connection already exists. Please refresh the page.');
+      } else {
+        toast.error(error.message || 'Failed to send connection request');
       }
-    } else {
-      throw new Error(data.message || 'Request failed');
     }
-    
-  } catch (error) {
-    console.error('Connection request failed:', error);
-    
-    // More specific error handling
-    if (error.message.includes('Invalid recipient ID') || error.message.includes('not found')) {
-      toast.error('Invalid user selected');
-    } else if (error.message.includes('cannot connect to yourself')) {
-      toast.error('Cannot connect to yourself');
-    } else if (error.message.includes('duplicate key')) {
-      toast.error('Connection already exists. Please refresh the page.');
-    } else {
-      toast.error(error.message || 'Failed to send connection request');
-    }
-  }
-};
+  };
 
   // Helper function to update alumni connection status
   const updateAlumniConnectionStatus = (alumniId, status) => {
@@ -249,11 +399,9 @@ const sendConnectionRequest = async (alumniId) => {
 
       const data = await response.json();
 
-      // Update states
       setPendingRequests(prev => prev.filter(req => req.id !== connectionId));
       updateAlumniConnectionStatus(alumniId, 'connected');
 
-      // Refresh connections list
       await fetchMyConnections();
       
       toast.success('Connection request accepted!');
@@ -277,7 +425,6 @@ const sendConnectionRequest = async (alumniId) => {
         throw new Error(errorData.message);
       }
 
-      // Update states
       setPendingRequests(prev => prev.filter(req => req.id !== connectionId));
       updateAlumniConnectionStatus(alumniId, 'not_connected');
 
@@ -317,12 +464,30 @@ const sendConnectionRequest = async (alumniId) => {
     });
   };
 
+  // Story form submission
+  const handleStorySubmit = async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const storyData = {
+      title: formData.get('title'),
+      content: formData.get('content'),
+      category: formData.get('category'),
+      tags: formData.get('tags') ? formData.get('tags').split(',').map(tag => tag.trim()) : []
+    };
+
+    const success = await createSuccessStory(storyData);
+    if (success) {
+      e.target.reset();
+    }
+  };
+
   // Navigation handler
   const handleNavClick = (section) => {
     setActiveSection(section);
   };
 
-  // AlumniCard Component - REMOVED CANCEL FUNCTIONALITY
+  // AlumniCard Component
   const AlumniCard = ({ alumni, onConnect, onViewProfile }) => {
     const getConnectionButton = () => {
       const buttonClass = "px-4 py-2 rounded-lg font-medium text-sm flex-1 transition-colors flex items-center justify-center";
@@ -409,7 +574,6 @@ const sendConnectionRequest = async (alumniId) => {
             </div>
           </div>
           
-          {/* Connection Status Badge */}
           <div className={`px-2 py-1 rounded-full text-xs font-medium ${
             alumni.connectionStatus === 'connected' ? 'bg-green-100 text-green-800' :
             alumni.connectionStatus === 'pending_sent' ? 'bg-yellow-100 text-yellow-800' :
@@ -423,7 +587,6 @@ const sendConnectionRequest = async (alumniId) => {
           </div>
         </div>
         
-        {/* Profile Information */}
         <div className="space-y-2 mb-4">
           {alumni.graduationYear && (
             <div className="flex items-center text-sm text-gray-600">
@@ -445,7 +608,6 @@ const sendConnectionRequest = async (alumniId) => {
           )}
         </div>
 
-        {/* Action Buttons */}
         <div className="flex space-x-2">
           {getConnectionButton()}
           <button 
@@ -563,6 +725,195 @@ const sendConnectionRequest = async (alumniId) => {
     </div>
   );
 
+  // StoryCard Component
+  const StoryCard = ({ story, onLike, onOpen }) => {
+    const categoryNames = {
+      'career': 'Career Growth',
+      'entrepreneurship': 'Entrepreneurship',
+      'education': 'Higher Education',
+      'innovation': 'Innovation & Research',
+      'leadership': 'Leadership',
+      'social-impact': 'Social Impact'
+    };
+
+    const formatDate = (dateString) => {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    };
+
+    return (
+      <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center">
+            <div className="bg-blue-100 rounded-full w-12 h-12 flex items-center justify-center mr-4">
+              <span className="text-blue-600 font-semibold text-lg">
+                {story.author?.name?.charAt(0) || 'A'}
+              </span>
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900">{story.author?.name || 'Anonymous'}</h3>
+              <p className="text-sm text-gray-600">
+                {story.author?.role === 'alumni' ? 'Alumni' : 'Student'}
+                {story.author?.graduationYear && ` • Class of ${story.author.graduationYear}`}
+              </p>
+              <p className="text-xs text-gray-500">{formatDate(story.createdAt)}</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+              {categoryNames[story.category]}
+            </span>
+          </div>
+        </div>
+        
+        <h2 
+          className="text-xl font-bold text-gray-900 mb-3 hover:text-blue-600 cursor-pointer"
+          onClick={() => onOpen(story._id)}
+        >
+          {story.title}
+        </h2>
+        
+        <p className="text-gray-700 mb-4 line-clamp-3">
+          {story.content.length > 200 ? `${story.content.substring(0, 200)}...` : story.content}
+        </p>
+        
+        {story.tags && story.tags.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {story.tags.map((tag, index) => (
+              <span key={index} className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs">
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
+        
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <button 
+              onClick={() => onLike(story._id)} 
+              className="flex items-center space-x-2 text-gray-600 hover:text-blue-600"
+            >
+              <svg className={`w-5 h-5 ${story.isLiked ? 'text-blue-600 fill-current' : ''}`} 
+                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
+                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+              <span>{story.likeCount || 0} likes</span>
+            </button>
+            <span className="text-sm text-gray-500">{story.views || 0} views</span>
+          </div>
+          <button 
+            onClick={() => onOpen(story._id)} 
+            className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+          >
+            Read Full Story →
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // StoryModal Component
+  const StoryModal = ({ story, onClose, onLike }) => {
+    const categoryNames = {
+      'career': 'Career Growth',
+      'entrepreneurship': 'Entrepreneurship',
+      'education': 'Higher Education',
+      'innovation': 'Innovation & Research',
+      'leadership': 'Leadership',
+      'social-impact': 'Social Impact'
+    };
+
+    const formatDate = (dateString) => {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="p-6">
+            <div className="flex justify-between items-start mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Success Story</h2>
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">
+                ×
+              </button>
+            </div>
+            
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                  {categoryNames[story.category]}
+                </span>
+                <span className="text-sm text-gray-500">{formatDate(story.createdAt)}</span>
+              </div>
+              
+              <h1 className="text-3xl font-bold text-gray-900 mb-6">{story.title}</h1>
+              
+              <div className="flex items-center mb-6">
+                <div className="bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mr-4">
+                  <span className="text-blue-600 font-semibold text-xl">
+                    {story.author?.name?.charAt(0) || 'A'}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">{story.author?.name || 'Anonymous'}</h3>
+                  <p className="text-gray-600">
+                    {story.author?.role === 'alumni' ? 'Alumni' : 'Student'}
+                    {story.author?.graduationYear && ` • Class of ${story.author.graduationYear}`}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="prose max-w-none mb-8">
+                <div className="text-gray-700 whitespace-pre-line leading-relaxed text-lg">
+                  {story.content}
+                </div>
+              </div>
+              
+              {story.tags && story.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {story.tags.map((tag, index) => (
+                    <span key={index} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+              
+              <div className="flex items-center justify-between pt-6 border-t">
+                <button 
+                  onClick={() => onLike(story._id)} 
+                  className="flex items-center space-x-2 text-gray-600 hover:text-blue-600"
+                >
+                  <svg className={`w-6 h-6 ${story.isLiked ? 'text-blue-600 fill-current' : ''}`} 
+                       fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
+                          d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  </svg>
+                  <span className="font-medium">{story.likeCount || 0} people liked this story</span>
+                </button>
+                
+                <div className="flex space-x-4">
+                  <span className="text-gray-500">{story.views || 0} views</span>
+                  <button className="text-blue-600 hover:text-blue-800 font-medium">
+                    Share Story
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Render Alumni Directory
   const renderAlumniDirectory = () => (
     <div className="mb-8">
@@ -571,7 +922,6 @@ const sendConnectionRequest = async (alumniId) => {
         <p className="text-gray-600">Connect with fellow alumni from your institution</p>
       </div>
       
-      {/* Search and Filters */}
       <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
@@ -618,14 +968,12 @@ const sendConnectionRequest = async (alumniId) => {
         </button>
       </div>
       
-      {/* Loading State */}
       {loading && (
         <div className="flex justify-center items-center py-8">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
         </div>
       )}
       
-      {/* Alumni Cards */}
       {!loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredAlumni.map(alumni => (
@@ -639,7 +987,6 @@ const sendConnectionRequest = async (alumniId) => {
         </div>
       )}
       
-      {/* No Results */}
       {!loading && filteredAlumni.length === 0 && (
         <div className="text-center py-8">
           <p className="text-gray-500">No alumni found matching your criteria.</p>
@@ -657,7 +1004,6 @@ const sendConnectionRequest = async (alumniId) => {
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Connection Requests */}
         <div className="bg-white rounded-xl shadow-sm p-6">
           <h3 className="text-xl font-semibold text-gray-900 mb-4">
             Pending Requests ({pendingRequests.length})
@@ -678,7 +1024,6 @@ const sendConnectionRequest = async (alumniId) => {
           </div>
         </div>
         
-        {/* My Connections */}
         <div className="bg-white rounded-xl shadow-sm p-6">
           <h3 className="text-xl font-semibold text-gray-900 mb-4">
             My Network ({myConnections.length})
@@ -697,9 +1042,201 @@ const sendConnectionRequest = async (alumniId) => {
     </div>
   );
 
+  // Render Success Stories
+  const renderSuccessStories = () => (
+    <div className="mb-8">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Success Stories</h2>
+        <p className="text-gray-600">Share your journey and get inspired by fellow alumni achievements</p>
+      </div>
+      
+      <div className="mb-6">
+        <button 
+          onClick={() => setShowAddStoryForm(true)} 
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium flex items-center"
+        >
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path>
+          </svg>
+          Share Your Success Story
+        </button>
+      </div>
+      
+      {showAddStoryForm && (
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-4">Share Your Success Story</h3>
+          <form onSubmit={handleStorySubmit}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Story Title *</label>
+                <input 
+                  type="text" 
+                  name="title" 
+                  required 
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                  placeholder="e.g., From Student to Tech Lead at Google" 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+                <select 
+                  name="category" 
+                  required 
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Select Category</option>
+                  <option value="career">Career Growth</option>
+                  <option value="entrepreneurship">Entrepreneurship</option>
+                  <option value="education">Higher Education</option>
+                  <option value="innovation">Innovation & Research</option>
+                  <option value="leadership">Leadership</option>
+                  <option value="social-impact">Social Impact</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Your Story *</label>
+              <textarea 
+                name="content" 
+                required 
+                rows="8" 
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                placeholder="Share your journey, challenges you overcame, key milestones, and advice for fellow alumni..."
+              ></textarea>
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Tags (comma separated)</label>
+              <input 
+                type="text" 
+                name="tags" 
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                placeholder="e.g., career-growth, technology, leadership" 
+              />
+            </div>
+            
+            <div className="flex space-x-4">
+              <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium">
+                Publish Story
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setShowAddStoryForm(false)} 
+                className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-6 py-2 rounded-lg font-medium"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+      
+      <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+        <div className="flex flex-wrap gap-4 items-center">
+          <label className="text-sm font-medium text-gray-700">Filter by category:</label>
+          <select 
+            value={storyFilters.category}
+            onChange={(e) => setStoryFilters(prev => ({ ...prev, category: e.target.value }))}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="">All Categories</option>
+            <option value="career">Career Growth</option>
+            <option value="entrepreneurship">Entrepreneurship</option>
+            <option value="education">Higher Education</option>
+            <option value="innovation">Innovation & Research</option>
+            <option value="leadership">Leadership</option>
+            <option value="social-impact">Social Impact</option>
+          </select>
+          
+          <input 
+            type="text" 
+            value={storyFilters.search}
+            onChange={(e) => setStoryFilters(prev => ({ ...prev, search: e.target.value }))}
+            placeholder="Search stories..." 
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+          />
+          
+          <button 
+            onClick={() => setStoryFilters({ category: '', search: '' })}
+            className="text-blue-600 hover:text-blue-800 font-medium"
+          >
+            Clear Filters
+          </button>
+        </div>
+      </div>
+      
+      {storyLoading && (
+        <div className="flex justify-center items-center py-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      )}
+      
+      {!storyLoading && (
+        <>
+          <div className="space-y-6">
+            {filteredStories.map(story => (
+              <StoryCard 
+                key={story._id} 
+                story={story} 
+                onLike={toggleStoryLike} 
+                onOpen={fetchStoryById} 
+              />
+            ))}
+          </div>
+          
+          {filteredStories.length === 0 && !storyLoading && (
+            <div className="text-center py-8">
+              <p className="text-gray-500">No success stories found matching your criteria.</p>
+            </div>
+          )}
+        </>
+      )}
+      
+      {storyPagination.totalPages > 1 && (
+        <div className="flex justify-center items-center space-x-4 mt-8">
+          <button
+            onClick={() => fetchSuccessStories(storyPagination.currentPage - 1, storyFilters)}
+            disabled={!storyPagination.hasPrev}
+            className={`px-4 py-2 rounded-lg ${
+              storyPagination.hasPrev 
+                ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            Previous
+          </button>
+          
+          <span className="text-gray-600">
+            Page {storyPagination.currentPage} of {storyPagination.totalPages}
+          </span>
+          
+          <button
+            onClick={() => fetchSuccessStories(storyPagination.currentPage + 1, storyFilters)}
+            disabled={!storyPagination.hasNext}
+            className={`px-4 py-2 rounded-lg ${
+              storyPagination.hasNext 
+                ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            Next
+          </button>
+        </div>
+      )}
+      
+      {selectedStory && (
+        <StoryModal 
+          story={selectedStory} 
+          onClose={() => setSelectedStory(null)} 
+          onLike={toggleStoryLike} 
+        />
+      )}
+    </div>
+  );
+
   return (
     <div className="bg-gray-50 min-h-screen">
-      {/* Header Navigation */}
       <div className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex space-x-8">
@@ -723,13 +1260,12 @@ const sendConnectionRequest = async (alumniId) => {
         </div>
       </div>
       
-      {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeSection === 'directory' && renderAlumniDirectory()}
         {activeSection === 'connections' && renderConnections()}
+        {activeSection === 'stories' && renderSuccessStories()}
       </div>
 
-      {/* Profile Modal */}
       <ProfileModal profile={selectedProfile} onClose={handleCloseProfile} />
       
       <ToastContainer position="bottom-right" />
