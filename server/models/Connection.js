@@ -1,4 +1,3 @@
-// models/Connection.js - FIXED VERSION
 import mongoose from 'mongoose';
 
 const connectionSchema = new mongoose.Schema({
@@ -19,14 +18,14 @@ const connectionSchema = new mongoose.Schema({
     required: [true, 'Recipient ID is required'],
     validate: {
       validator: function(v) {
-        return mongoose.Types.ObjectId.isValid(v);
+        return mongoose.Types.ObjectId.isValid(v) && v.toString() !== this.requesterId?.toString();
       },
-      message: 'Invalid recipient ID'
+      message: 'Invalid recipient ID or cannot connect to yourself'
     }
   },
   status: {
     type: String,
-    enum: ['pending', 'accepted', 'declined'],
+    enum: ['pending', 'accepted', 'declined', 'cancelled'],
     default: 'pending'
   },
   requestedAt: {
@@ -40,47 +39,90 @@ const connectionSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Pre-save validation to prevent null values
+// Enhanced pre-save validation
 connectionSchema.pre('save', function(next) {
-  if (!this.requesterId || !this.recipientId) {
-    return next(new Error('Both requesterId and recipientId are required'));
+  // Validate ObjectIds
+  if (!mongoose.Types.ObjectId.isValid(this.requesterId) || 
+      !mongoose.Types.ObjectId.isValid(this.recipientId)) {
+    return next(new Error('Invalid user ID format'));
   }
   
-  if (this.requesterId.toString() === this.recipientId.toString()) {
-    return next(new Error('Cannot connect to yourself'));
+  // Convert to string for comparison
+  const requesterStr = this.requesterId.toString();
+  const recipientStr = this.recipientId.toString();
+  
+  // Prevent self-connection
+  if (requesterStr === recipientStr) {
+    return next(new Error('Cannot send connection request to yourself'));
+  }
+  
+  // Ensure requesterId is always first in alphabetical order for consistent indexing
+  if (requesterStr > recipientStr) {
+    // Swap to maintain consistent order
+    [this.requesterId, this.recipientId] = [this.recipientId, this.requesterId];
   }
   
   next();
 });
 
 // Static method to find connection between two users
-connectionSchema.statics.findConnection = function(userId1, userId2) {
-  // Validate ObjectIds
+connectionSchema.statics.findConnection = async function(userId1, userId2) {
   if (!mongoose.Types.ObjectId.isValid(userId1) || !mongoose.Types.ObjectId.isValid(userId2)) {
     throw new Error('Invalid user ID');
   }
   
+  // Convert to strings for consistent ordering
+  const id1 = userId1.toString();
+  const id2 = userId2.toString();
+  
+  // Always query with consistent order
+  const [firstId, secondId] = id1 < id2 ? [id1, id2] : [id2, id1];
+  
   return this.findOne({
-    $or: [
-      { requesterId: userId1, recipientId: userId2 },
-      { requesterId: userId2, recipientId: userId1 }
-    ]
+    requesterId: firstId,
+    recipientId: secondId
   });
 };
 
-// Create compound index with proper filtering
+// Method to check if connection exists
+connectionSchema.statics.connectionExists = async function(userId1, userId2) {
+  const connection = await this.findConnection(userId1, userId2);
+  return !!connection;
+};
+
+// Create compound index with strict filtering
 connectionSchema.index({ requesterId: 1, recipientId: 1 }, { 
   unique: true,
   name: 'unique_connection_pair',
   partialFilterExpression: {
-    requesterId: { $exists: true, $type: 'objectId' },
-    recipientId: { $exists: true, $type: 'objectId' }
+    requesterId: { $exists: true, $ne: null, $type: 'objectId' },
+    recipientId: { $exists: true, $ne: null, $type: 'objectId' },
+    status: { $in: ['pending', 'accepted'] }
   }
 });
 
 // Additional indexes for better performance
 connectionSchema.index({ recipientId: 1, status: 1 });
 connectionSchema.index({ requesterId: 1, status: 1 });
-connectionSchema.index({ status: 1, requestedAt: -1 });
+connectionSchema.index({ status: 1 });
+connectionSchema.index({ requestedAt: -1 });
+
+// Virtual for populated data
+connectionSchema.virtual('requester', {
+  ref: 'User',
+  localField: 'requesterId',
+  foreignField: '_id',
+  justOne: true
+});
+
+connectionSchema.virtual('recipient', {
+  ref: 'User',
+  localField: 'recipientId',
+  foreignField: '_id',
+  justOne: true
+});
+
+connectionSchema.set('toJSON', { virtuals: true });
+connectionSchema.set('toObject', { virtuals: true });
 
 export default mongoose.model('Connection', connectionSchema);

@@ -153,6 +153,7 @@ const NetworkingHub = () => {
 
   // Send connection request
  // Enhanced sendConnectionRequest function in NetworkingHub.jsx
+// Enhanced sendConnectionRequest function in NetworkingHub.jsx
 const sendConnectionRequest = async (alumniId) => {
   try {
     if (!alumniId) {
@@ -172,13 +173,21 @@ const sendConnectionRequest = async (alumniId) => {
 
     if (!response.ok) {
       // Handle specific error cases
-      if (data.message.includes('already exists') || data.message.includes('already sent')) {
+      if (data.message.includes('already exists') || 
+          data.message.includes('already sent') ||
+          data.message.includes('pending request')) {
         updateAlumniConnectionStatus(alumniId, 'pending_sent');
         toast.info(data.message);
         return;
       }
       if (data.message.includes('connected')) {
         updateAlumniConnectionStatus(alumniId, 'connected');
+        toast.info(data.message);
+        return;
+      }
+      if (data.message.includes('previously declined') || 
+          data.message.includes('cancelled')) {
+        updateAlumniConnectionStatus(alumniId, 'not_connected');
         toast.info(data.message);
         return;
       }
@@ -189,6 +198,7 @@ const sendConnectionRequest = async (alumniId) => {
       updateAlumniConnectionStatus(alumniId, 'pending_sent');
       toast.success('Connection request sent successfully!');
       
+      // Refresh connection requests if on connections tab
       if (activeSection === 'connections') {
         await fetchConnectionRequests();
       }
@@ -204,6 +214,8 @@ const sendConnectionRequest = async (alumniId) => {
       toast.error('Invalid user selected');
     } else if (error.message.includes('cannot connect to yourself')) {
       toast.error('Cannot connect to yourself');
+    } else if (error.message.includes('duplicate key')) {
+      toast.error('Connection already exists. Please refresh the page.');
     } else {
       toast.error(error.message || 'Failed to send connection request');
     }

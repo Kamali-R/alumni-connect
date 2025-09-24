@@ -72,7 +72,371 @@ app.use('/api', protectedRoutes);           // General protected routes
 app.use('/api', contactRoutes);             // Contact routes
 app.use('/api', alumniRoutes);              // Alumni profile routes
 app.use('/api', jobRoutes);                 // Job routes
-app.use('/api', networkingRoutes);          // Networking routes
+app.use('/api', networkingRoutes);
+
+app.delete('/api/debug/fix-connections-completely', async (req, res) => {
+  try {
+    const Connection = mongoose.model('Connection');
+    
+    console.log('🛠️ Starting complete connections fix...');
+    
+    // 1. Delete ALL connections
+    const deleteResult = await Connection.deleteMany({});
+    console.log('✅ Deleted all connections:', deleteResult.deletedCount);
+    
+    // 2. Drop ALL indexes from connections collection
+    const db = mongoose.connection.db;
+    const collection = db.collection('connections');
+    
+    try {
+      const indexes = await collection.indexes();
+      console.log('📋 Current indexes:', indexes.map(idx => idx.name));
+      
+      // Drop all indexes except _id_
+      for (const index of indexes) {
+        if (index.name !== '_id_') {
+          try {
+            await collection.dropIndex(index.name);
+            console.log('✅ Dropped index:', index.name);
+          } catch (e) {
+            console.log('ℹ️ Could not drop index', index.name, ':', e.message);
+          }
+        }
+      }
+    } catch (e) {
+      console.log('ℹ️ Error handling indexes:', e.message);
+    }
+    
+    // 3. Create ONE clean, proper index
+    await collection.createIndex(
+      { requesterId: 1, recipientId: 1 }, 
+      { 
+        unique: true, 
+        name: 'unique_connection_pair'
+      }
+    );
+    console.log('✅ Created clean unique index');
+    
+    // 4. Test creating a valid connection
+    const User = mongoose.model('User');
+    const users = await User.find({ role: 'alumni' }).limit(2);
+    
+    if (users.length >= 2) {
+      const testConnection = new Connection({
+        requesterId: users[0]._id,
+        recipientId: users[1]._id,
+        status: 'pending',
+        requestedAt: new Date()
+      });
+      
+      await testConnection.save();
+      console.log('✅ Test connection created successfully');
+      
+      // Clean up test connection
+      await Connection.findByIdAndDelete(testConnection._id);
+      console.log('✅ Test connection cleaned up');
+    }
+    
+    // 5. Verify the fix
+    const finalStats = await collection.stats();
+    const finalIndexes = await collection.indexes();
+    
+    res.json({
+      message: 'Connections completely fixed!',
+      actions: {
+        deletedConnections: deleteResult.deletedCount,
+        createdIndexes: finalIndexes.map(idx => idx.name),
+        collectionSize: finalStats.size,
+        testSuccessful: users.length >= 2
+      },
+      nextSteps: [
+        'Now replace your Connection model with the fixed version',
+        'Update your networking controller',
+        'Restart the server',
+        'Test connection functionality'
+      ]
+    });
+    
+  } catch (error) {
+    console.error('❌ Fix error:', error);
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+});
+// Networking routes
+app.get('/api/debug/check-connections-state', async (req, res) => {
+  try {
+    const Connection = mongoose.model('Connection');
+    const User = mongoose.model('User');
+    
+    console.log('🔍 Checking connections state...');
+    
+    // Get ALL connections with details
+    const allConnections = await Connection.find({})
+      .populate('requesterId', 'name email')
+      .populate('recipientId', 'name email')
+      .lean();
+    
+    // Get basic collection info (compatible method)
+    const db = mongoose.connection.db;
+    const collection = db.collection('connections');
+    
+    // Count documents using compatible method
+    const totalCount = await collection.countDocuments();
+    
+    // Get indexes
+    const indexes = await collection.indexes();
+    
+    // Check for any users in the database
+    const totalUsers = await User.countDocuments({ role: 'alumni' });
+    const sampleUsers = await User.find({ role: 'alumni' }).limit(3).select('name email');
+    
+    console.log('📊 Connection analysis:', {
+      totalConnections: allConnections.length,
+      totalCountFromCollection: totalCount,
+      totalAlumniUsers: totalUsers
+    });
+    
+    res.json({
+      // Basic counts
+      totalConnections: allConnections.length,
+      totalCountFromCollection: totalCount,
+      totalAlumniUsers: totalUsers,
+      
+      // Index information
+      indexes: indexes.map(index => index.name),
+      
+      // Sample users available for testing
+      sampleUsers: sampleUsers.map(user => ({
+        id: user._id,
+        name: user.name,
+        email: user.email
+      })),
+      
+      // Detailed connection analysis
+      connections: allConnections.map(conn => {
+        const hasRequester = conn.requesterId && mongoose.Types.ObjectId.isValid(conn.requesterId);
+        const hasRecipient = conn.recipientId && mongoose.Types.ObjectId.isValid(conn.recipientId);
+        
+        return {
+          id: conn._id,
+          requesterId: conn.requesterId,
+          recipientId: conn.recipientId,
+          requesterName: conn.requesterId?.name || 'null/missing',
+          recipientName: conn.recipientId?.name || 'null/missing', 
+          status: conn.status,
+          requestedAt: conn.requestedAt,
+          hasNullValues: !hasRequester || !hasRecipient,
+          isValid: hasRequester && hasRecipient,
+          // Detailed validation
+          requesterValid: hasRequester,
+          recipientValid: hasRecipient,
+          canBeUsed: hasRequester && hasRecipient && conn.requesterId.toString() !== conn.recipientId.toString()
+        };
+      }),
+      
+      // Summary statistics
+      summary: {
+        validConnections: allConnections.filter(conn => 
+          conn.requesterId && conn.recipientId &&
+          mongoose.Types.ObjectId.isValid(conn.requesterId) &&
+          mongoose.Types.ObjectId.isValid(conn.recipientId)
+        ).length,
+        
+        corruptedConnections: allConnections.filter(conn => 
+          !conn.requesterId || !conn.recipientId ||
+          !mongoose.Types.ObjectId.isValid(conn.requesterId) ||
+          !mongoose.Types.ObjectId.isValid(conn.recipientId)
+        ).length,
+        
+        pendingConnections: allConnections.filter(conn => conn.status === 'pending').length,
+        acceptedConnections: allConnections.filter(conn => conn.status === 'accepted').length,
+        declinedConnections: allConnections.filter(conn => conn.status === 'declined').length
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Diagnostic error:', error);
+    res.status(500).json({ 
+      error: error.message,
+      hint: 'Check if Connection model is properly defined'
+    });
+  }
+});
+
+app.post('/api/debug/test-connection-creation', async (req, res) => {
+  try {
+    const Connection = mongoose.model('Connection');
+    const User = mongoose.model('User');
+    
+    // Get two alumni users to test with
+    const users = await User.find({ role: 'alumni' }).limit(2);
+    
+    if (users.length < 2) {
+      return res.status(400).json({ 
+        message: 'Need at least 2 alumni users for testing',
+        availableUsers: users.length
+      });
+    }
+    
+    const [user1, user2] = users;
+    
+    console.log('Testing connection between:', {
+      user1: user1.name,
+      user2: user2.name
+    });
+    
+    // Try to create a connection
+    const testConnection = new Connection({
+      requesterId: user1._id,
+      recipientId: user2._id,
+      status: 'pending'
+    });
+    
+    // Validate first
+    try {
+      await testConnection.validate();
+      console.log('✅ Validation passed');
+    } catch (validationError) {
+      return res.status(400).json({
+        message: 'Validation failed',
+        error: validationError.message
+      });
+    }
+    
+    // Try to save
+    await testConnection.save();
+    console.log('✅ Connection saved successfully');
+    
+    // Clean up the test connection
+    await Connection.findByIdAndDelete(testConnection._id);
+    
+    res.json({
+      success: true,
+      message: 'Connection creation test passed!',
+      testUsers: {
+        requester: user1.name,
+        recipient: user2.name
+      }
+    });
+    
+  } catch (error) {
+    console.error('Test connection error:', error);
+    
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Duplicate key error (connection already exists)',
+        error: error.message
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Connection creation test failed',
+      error: error.message,
+      code: error.code
+    });
+  }
+});
+
+app.delete('/api/debug/reset-all-connections', async (req, res) => {
+  try {
+    const Connection = mongoose.model('Connection');
+    
+    // Delete ALL connections (nuclear option)
+    const deleteResult = await Connection.deleteMany({});
+    
+    // Drop all indexes and recreate simple one
+    const db = mongoose.connection.db;
+    
+    try {
+      await db.collection('connections').dropIndexes();
+      console.log('✅ Dropped all indexes');
+    } catch (e) {
+      console.log('ℹ️ Could not drop indexes:', e.message);
+    }
+    
+    // Create simple unique index
+    await db.collection('connections').createIndex(
+      { requesterId: 1, recipientId: 1 }, 
+      { unique: true, name: 'unique_connection_pair' }
+    );
+    
+    res.json({
+      message: 'All connections reset successfully',
+      deletedCount: deleteResult.deletedCount
+    });
+    
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/debug/simple-connection-test', async (req, res) => {
+  try {
+    const Connection = mongoose.model('Connection');
+    
+    // Just try to count connections - most basic test
+    const count = await Connection.countDocuments();
+    
+    // Try to find one connection
+    const sampleConnection = await Connection.findOne({});
+    
+    res.json({
+      success: true,
+      totalConnections: count,
+      sampleConnection: sampleConnection ? {
+        id: sampleConnection._id,
+        requesterId: sampleConnection.requesterId,
+        recipientId: sampleConnection.recipientId,
+        status: sampleConnection.status
+      } : null,
+      message: `Found ${count} connections in database`
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      hint: 'Connection model might not be properly defined'
+    });
+  }
+});
+app.delete('/api/debug/cleanup-corrupted-connections', async (req, res) => {
+  try {
+    const Connection = mongoose.model('Connection');
+    
+    console.log('🧹 Starting simple cleanup of corrupted connections...');
+    
+    // SIMPLE: Delete any connection with null values
+    const deleteResult = await Connection.deleteMany({
+      $or: [
+        { requesterId: null },
+        { recipientId: null }
+      ]
+    });
+    
+    console.log('✅ Cleanup completed. Deleted:', deleteResult.deletedCount, 'corrupted connections');
+    
+    // Don't recreate indexes here - let your Connection model handle it
+    console.log('✅ Indexes will be handled by Connection model');
+    
+    res.json({
+      message: 'Cleanup completed successfully',
+      deletedCount: deleteResult.deletedCount
+    });
+    
+  } catch (error) {
+    console.error('❌ Cleanup error:', error);
+    res.status(500).json({ 
+      error: error.message
+    });
+  }
+});
+
 
 // ✅ Root Route
 app.get('/', (req, res) => {
@@ -286,54 +650,9 @@ app.use('/api/connection-request', (req, res, next) => {
   next();
 });
 // Add this temporary cleanup route to server.js
-app.delete('/api/debug/cleanup-corrupted-connections', async (req, res) => {
-  try {
-    const Connection = mongoose.model('Connection');
-    
-    // Find and delete connections with null values
-    const result = await Connection.deleteMany({
-      $or: [
-        { requesterId: null },
-        { recipientId: null },
-        { requesterId: { $exists: false } },
-        { recipientId: { $exists: false } }
-      ]
-    });
-    
-    console.log('🧹 Cleanup result:', result);
-    
-    // Also drop and recreate the index
-    const db = mongoose.connection.db;
-    try {
-      await db.collection('connections').dropIndex('fromUser_1_toUser_1');
-    } catch (e) {
-      console.log('Index might not exist, continuing...');
-    }
-    
-    // Recreate the proper index
-    await db.collection('connections').createIndex(
-      { requesterId: 1, recipientId: 1 }, 
-      { 
-        unique: true, 
-        name: 'unique_connection_pair',
-        partialFilterExpression: {
-          requesterId: { $exists: true, $ne: null },
-          recipientId: { $exists: true, $ne: null }
-        }
-      }
-    );
-    
-    res.json({
-      message: 'Cleanup completed successfully',
-      deletedCount: result.deletedCount,
-      indexes: await db.collection('connections').getIndexes()
-    });
-    
-  } catch (error) {
-    console.error('Cleanup error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+// Add this to server.js - CORRUPTED DATA CLEANUP
+// Add this cleanup route to your EXISTING server.js file
+
 mongoose
   .connect(MONGO_URI, {
     useNewUrlParser: true,
@@ -383,23 +702,40 @@ mongoose
     console.error('❌ MongoDB connection failed:', err.message);
     process.exit(1);
   });
-
-  // Add this function to your server.js after mongoose connection
+// Enhanced index creation function
 const createConnectionIndexes = async () => {
   try {
     const db = mongoose.connection.db;
     
-    // Drop existing problematic indexes first
-    try {
-      await db.collection('connections').dropIndex('unique_connection');
-    } catch (e) {
-      console.log('Index might not exist, continuing...');
+    console.log('🔄 Creating database indexes...');
+    
+    // Clean up any problematic indexes first
+    const existingIndexes = await db.collection('connections').getIndexes();
+    const indexesToDrop = ['fromUser_1_toUser_1', 'requesterId_1_recipientId_1'];
+    
+    for (const indexName of indexesToDrop) {
+      if (existingIndexes[indexName]) {
+        try {
+          await db.collection('connections').dropIndex(indexName);
+          console.log(`✅ Dropped index: ${indexName}`);
+        } catch (e) {
+          console.log(`ℹ️ Could not drop index ${indexName}:`, e.message);
+        }
+      }
     }
     
-    // Create new indexes
+    // Create new, proper indexes
     await db.collection('connections').createIndex(
       { requesterId: 1, recipientId: 1 }, 
-      { unique: true, name: 'unique_connection_pair' }
+      { 
+        unique: true, 
+        name: 'unique_connection_pair',
+        partialFilterExpression: {
+          requesterId: { $exists: true, $ne: null, $type: 'objectId' },
+          recipientId: { $exists: true, $ne: null, $type: 'objectId' },
+          status: { $in: ['pending', 'accepted'] }
+        }
+      }
     );
     
     await db.collection('connections').createIndex(
@@ -412,13 +748,19 @@ const createConnectionIndexes = async () => {
       { name: 'sent_requests_index' }
     );
     
-    console.log('✅ Connection indexes created successfully');
+    await db.collection('connections').createIndex(
+      { status: 1, requestedAt: -1 }, 
+      { name: 'status_timestamp_index' }
+    );
+    
+    console.log('✅ All connection indexes created successfully');
+    
   } catch (error) {
     console.log('ℹ️ Index creation note:', error.message);
   }
 };
 
-// Call this after mongoose connection
+// Call after mongoose connection
 mongoose.connection.once('open', () => {
   createConnectionIndexes();
 });
