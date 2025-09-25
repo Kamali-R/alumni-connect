@@ -195,6 +195,8 @@ const fetchMyConnections = async () => {
 
   // Fetch success stories
   // Fetch success stories - FIXED VERSION
+// Enhanced fetchSuccessStories function to include author profile images
+// Fixed fetchSuccessStories function
 const fetchSuccessStories = async (page = 1, filters = {}) => {
   setStoryLoading(true);
   try {
@@ -218,19 +220,44 @@ const fetchSuccessStories = async (page = 1, filters = {}) => {
     if (data.success) {
       const currentUserId = getCurrentUserId();
       
-      // Ensure like data is properly structured with consistent logic
-      const storiesWithLikes = data.stories.map(story => ({
-        ...story,
-        likeCount: story.likes?.length || story.likeCount || 0,
-        // Use the same logic everywhere to determine if current user liked
-        isLiked: story.likes 
-          ? story.likes.some(like => 
-              typeof like === 'object' ? like._id === currentUserId : like === currentUserId
-            )
-          : story.isLiked || false,
-        // Ensure likes array exists
-        likes: story.likes || []
-      }));
+      // Enhanced story processing with correct graduation year and profile images
+      const storiesWithLikes = data.stories.map(story => {
+        // Ensure author data is properly structured
+        const author = story.author || {};
+        
+        // Get correct graduation year (prioritize alumniProfile data)
+        const graduationYear = author.alumniProfile?.academicInfo?.graduationYear 
+          || author.graduationYear 
+          || null;
+
+        // Get profile image URL
+        const profileImageUrl = author.profileImageUrl 
+          || (author.alumniProfile?.profileImage 
+            ? `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${author.alumniProfile.profileImage}`
+            : null);
+
+        return {
+          ...story,
+          likeCount: story.likeCount || story.likes?.length || 0,
+          // Use consistent like checking logic
+          isLiked: story.likes 
+            ? story.likes.some(like => 
+                typeof like === 'object' ? like._id === currentUserId : like === currentUserId
+              )
+            : story.isLiked || false,
+          likes: story.likes || [],
+          // Enhanced author data with correct graduation year and profile image
+          author: {
+            _id: author._id,
+            name: author.name || 'Anonymous',
+            email: author.email,
+            role: author.role,
+            graduationYear: graduationYear, // Correct graduation year
+            profileImageUrl: profileImageUrl, // Profile image URL
+            alumniProfile: author.alumniProfile
+          }
+        };
+      });
 
       setSuccessStories(storiesWithLikes);
       setFilteredStories(storiesWithLikes);
@@ -809,8 +836,9 @@ const AlumniCard = ({ alumni, onConnect, onViewProfile }) => {
         <div className="flex items-center">
           <div className="relative">
             {getProfileImage()}
-            {/* Fallback avatar */}
-            <div className="profile-fallback bg-gradient-to-br from-blue-100 to-blue-200 rounded-full w-12 h-12 flex items-center justify-center mr-4">
+            {/* Fallback avatar - Show only if no image or image fails */}
+            <div className="profile-fallback bg-gradient-to-br from-blue-100 to-blue-200 rounded-full w-12 h-12 flex items-center justify-center mr-4"
+                 style={{ display: alumni.profileImageUrl ? 'none' : 'flex' }}>
               <span className="text-blue-600 font-semibold text-lg">
                 {alumni.name?.charAt(0)?.toUpperCase() || 'A'}
               </span>
@@ -966,6 +994,23 @@ const ProfileModal = ({ profile, onClose }) => {
   };
 
   const careerInfo = getCareerInfo();
+  const getProfileImage = () => {
+    if (profile.profileImageUrl) {
+      return (
+        <img 
+          src={profile.profileImageUrl} 
+          alt={profile.name}
+          className="w-20 h-20 rounded-full object-cover"
+          onError={(e) => {
+            e.target.style.display = 'none';
+            const fallback = e.target.parentNode.querySelector('.profile-fallback');
+            if (fallback) fallback.style.display = 'flex';
+          }}
+        />
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -982,20 +1027,17 @@ const ProfileModal = ({ profile, onClose }) => {
           </div>
           
           {/* Profile Header */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 mb-6">
+   <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 mb-6">
             <div className="flex items-center">
-              <div className="bg-blue-100 rounded-full w-20 h-20 flex items-center justify-center mr-6">
-                {profile.profileImageUrl ? (
-                  <img 
-                    src={profile.profileImageUrl} 
-                    alt={profile.name}
-                    className="w-20 h-20 rounded-full object-cover"
-                  />
-                ) : (
+              <div className="relative">
+                {getProfileImage()}
+                {/* Fallback avatar */}
+                <div className="profile-fallback bg-blue-100 rounded-full w-20 h-20 flex items-center justify-center mr-6"
+                     style={{ display: profile.profileImageUrl ? 'none' : 'flex' }}>
                   <span className="text-blue-600 font-semibold text-2xl">
-                    {profile.name?.charAt(0) || 'A'}
+                    {profile.name?.charAt(0)?.toUpperCase() || 'A'}
                   </span>
-                )}
+                </div>
               </div>
               <div className="flex-1">
                 <h1 className="text-3xl font-bold text-gray-900">{profile.name}</h1>
@@ -1195,13 +1237,38 @@ const ProfileModal = ({ profile, onClose }) => {
   );
 };
   // PendingRequestCard Component
-  const PendingRequestCard = ({ request, onAccept, onDecline }) => (
+// Updated PendingRequestCard Component with profile image handling
+const PendingRequestCard = ({ request, onAccept, onDecline }) => {
+  const getProfileImage = () => {
+    if (request.person.profileImageUrl) {
+      return (
+        <img 
+          src={request.person.profileImageUrl} 
+          alt={request.person.name}
+          className="w-10 h-10 rounded-full object-cover mr-3"
+          onError={(e) => {
+            e.target.style.display = 'none';
+            const fallback = e.target.parentNode.querySelector('.profile-fallback');
+            if (fallback) fallback.style.display = 'flex';
+          }}
+        />
+      );
+    }
+    return null;
+  };
+
+  return (
     <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
       <div className="flex items-center">
-        <div className="bg-blue-100 rounded-full w-10 h-10 flex items-center justify-center mr-3">
-          <span className="text-blue-600 font-semibold">
-            {request.person.name.charAt(0)}
-          </span>
+        <div className="relative">
+          {getProfileImage()}
+          {/* Fallback avatar */}
+          <div className="profile-fallback bg-blue-100 rounded-full w-10 h-10 flex items-center justify-center mr-3"
+               style={{ display: request.person.profileImageUrl ? 'none' : 'flex' }}>
+            <span className="text-blue-600 font-semibold">
+              {request.person.name?.charAt(0)?.toUpperCase() || 'A'}
+            </span>
+          </div>
         </div>
         <div>
           <h4 className="font-medium text-gray-900">{request.person.name}</h4>
@@ -1230,13 +1297,14 @@ const ProfileModal = ({ profile, onClose }) => {
       </div>
     </div>
   );
-
+};
   // ConnectionCard Component
  // Updated ConnectionCard Component with Message Button
 // Updated ConnectionCard Component with Blue Message Button
 // Fixed ConnectionCard Component with Blue Message Button
 // Fixed ConnectionCard Component with Blue Message Button
 // Fixed ConnectionCard Component
+// Fixed ConnectionCard Component with proper profile image handling
 const ConnectionCard = ({ connection, onMessage }) => {
   const getProfileImage = () => {
     if (connection.person.profileImageUrl) {
@@ -1262,7 +1330,8 @@ const ConnectionCard = ({ connection, onMessage }) => {
         <div className="relative">
           {getProfileImage()}
           {/* Fallback avatar */}
-          <div className="profile-fallback bg-green-100 rounded-full w-12 h-12 flex items-center justify-center mr-4">
+          <div className="profile-fallback bg-green-100 rounded-full w-12 h-12 flex items-center justify-center mr-4"
+               style={{ display: connection.person.profileImageUrl ? 'none' : 'flex' }}>
             <span className="text-green-600 font-semibold text-lg">
               {connection.person.name?.charAt(0)?.toUpperCase() || 'A'}
             </span>
@@ -1292,71 +1361,102 @@ const ConnectionCard = ({ connection, onMessage }) => {
   );
 };
   // StoryCard Component
-  const StoryCard = ({ story, onLike, onOpen }) => {
-    const categoryNames = {
-      'career': 'Career Growth',
-      'entrepreneurship': 'Entrepreneurship',
-      'education': 'Higher Education',
-      'innovation': 'Innovation & Research',
-      'leadership': 'Leadership',
-      'social-impact': 'Social Impact'
-    };
+  // Enhanced StoryCard Component
+const StoryCard = ({ story, onLike, onOpen }) => {
+  const categoryNames = {
+    'career': 'Career Growth',
+    'entrepreneurship': 'Entrepreneurship',
+    'education': 'Higher Education',
+    'innovation': 'Innovation & Research',
+    'leadership': 'Leadership',
+    'social-impact': 'Social Impact'
+  };
 
-    const formatDate = (dateString) => {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    };
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
 
-    return (
-      <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center">
-            <div className="bg-blue-100 rounded-full w-12 h-12 flex items-center justify-center mr-4">
+  // Get correct graduation year display
+  const getGraduationText = () => {
+    if (!story.author?.graduationYear) return '';
+    return ` • Class of ${story.author.graduationYear}`;
+  };
+
+  // Enhanced author avatar with proper fallback
+  const getAuthorAvatar = () => {
+    if (story.author?.profileImageUrl) {
+      return (
+        <img 
+          src={story.author.profileImageUrl} 
+          alt={story.author.name}
+          className="w-12 h-12 rounded-full object-cover mr-4"
+          onError={(e) => {
+            e.target.style.display = 'none';
+            const fallback = e.target.parentNode.querySelector('.author-fallback');
+            if (fallback) fallback.style.display = 'flex';
+          }}
+        />
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center">
+          <div className="relative">
+            {getAuthorAvatar()}
+            {/* Fallback avatar */}
+            <div className="author-fallback bg-blue-100 rounded-full w-12 h-12 flex items-center justify-center mr-4"
+                 style={{ display: story.author?.profileImageUrl ? 'none' : 'flex' }}>
               <span className="text-blue-600 font-semibold text-lg">
-                {story.author?.name?.charAt(0) || 'A'}
+                {story.author?.name?.charAt(0)?.toUpperCase() || 'A'}
               </span>
             </div>
-            <div>
-              <h3 className="font-semibold text-gray-900">{story.author?.name || 'Anonymous'}</h3>
-              <p className="text-sm text-gray-600">
-                {story.author?.role === 'alumni' ? 'Alumni' : 'Student'}
-                {story.author?.graduationYear && ` • Class of ${story.author.graduationYear}`}
-              </p>
-              <p className="text-xs text-gray-500">{formatDate(story.createdAt)}</p>
-            </div>
           </div>
-          <div className="text-right">
-            <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-              {categoryNames[story.category]}
-            </span>
+          <div>
+            <h3 className="font-semibold text-gray-900">{story.author?.name || 'Anonymous'}</h3>
+            <p className="text-sm text-gray-600">
+              {story.author?.role === 'alumni' ? 'Alumni' : 'Student'}
+              {getGraduationText()} {/* Correct graduation year display */}
+            </p>
+            <p className="text-xs text-gray-500">{formatDate(story.createdAt)}</p>
           </div>
         </div>
-        
-        <h2 
-          className="text-xl font-bold text-gray-900 mb-3 hover:text-blue-600 cursor-pointer"
-          onClick={() => onOpen(story._id)}
-        >
-          {story.title}
-        </h2>
-        
-        <p className="text-gray-700 mb-4 line-clamp-3">
-          {story.content.length > 200 ? `${story.content.substring(0, 200)}...` : story.content}
-        </p>
-        
-        {story.tags && story.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            {story.tags.map((tag, index) => (
-              <span key={index} className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs">
-                #{tag}
-              </span>
-            ))}
-          </div>
-        )}
-        
-         <div className="flex items-center justify-between">
+        <div className="text-right">
+          <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+            {categoryNames[story.category]}
+          </span>
+        </div>
+      </div>
+      
+      <h2 
+        className="text-xl font-bold text-gray-900 mb-3 hover:text-blue-600 cursor-pointer"
+        onClick={() => onOpen(story._id)}
+      >
+        {story.title}
+      </h2>
+      
+      <p className="text-gray-700 mb-4 line-clamp-3">
+        {story.content.length > 200 ? `${story.content.substring(0, 200)}...` : story.content}
+      </p>
+      
+      {story.tags && story.tags.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {story.tags.map((tag, index) => (
+            <span key={index} className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs">
+              #{tag}
+            </span>
+          ))}
+        </div>
+      )}
+      
+      <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <button 
             onClick={() => onLike(story._id)} 
@@ -1383,125 +1483,157 @@ const ConnectionCard = ({ connection, onMessage }) => {
           </button>
           <span className="text-sm text-gray-500">{story.views || 0} views</span>
         </div>
-          <button 
-            onClick={() => onOpen(story._id)} 
-            className="text-blue-600 hover:text-blue-800 font-medium text-sm"
-          >
-            Read Full Story →
-          </button>
-        </div>
+        <button 
+          onClick={() => onOpen(story._id)} 
+          className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+        >
+          Read Full Story →
+        </button>
       </div>
-    );
-  };
+    </div>
+  );
+};
 
   // StoryModal Component
-  const StoryModal = ({ story, onClose, onLike }) => {
-    const categoryNames = {
-      'career': 'Career Growth',
-      'entrepreneurship': 'Entrepreneurship',
-      'education': 'Higher Education',
-      'innovation': 'Innovation & Research',
-      'leadership': 'Leadership',
-      'social-impact': 'Social Impact'
-    };
+ // Enhanced StoryModal Component
+const StoryModal = ({ story, onClose, onLike }) => {
+  const categoryNames = {
+    'career': 'Career Growth',
+    'entrepreneurship': 'Entrepreneurship',
+    'education': 'Higher Education',
+    'innovation': 'Innovation & Research',
+    'leadership': 'Leadership',
+    'social-impact': 'Social Impact'
+  };
 
-    const formatDate = (dateString) => {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    };
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
 
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-        <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-          <div className="p-6">
-            <div className="flex justify-between items-start mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Success Story</h2>
-              <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">
-                ×
-              </button>
+  // Get correct graduation year display
+  const getGraduationText = () => {
+    if (!story.author?.graduationYear) return '';
+    return ` • Class of ${story.author.graduationYear}`;
+  };
+
+  // Enhanced author avatar for modal
+  const getAuthorAvatar = () => {
+    if (story.author?.profileImageUrl) {
+      return (
+        <img 
+          src={story.author.profileImageUrl} 
+          alt={story.author.name}
+          className="w-16 h-16 rounded-full object-cover mr-4"
+          onError={(e) => {
+            e.target.style.display = 'none';
+            const fallback = e.target.parentNode.querySelector('.author-fallback');
+            if (fallback) fallback.style.display = 'flex';
+          }}
+        />
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6">
+          <div className="flex justify-between items-start mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">Success Story</h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">
+              ×
+            </button>
+          </div>
+          
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                {categoryNames[story.category]}
+              </span>
+              <span className="text-sm text-gray-500">{formatDate(story.createdAt)}</span>
             </div>
             
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                  {categoryNames[story.category]}
-                </span>
-                <span className="text-sm text-gray-500">{formatDate(story.createdAt)}</span>
-              </div>
-              
-              <h1 className="text-3xl font-bold text-gray-900 mb-6">{story.title}</h1>
-              
-              <div className="flex items-center mb-6">
-                <div className="bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mr-4">
+            <h1 className="text-3xl font-bold text-gray-900 mb-6">{story.title}</h1>
+            
+            <div className="flex items-center mb-6">
+              <div className="relative">
+                {getAuthorAvatar()}
+                {/* Fallback avatar */}
+                <div className="author-fallback bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mr-4"
+                     style={{ display: story.author?.profileImageUrl ? 'none' : 'flex' }}>
                   <span className="text-blue-600 font-semibold text-xl">
-                    {story.author?.name?.charAt(0) || 'A'}
+                    {story.author?.name?.charAt(0)?.toUpperCase() || 'A'}
                   </span>
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">{story.author?.name || 'Anonymous'}</h3>
-                  <p className="text-gray-600">
-                    {story.author?.role === 'alumni' ? 'Alumni' : 'Student'}
-                    {story.author?.graduationYear && ` • Class of ${story.author.graduationYear}`}
-                  </p>
-                </div>
               </div>
-              
-              <div className="prose max-w-none mb-8">
-                <div className="text-gray-700 whitespace-pre-line leading-relaxed text-lg">
-                  {story.content}
-                </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">{story.author?.name || 'Anonymous'}</h3>
+                <p className="text-gray-600">
+                  {story.author?.role === 'alumni' ? 'Alumni' : 'Student'}
+                  {getGraduationText()} {/* Correct graduation year display */}
+                </p>
               </div>
+            </div>
+            
+            <div className="prose max-w-none mb-8">
+              <div className="text-gray-700 whitespace-pre-line leading-relaxed text-lg">
+                {story.content}
+              </div>
+            </div>
+            
+            {story.tags && story.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-6">
+                {story.tags.map((tag, index) => (
+                  <span key={index} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm">
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
+            
+            <div className="flex items-center justify-between pt-6 border-t">
+              <button 
+                onClick={() => onLike(story._id)} 
+                className={`flex items-center space-x-2 transition-colors ${
+                  story.isLiked ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'
+                }`}
+              >
+                <svg 
+                  className={`w-6 h-6 ${story.isLiked ? 'fill-current' : ''}`} 
+                  fill={story.isLiked ? "currentColor" : "none"} 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth="2" 
+                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" 
+                  />
+                </svg>
+                <span className={`font-medium ${story.isLiked ? 'text-blue-600' : ''}`}>
+                  {story.likeCount || 0} people liked this story
+                </span>
+              </button>
               
-              {story.tags && story.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-6">
-                  {story.tags.map((tag, index) => (
-                    <span key={index} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm">
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-              
-              <div className="flex items-center justify-between pt-6 border-t">
-                  <button 
-                    onClick={() => onLike(story._id)} 
-                    className={`flex items-center space-x-2 transition-colors ${
-                      story.isLiked ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'
-                    }`}
-                  >
-                    <svg 
-                      className={`w-6 h-6 ${story.isLiked ? 'fill-current' : ''}`} 
-                      fill={story.isLiked ? "currentColor" : "none"} 
-                      stroke="currentColor" 
-                      viewBox="0 0 24 24"
-                    >
-                      <path 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round" 
-                        strokeWidth="2" 
-                        d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" 
-                      />
-                    </svg>
-                    <span className={`font-medium ${story.isLiked ? 'text-blue-600' : ''}`}>
-                      {story.likeCount || 0} people liked this story
-                    </span>
-                  </button>
-                <div className="flex space-x-4">
-                  <span className="text-gray-500">{story.views || 0} views</span>
-                  <button className="text-blue-600 hover:text-blue-800 font-medium">
-                    Share Story
-                  </button>
-                </div>
+              <div className="flex space-x-4">
+                <span className="text-gray-500">{story.views || 0} views</span>
+                <button className="text-blue-600 hover:text-blue-800 font-medium">
+                  Share Story
+                </button>
               </div>
             </div>
           </div>
         </div>
       </div>
-    );
-  };
+    </div>
+  );
+};
 
   // Render Alumni Directory
 // Enhanced renderAlumniDirectory function

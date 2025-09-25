@@ -425,6 +425,11 @@ export const getAlumniDirectory = async (req, res) => {
           }
         }
 
+        // Enhanced profile image URL handling
+        const profileImageUrl = user.alumniProfile?.profileImage 
+          ? `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${user.alumniProfile.profileImage}`
+          : null;
+
         return {
           id: user._id,
           userId: user._id,
@@ -432,9 +437,7 @@ export const getAlumniDirectory = async (req, res) => {
           email: user.email,
           graduationYear: user.graduationYear,
           alumniProfile: user.alumniProfile,
-          profileImageUrl: user.alumniProfile?.profileImage 
-            ? `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${user.alumniProfile.profileImage}`
-            : null,
+          profileImageUrl: profileImageUrl, // This will be used by frontend
           connectionStatus,
           branch: user.alumniProfile?.academicInfo?.branch,
           company: user.alumniProfile?.careerDetails?.companyName,
@@ -442,7 +445,6 @@ export const getAlumniDirectory = async (req, res) => {
         };
       })
     );
-
     console.log(`📊 Found ${alumniWithConnections.length} alumni profiles`);
 
     res.status(200).json({
