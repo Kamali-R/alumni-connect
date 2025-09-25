@@ -465,6 +465,7 @@ export const getAlumniDirectory = async (req, res) => {
 };
 
 // Get my connections
+// Enhanced getMyConnections function in networkingController.js
 export const getMyConnections = async (req, res) => {
   try {
     const currentUserId = req.user.id;
@@ -478,8 +479,22 @@ export const getMyConnections = async (req, res) => {
       ],
       status: 'accepted'
     })
-    .populate('requesterId', 'name email graduationYear')
-    .populate('recipientId', 'name email graduationYear')
+    .populate({
+      path: 'requesterId',
+      select: 'name email graduationYear',
+      populate: {
+        path: 'alumniProfile',
+        select: 'profileImage'
+      }
+    })
+    .populate({
+      path: 'recipientId', 
+      select: 'name email graduationYear',
+      populate: {
+        path: 'alumniProfile',
+        select: 'profileImage'
+      }
+    })
     .sort({ respondedAt: -1 });
 
     console.log(`🤝 Found ${connections.length} connections`);
@@ -489,13 +504,20 @@ export const getMyConnections = async (req, res) => {
       const isRequester = connection.requesterId._id.toString() === currentUserId;
       const otherPerson = isRequester ? connection.recipientId : connection.requesterId;
 
+      // Get profile image URL
+      const profileImageUrl = otherPerson.alumniProfile?.profileImage 
+        ? `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${otherPerson.alumniProfile.profileImage}`
+        : null;
+
       return {
         id: connection._id,
         person: {
           id: otherPerson._id,
           name: otherPerson.name,
           email: otherPerson.email,
-          graduationYear: otherPerson.graduationYear
+          graduationYear: otherPerson.graduationYear,
+          profileImageUrl: profileImageUrl,
+          profileImage: otherPerson.alumniProfile?.profileImage
         },
         connectedSince: connection.respondedAt,
         status: connection.status,

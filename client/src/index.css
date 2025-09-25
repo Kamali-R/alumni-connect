@@ -39,17 +39,15 @@ html {
 }
 
 /* Ensure images don't stretch */
-img {
-  object-fit: cover;
+/* Add to your CSS */
+.profile-fallback {
+  display: none; /* Hidden by default, shown when image fails */
 }
 
-/* Improve the look of the avatar container */
-.relative {
-  position: relative;
+.relative img + .profile-fallback {
+  display: none; /* Keep fallback hidden when image is displayed */
 }
 
-.relative img {
-  position: absolute;
-  top: 0;
-  left: 0;
+.relative img[style*="display: none"] + .profile-fallback {
+  display: flex; /* Show fallback when image is hidden */
 }

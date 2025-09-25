@@ -160,27 +160,42 @@ const fetchAlumniDirectory = async () => {
   };
 
   // Fetch my connections
-  const fetchMyConnections = async () => {
-    try {
-      const response = await fetch('http://localhost:5000/api/my-connections', {
-        method: 'GET',
-        headers: getAuthHeaders()
-      });
+ // Enhanced fetchMyConnections function
+const fetchMyConnections = async () => {
+  try {
+    const response = await fetch('http://localhost:5000/api/my-connections', {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch connections: ${response.status}`);
-      }
-
-      const data = await response.json();
-      setMyConnections(data.connections || []);
-    } catch (error) {
-      console.error('Error fetching connections:', error);
-      toast.error('Failed to load connections');
+    if (!response.ok) {
+      throw new Error(`Failed to fetch connections: ${response.status}`);
     }
-  };
+
+    const data = await response.json();
+    
+    // Ensure profile images are properly set for connections
+    const connectionsWithImages = data.connections.map(connection => ({
+      ...connection,
+      person: {
+        ...connection.person,
+        profileImageUrl: connection.person.profileImageUrl || 
+                        (connection.person.profileImage ? 
+                          `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${connection.person.profileImage}` : 
+                          null)
+      }
+    }));
+    
+    setMyConnections(connectionsWithImages || []);
+  } catch (error) {
+    console.error('Error fetching connections:', error);
+    toast.error('Failed to load connections');
+  }
+};
 
   // Fetch success stories
-  const fetchSuccessStories = async (page = 1, filters = {}) => {
+  // Fetch success stories - FIXED VERSION
+const fetchSuccessStories = async (page = 1, filters = {}) => {
   setStoryLoading(true);
   try {
     const queryParams = new URLSearchParams({
@@ -201,11 +216,20 @@ const fetchAlumniDirectory = async () => {
     const data = await response.json();
     
     if (data.success) {
-      // Ensure like data is properly structured
+      const currentUserId = getCurrentUserId();
+      
+      // Ensure like data is properly structured with consistent logic
       const storiesWithLikes = data.stories.map(story => ({
         ...story,
         likeCount: story.likes?.length || story.likeCount || 0,
-        isLiked: story.likes?.includes?.(getCurrentUserId()) || story.isLiked || false
+        // Use the same logic everywhere to determine if current user liked
+        isLiked: story.likes 
+          ? story.likes.some(like => 
+              typeof like === 'object' ? like._id === currentUserId : like === currentUserId
+            )
+          : story.isLiked || false,
+        // Ensure likes array exists
+        likes: story.likes || []
       }));
 
       setSuccessStories(storiesWithLikes);
@@ -220,16 +244,16 @@ const fetchAlumniDirectory = async () => {
   }
 };
 // Add helper function to get current user ID
+// Add helper function to get current user ID - IMPROVED VERSION
 const getCurrentUserId = () => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    try {
+  try {
+    const token = localStorage.getItem('token');
+    if (token) {
       const payload = JSON.parse(atob(token.split('.')[1]));
       return payload.id;
-    } catch (error) {
-      console.error('Error decoding token:', error);
-      return null;
     }
+  } catch (error) {
+    console.error('Error decoding token:', error);
   }
   return null;
 };
@@ -264,6 +288,7 @@ const getCurrentUserId = () => {
   };
 
   // Like/Unlike story
+// Like/Unlike story - FIXED VERSION
 const toggleStoryLike = async (storyId) => {
   try {
     const response = await fetch(`http://localhost:5000/api/stories/${storyId}/like`, {
@@ -278,37 +303,48 @@ const toggleStoryLike = async (storyId) => {
     const data = await response.json();
     
     if (data.success) {
+      // Get current user ID for consistent state updates
+      const currentUserId = getCurrentUserId();
+      
       // Update all story states consistently
-      const updateStoryInState = (story) => 
-        story._id === storyId 
-          ? { 
-              ...story, 
-              likeCount: data.likeCount, 
-              isLiked: data.isLiked,
-              likes: data.likes // Ensure likes array is updated
-            }
-          : story;
+      const updateStoryInState = (story) => {
+        if (story._id === storyId) {
+          return {
+            ...story,
+            likeCount: data.likeCount,
+            isLiked: data.isLiked,
+            // Ensure likes array is properly updated
+            likes: data.isLiked 
+              ? [...(story.likes || []), currentUserId].filter(Boolean)
+              : (story.likes || []).filter(id => id !== currentUserId)
+          };
+        }
+        return story;
+      };
 
       setSuccessStories(prev => prev.map(updateStoryInState));
       setFilteredStories(prev => prev.map(updateStoryInState));
       
+      // Update selected story if it's the one being liked/unliked
       if (selectedStory && selectedStory._id === storyId) {
         setSelectedStory(prev => ({
           ...prev,
           likeCount: data.likeCount,
           isLiked: data.isLiked,
-          likes: data.likes
+          likes: data.isLiked 
+            ? [...(prev.likes || []), currentUserId].filter(Boolean)
+            : (prev.likes || []).filter(id => id !== currentUserId)
         }));
       }
 
-      toast.success(data.isLiked ? 'Story liked!' : 'Story unliked!');
+      // Optional: Show different messages for like/unlike
+      // toast.success(data.isLiked ? 'Story liked!' : 'Story unliked!');
     }
   } catch (error) {
     console.error('Error toggling like:', error);
     toast.error('Failed to update like');
   }
 };
-
   // Fetch single story
   const fetchStoryById = async (storyId) => {
     try {
@@ -356,6 +392,16 @@ const toggleStoryLike = async (storyId) => {
     }
   }, [storyFilters, activeSection]);
 
+  // Add this useEffect to sync like states across components
+useEffect(() => {
+  // This ensures that when a story is liked/unliked, all instances are updated
+  if (selectedStory) {
+    const updatedStory = successStories.find(story => story._id === selectedStory._id);
+    if (updatedStory && updatedStory.isLiked !== selectedStory.isLiked) {
+      setSelectedStory(updatedStory);
+    }
+  }
+}, [successStories, selectedStory]);
   // Enhanced filter function
 const applyAlumniFilters = () => {
   let filtered = alumniData;
@@ -1310,21 +1356,33 @@ const ConnectionCard = ({ connection, onMessage }) => {
           </div>
         )}
         
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <button 
-              onClick={() => onLike(story._id)} 
-              className="flex items-center space-x-2 text-gray-600 hover:text-blue-600"
+         <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <button 
+            onClick={() => onLike(story._id)} 
+            className={`flex items-center space-x-2 transition-colors ${
+              story.isLiked ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'
+            }`}
+          >
+            <svg 
+              className={`w-5 h-5 ${story.isLiked ? 'fill-current' : ''}`} 
+              fill={story.isLiked ? "currentColor" : "none"} 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
             >
-              <svg className={`w-5 h-5 ${story.isLiked ? 'text-blue-600 fill-current' : ''}`} 
-                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-              </svg>
-              <span>{story.likeCount || 0} likes</span>
-            </button>
-            <span className="text-sm text-gray-500">{story.views || 0} views</span>
-          </div>
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth="2" 
+                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" 
+              />
+            </svg>
+            <span className={story.isLiked ? 'font-medium' : ''}>
+              {story.likeCount || 0} {story.likeCount === 1 ? 'like' : 'likes'}
+            </span>
+          </button>
+          <span className="text-sm text-gray-500">{story.views || 0} views</span>
+        </div>
           <button 
             onClick={() => onOpen(story._id)} 
             className="text-blue-600 hover:text-blue-800 font-medium text-sm"
@@ -1408,18 +1466,29 @@ const ConnectionCard = ({ connection, onMessage }) => {
               )}
               
               <div className="flex items-center justify-between pt-6 border-t">
-                <button 
-                  onClick={() => onLike(story._id)} 
-                  className="flex items-center space-x-2 text-gray-600 hover:text-blue-600"
-                >
-                  <svg className={`w-6 h-6 ${story.isLiked ? 'text-blue-600 fill-current' : ''}`} 
-                       fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                          d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                  </svg>
-                  <span className="font-medium">{story.likeCount || 0} people liked this story</span>
-                </button>
-                
+                  <button 
+                    onClick={() => onLike(story._id)} 
+                    className={`flex items-center space-x-2 transition-colors ${
+                      story.isLiked ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'
+                    }`}
+                  >
+                    <svg 
+                      className={`w-6 h-6 ${story.isLiked ? 'fill-current' : ''}`} 
+                      fill={story.isLiked ? "currentColor" : "none"} 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        strokeWidth="2" 
+                        d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" 
+                      />
+                    </svg>
+                    <span className={`font-medium ${story.isLiked ? 'text-blue-600' : ''}`}>
+                      {story.likeCount || 0} people liked this story
+                    </span>
+                  </button>
                 <div className="flex space-x-4">
                   <span className="text-gray-500">{story.views || 0} views</span>
                   <button className="text-blue-600 hover:text-blue-800 font-medium">
