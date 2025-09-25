@@ -17,6 +17,7 @@ import newsAndAchievementsRoutes from './routes/NewsAndAchievementsRoutes.js'; /
 import './config/googleAuth.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import jobRoutes from './routes/jobRoutes.js';
 
 dotenv.config();
 
@@ -81,6 +82,7 @@ app.use('/api', contactRoutes);
 app.use('/api', alumniRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api', newsAndAchievementsRoutes); // ✅ Add this line
+app.use('/api', jobRoutes);
 
 // ✅ Root Route
 app.get('/', (req, res) => {
