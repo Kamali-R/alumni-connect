@@ -5,9 +5,10 @@ import Register from './Register';
 import VerifyOtp from './VerifyOtp';
 import PasswordResetFlow from './password';
 import Login from './Login';
-import AlumniDashboard from './dashboard';
+import AlumniDashboard from './Dashboard';
 import AlumniConnectProfile from './AlumniProfile';
-import GoogleAuthHandler from './GoogleAuthHandler'; // Make sure to import this
+import EventsAndReunions from "./EventsAndReunions";
+import GoogleAuthHandler from './GoogleAuthHandler';
 import './index.css';
 
 function App() {
@@ -32,8 +33,8 @@ function App() {
           <Route path="/forgot-password" element={<PasswordResetFlow />} />
           <Route path="/alumni-profile" element={<AlumniConnectProfile />} />
           <Route path="/dashboard" element={<AlumniDashboard />} />
-         
-          {/* Add Google Auth Handler route */}
+          {/* Add this route for Events */}
+          <Route path="/events" element={<EventsAndReunions />} />
           <Route path="/auth/google/callback" element={<GoogleAuthHandler />} />
         </Routes>
       </div>
