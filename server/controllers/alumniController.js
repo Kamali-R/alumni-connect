@@ -363,8 +363,9 @@ export const getAllAlumni = async (req, res) => {
       careerStatus: alumni.careerStatus,
       company: alumni.careerDetails?.companyName,
       jobTitle: alumni.careerDetails?.jobTitle,
-      skills: alumni.skills?.slice(0, 5) || [], // Limit skills for preview
-      profileImage: alumni.profileImage ? 
+      skills: alumni.skills?.slice(0, 5) || [],
+      interests: alumni.interests || [], // Add this line
+      profileImageUrl: alumni.profileImage ? 
         `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${alumni.profileImage}` : 
         null,
       bio: alumni.otherInfo?.bio ? 

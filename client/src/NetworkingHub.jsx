@@ -6,6 +6,7 @@ import {
   FaGraduationCap, 
   FaBriefcase, 
   FaTools, 
+  FaHeart,
   FaInfoCircle, 
   FaGlobe, 
   FaLinkedin, 
@@ -69,7 +70,8 @@ const NetworkingHub = () => {
   };
 
   // Fetch alumni directory from backend
- const fetchAlumniDirectory = async () => {
+ // Enhanced fetchAlumniDirectory function
+const fetchAlumniDirectory = async () => {
   setLoading(true);
   try {
     const queryParams = new URLSearchParams({
@@ -92,8 +94,16 @@ const NetworkingHub = () => {
     const data = await response.json();
     
     if (data.success) {
-      setAlumniData(data.alumni || []);
-      // Don't set filteredAlumni here - let the useEffect handle filtering
+      // Ensure profileImageUrl is properly set
+      const alumniWithImages = data.alumni.map(alumni => ({
+        ...alumni,
+        profileImageUrl: alumni.profileImageUrl || 
+                       (alumni.profileImage ? 
+                         `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${alumni.profileImage}` : 
+                         null)
+      }));
+      
+      setAlumniData(alumniWithImages);
     } else {
       throw new Error(data.message || 'Failed to load alumni directory');
     }
@@ -393,13 +403,14 @@ const applyAlumniFilters = () => {
   }
   
   // Interests filter
-  if (filters.interests) {
+    if (filters.interests) {
     const interestsTerm = filters.interests.toLowerCase();
-    filtered = filtered.filter(alumni => 
-      alumni.alumniProfile?.interests?.some(interest => 
+    filtered = filtered.filter(alumni => {
+      const interests = alumni.alumniProfile?.interests || [];
+      return interests.some(interest => 
         interest.toLowerCase().includes(interestsTerm)
-      )
-    );
+      );
+    });
   }
   
   // Company filter
@@ -727,7 +738,7 @@ const AlumniCard = ({ alumni, onConnect, onViewProfile }) => {
   };
 
   // Fixed profile image handling
-  const getProfileImage = () => {
+ const getProfileImage = () => {
     if (alumni.profileImageUrl) {
       return (
         <img 
@@ -736,10 +747,9 @@ const AlumniCard = ({ alumni, onConnect, onViewProfile }) => {
           className="w-12 h-12 rounded-full object-cover mr-4"
           onError={(e) => {
             e.target.style.display = 'none';
-            // Fixed: Use standard conditional check
-            if (e.target.nextSibling) {
-              e.target.nextSibling.style.display = 'flex';
-            }
+            // Show fallback if image fails to load
+            const fallback = e.target.parentNode.querySelector('.profile-fallback');
+            if (fallback) fallback.style.display = 'flex';
           }}
         />
       );
@@ -753,9 +763,10 @@ const AlumniCard = ({ alumni, onConnect, onViewProfile }) => {
         <div className="flex items-center">
           <div className="relative">
             {getProfileImage()}
-            <div className="bg-gradient-to-br from-blue-100 to-blue-200 rounded-full w-12 h-12 flex items-center justify-center mr-4">
+            {/* Fallback avatar */}
+            <div className="profile-fallback bg-gradient-to-br from-blue-100 to-blue-200 rounded-full w-12 h-12 flex items-center justify-center mr-4">
               <span className="text-blue-600 font-semibold text-lg">
-                {alumni.name?.charAt(0) || 'A'}
+                {alumni.name?.charAt(0)?.toUpperCase() || 'A'}
               </span>
             </div>
           </div>
@@ -768,6 +779,7 @@ const AlumniCard = ({ alumni, onConnect, onViewProfile }) => {
           </div>
         </div>
         
+        {/* Connection status badge */}
         <div className={`px-2 py-1 rounded-full text-xs font-medium ${
           alumni.connectionStatus === 'connected' ? 'bg-green-100 text-green-800' :
           alumni.connectionStatus === 'pending_sent' ? 'bg-yellow-100 text-yellow-800' :
@@ -1041,6 +1053,22 @@ const ProfileModal = ({ profile, onClose }) => {
                 </div>
               </div>
             )}
+            {/* Add Interests Section */}
+          {profile.interests && profile.interests.length > 0 && (
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                <FaHeart className="text-red-600 mr-2" />
+                Interests
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {profile.interests.map((interest, index) => (
+                  <span key={index} className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm">
+                    {interest}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
             {/* Bio */}
             {profile.otherInfo?.bio && (
@@ -1162,10 +1190,9 @@ const ProfileModal = ({ profile, onClose }) => {
 // Updated ConnectionCard Component with Blue Message Button
 // Fixed ConnectionCard Component with Blue Message Button
 // Fixed ConnectionCard Component with Blue Message Button
+// Fixed ConnectionCard Component
 const ConnectionCard = ({ connection, onMessage }) => {
-  // Fixed profile photo handling for connections
   const getProfileImage = () => {
-    // Try to get profile image from connection data
     if (connection.person.profileImageUrl) {
       return (
         <img 
@@ -1174,10 +1201,8 @@ const ConnectionCard = ({ connection, onMessage }) => {
           className="w-12 h-12 rounded-full object-cover mr-4"
           onError={(e) => {
             e.target.style.display = 'none';
-            // Fixed: Use standard conditional check
-            if (e.target.nextSibling) {
-              e.target.nextSibling.style.display = 'flex';
-            }
+            const fallback = e.target.parentNode.querySelector('.profile-fallback');
+            if (fallback) fallback.style.display = 'flex';
           }}
         />
       );
@@ -1190,9 +1215,10 @@ const ConnectionCard = ({ connection, onMessage }) => {
       <div className="flex items-center flex-1">
         <div className="relative">
           {getProfileImage()}
-          <div className="bg-green-100 rounded-full w-12 h-12 flex items-center justify-center mr-4">
+          {/* Fallback avatar */}
+          <div className="profile-fallback bg-green-100 rounded-full w-12 h-12 flex items-center justify-center mr-4">
             <span className="text-green-600 font-semibold text-lg">
-              {connection.person.name.charAt(0)}
+              {connection.person.name?.charAt(0)?.toUpperCase() || 'A'}
             </span>
           </div>
         </div>
@@ -1201,11 +1227,6 @@ const ConnectionCard = ({ connection, onMessage }) => {
           <p className="text-sm text-gray-600">{connection.person.email}</p>
           {connection.person.graduationYear && (
             <p className="text-xs text-gray-500">Class of {connection.person.graduationYear}</p>
-          )}
-          {connection.connectedSince && (
-            <p className="text-xs text-gray-500">
-              Connected since {new Date(connection.connectedSince).toLocaleDateString()}
-            </p>
           )}
         </div>
       </div>

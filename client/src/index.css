@@ -30,3 +30,26 @@ html {
   opacity: 0;
   transition: opacity 300ms;
 }
+/* Add to your CSS file */
+.profile-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+/* Ensure images don't stretch */
+img {
+  object-fit: cover;
+}
+
+/* Improve the look of the avatar container */
+.relative {
+  position: relative;
+}
+
+.relative img {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
