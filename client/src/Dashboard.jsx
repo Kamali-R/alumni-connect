@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AlumniProfilePage from './profile';
 import AlumniEventPortal from './EventsAndReunions';
+import NewsAndAchievements from './NewsAndAchievements';
 const AlumniConnectDashboard = () => {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -517,6 +518,13 @@ const AlumniConnectDashboard = () => {
           {activeSection === 'events' && (
             <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
               <AlumniEventPortal />
+            </div>
+          )}
+
+          {/* Profile Section */}
+          {activeSection === 'news' && (
+            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
+              <NewsAndAchievements/>
             </div>
           )}
           

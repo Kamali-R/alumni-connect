@@ -10,7 +10,8 @@ import alumniRoutes from './routes/alumniRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import protectedRoutes from './routes/protectedRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
-import eventRoutes from './routes/eventRoutes.js'; // ✅ Import event routes
+import eventRoutes from './routes/eventRoutes.js';
+import newsAndAchievementsRoutes from './routes/NewsAndAchievementsRoutes.js'; // ✅ Add this import
 
 // Load Google OAuth config
 import './config/googleAuth.js';
@@ -23,22 +24,19 @@ const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-
 // ✅ Middleware
-// In your server.js, update the CORS configuration:
 app.use(cors({
   origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
-// Add this after your middleware setup but before your routes
+
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
   next();
 });
 
-// Add this right after your API routes
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
@@ -46,7 +44,8 @@ app.get('/api/health', (req, res) => {
     database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
   });
 });
-app.use(express.json({ limit: '10mb' })); // ✅ Increased limit for event data
+
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 app.use(
@@ -56,13 +55,13 @@ app.use(
     saveUninitialized: false,
     cookie: { 
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 24 * 60 * 60 * 1000  // 24 hours
+      maxAge: 24 * 60 * 60 * 1000
     }
   })
 );
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ✅ Add TEST ENDPOINT here - BEFORE API routes
+// ✅ Test endpoint
 app.get('/api/test', (req, res) => {
   res.json({ 
     success: true, 
@@ -80,7 +79,8 @@ app.use('/', authRoutes);
 app.use('/api', protectedRoutes);
 app.use('/api', contactRoutes);
 app.use('/api', alumniRoutes);
-app.use('/api/events', eventRoutes); // ✅ Add event routes
+app.use('/api/events', eventRoutes);
+app.use('/api', newsAndAchievementsRoutes); // ✅ Add this line
 
 // ✅ Root Route
 app.get('/', (req, res) => {
@@ -97,7 +97,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ✅ 404 handler - FIXED: Removed the '*' parameter
+// ✅ 404 handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
