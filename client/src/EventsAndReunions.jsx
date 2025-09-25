@@ -1,53 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { eventsAPI } from './api';
 
-const AlumniEventPortal = () => {
-  const [activeTab, setActiveTab] = useState('viewEvents');
-  const [events, setEvents] = useState([
-    {
-      id: 1,
-      title: 'Annual Alumni Gala 2024',
-      type: 'gala',
-      date: '2024-03-15',
-      time: '19:00',
-      location: 'Grand Ballroom, Downtown Hotel',
-      description: 'Join us for an elegant evening of networking, awards, and celebration of our alumni achievements. Formal attire required.',
-      rsvpInfo: '',
-      attendance: 47,
-      postedDate: new Date('2024-03-10'),
-      isUserAttending: false,
-      isPostedByUser: false
-    },
-    {
-      id: 2,
-      title: 'Class of 2010 Reunion',
-      type: 'reunion',
-      date: '2024-04-22',
-      time: '14:00',
-      location: 'University Campus, Alumni Center',
-      description: 'Reconnect with your classmates and relive the memories from your graduation year. Casual attire welcome.',
-      rsvpInfo: '',
-      attendance: 23,
-      postedDate: new Date('2024-03-03'),
-      isUserAttending: false,
-      isPostedByUser: false
-    },
-    {
-      id: 3,
-      title: 'Professional Networking Mixer',
-      type: 'networking',
-      date: '2024-05-10',
-      time: '18:30',
-      location: 'Rooftop Lounge, Business District',
-      description: 'Connect with fellow alumni across various industries. Light refreshments and drinks will be provided.',
-      rsvpInfo: 'networking@alumni.edu',
-      attendance: 15,
-      postedDate: new Date('2024-03-09'),
-      isUserAttending: false,
-      isPostedByUser: false
-    }
-  ]);
-  
+const EventsAndReunions = () => {
+  const [events, setEvents] = useState([]);
+  const [filteredEvents, setFilteredEvents] = useState([]);
   const [userPostedEvents, setUserPostedEvents] = useState([]);
+  const [activeTab, setActiveTab] = useState('viewEvents');
+  const [attendanceLoading, setAttendanceLoading] = useState(new Set());
   const [filters, setFilters] = useState({
     eventType: '',
     startDate: '',
@@ -64,37 +23,90 @@ const AlumniEventPortal = () => {
     description: ''
   });
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [userPostedEventsLoading, setUserPostedEventsLoading] = useState(false);
 
-  // Filter events based on current filters
-  const filteredEvents = events.filter(event => {
-    const eventTypeMatch = !filters.eventType || event.type === filters.eventType;
-    const startDateMatch = !filters.startDate || event.date >= filters.startDate;
-    const endDateMatch = !filters.endDate || event.date <= filters.endDate;
-    const locationMatch = !filters.location || 
-      event.location.toLowerCase().includes(filters.location.toLowerCase());
-    
-    return eventTypeMatch && startDateMatch && endDateMatch && locationMatch;
-  });
+  // Helper function to get current user ID
+  const getCurrentUserId = () => localStorage.getItem('userId');
 
-  // Handle form input changes
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value
-    });
+  // Helper function to check if event date has passed
+  const isEventPast = (eventDate) => {
+    const today = new Date();
+    const eventDateObj = new Date(eventDate);
+    today.setHours(0, 0, 0, 0);
+    eventDateObj.setHours(0, 0, 0, 0);
+    return eventDateObj < today;
   };
 
-  // Handle filter changes
+  // Helper function to check if user is attending an event
+  const checkUserAttendance = useCallback((event, userId) => {
+    if (!event || !userId) return false;
+    
+    // First check the isUserAttending flag from server (most reliable)
+    if (event.isUserAttending !== undefined && event.isUserAttending !== null) {
+      return Boolean(event.isUserAttending);
+    }
+    
+    // Fallback to checking attendees array
+    if (event.attendees && Array.isArray(event.attendees)) {
+      return event.attendees.some(attendee => {
+        if (typeof attendee === 'string') {
+          return attendee === userId;
+        }
+        if (typeof attendee === 'object' && attendee !== null) {
+          return attendee._id === userId || attendee.id === userId || attendee.userId === userId;
+        }
+        return false;
+      });
+    }
+    
+    return false;
+  }, []);
+
+  // Process events to normalize data structure
+  const processEvents = useCallback((eventsArray) => {
+    const userId = getCurrentUserId();
+    
+    return eventsArray.map(event => {
+      // Use server-provided isUserAttending flag directly if available
+      let isUserAttending = false;
+      
+      if (event.isUserAttending !== undefined && event.isUserAttending !== null) {
+        // Trust the server's calculation
+        isUserAttending = Boolean(event.isUserAttending);
+      } else {
+        // Fallback to local calculation only if server didn't provide it
+        isUserAttending = checkUserAttendance(event, userId);
+      }
+      
+      // Calculate attendance count from various possible sources
+      let attendanceCount = 0;
+      
+      if (event.attendees && Array.isArray(event.attendees)) {
+        attendanceCount = event.attendees.length;
+      } else if (event.attendance !== undefined && event.attendance !== null) {
+        attendanceCount = Math.max(0, parseInt(event.attendance) || 0);
+      } else if (event.attendeeCount !== undefined) {
+        attendanceCount = Math.max(0, parseInt(event.attendeeCount) || 0);
+      }
+      
+      return {
+        ...event,
+        attendance: attendanceCount,
+        isUserAttending
+      };
+    });
+  }, [checkUserAttendance]);
+
+  // Handler functions
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    setFilters({
-      ...filters,
+    setFilters(prev => ({
+      ...prev,
       [name]: value
-    });
+    }));
   };
 
-  // Clear all filters
   const clearFilters = () => {
     setFilters({
       eventType: '',
@@ -104,99 +116,269 @@ const AlumniEventPortal = () => {
     });
   };
 
-  // Handle form submission
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    const newEvent = {
-      id: events.length + 1,
-      ...formData,
-      attendance: 0,
-      postedDate: new Date(),
-      isUserAttending: false,
-      isPostedByUser: true
-    };
-    
-    // Add to events list
-    setEvents([newEvent, ...events]);
-    
-    // Add to user posted events
-    setUserPostedEvents([newEvent, ...userPostedEvents]);
-    
-    // Reset form
-    setFormData({
-      title: '',
-      type: '',
-      date: '',
-      time: '',
-      location: '',
-      rsvpInfo: '',
-      description: ''
-    });
-    
-    // Show success message
-    setSubmitSuccess(true);
-    setTimeout(() => {
-      setSubmitSuccess(false);
-      setActiveTab('postedEvents');
-    }, 2000);
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
-  // Handle attendance button click
-  const handleAttendanceClick = (eventId) => {
-    setEvents(events.map(event => {
-      if (event.id === eventId) {
-        const newAttendance = event.isUserAttending 
-          ? event.attendance - 1 
-          : event.attendance + 1;
-        
-        return {
-          ...event,
-          attendance: newAttendance,
-          isUserAttending: !event.isUserAttending
-        };
+  // Fetch user's posted events
+  const fetchUserPostedEvents = useCallback(async () => {
+    try {
+      setUserPostedEventsLoading(true);
+      
+      console.log('Fetching user posted events...');
+      
+      // Check if user is authenticated
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.warn('No authentication token found');
+        setUserPostedEvents([]);
+        return;
       }
-      return event;
-    }));
+
+      const response = await eventsAPI.getUserEvents();
+      console.log('getUserEvents API response:', response);
+      
+      // Extract events data from response
+      let eventsData = [];
+      if (response?.data?.data) {
+        eventsData = response.data.data;
+      } else if (response?.data && Array.isArray(response.data)) {
+        eventsData = response.data;
+      } else if (response && Array.isArray(response)) {
+        eventsData = response;
+      }
+
+      console.log('Extracted user events data:', eventsData);
+      
+      // Process the events
+      const processedEvents = processEvents(eventsData);
+      console.log('Processed user events:', processedEvents);
+      
+      setUserPostedEvents(processedEvents);
+      
+    } catch (err) {
+      console.error('Failed to fetch user posted events:', err);
+      
+      // Check if it's an authentication error
+      if (err.response?.status === 401) {
+        console.error('Authentication failed - user may need to log in again');
+      }
+      
+      setUserPostedEvents([]);
+    } finally {
+      setUserPostedEventsLoading(false);
+    }
+  }, [processEvents]);
+
+  // Fetch all events - FIXED: Always refresh from server to get latest attendance status
+  const fetchAllEvents = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await eventsAPI.getAll(filters);
+      const eventsData = response.data?.data || response.data || response || [];
+      
+      console.log('Raw events from server:', eventsData);
+      
+      const processedEvents = processEvents(Array.isArray(eventsData) ? eventsData : []);
+      
+      console.log('Processed events with attendance status:', processedEvents);
+      
+      setEvents(processedEvents);
+      setFilteredEvents(processedEvents);
+    } catch (err) {
+      console.error('Failed to fetch events:', err);
+      setEvents([]);
+      setFilteredEvents([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filters, processEvents]);
+
+  useEffect(() => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    // Fetch user posted events immediately on component mount if user is logged in
+    fetchUserPostedEvents();
+  }
+  // Also fetch all events
+  fetchAllEvents();
+}, [fetchAllEvents, fetchUserPostedEvents]);
+
+  // FIXED: Also refresh events when switching to viewEvents tab to get latest data
+  useEffect(() => {
+    if (activeTab === 'viewEvents') {
+      fetchAllEvents();
+    }
+  }, [activeTab, fetchAllEvents]);
+
+  useEffect(() => {
+    if (activeTab === 'postedEvents') {
+      fetchUserPostedEvents();
+    }
+  }, [activeTab, fetchUserPostedEvents]);
+
+  // Handle form submission
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     
-    // Also update in userPostedEvents if it exists there
-    setUserPostedEvents(userPostedEvents.map(event => {
-      if (event.id === eventId) {
-        const newAttendance = event.isUserAttending 
-          ? event.attendance - 1 
-          : event.attendance + 1;
-        
-        return {
-          ...event,
-          attendance: newAttendance,
-          isUserAttending: !event.isUserAttending
-        };
+    try {
+      const response = await eventsAPI.create(formData);
+      const newEvent = response.data?.data || response.data;
+      
+      // Add current user info to the new event
+      const userId = getCurrentUserId();
+      const enrichedEvent = {
+        ...newEvent,
+        postedBy: userId,
+        attendance: 0,
+        isUserAttending: false, // Creator doesn't automatically attend
+        attendees: []
+      };
+      
+      const processedEvent = processEvents([enrichedEvent])[0];
+      
+      // Add to all relevant state arrays
+      setEvents(prev => [processedEvent, ...prev]);
+      setFilteredEvents(prev => [processedEvent, ...prev]);
+      setUserPostedEvents(prev => [processedEvent, ...prev]);
+      
+      setFormData({
+        title: '',
+        type: '',
+        date: '',
+        time: '',
+        location: '',
+        rsvpInfo: '',
+        description: ''
+      });
+      
+      setSubmitSuccess(true);
+      setTimeout(() => {
+        setSubmitSuccess(false);
+        setActiveTab('postedEvents');
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to create event:', err);
+    }
+  };
+
+  // FIXED: Handle attendance button click with better server sync
+  const handleAttendanceClick = async (eventId) => {
+    if (attendanceLoading.has(eventId)) {
+      return;
+    }
+    
+    // Check if user is authenticated
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('Please log in to attend events');
+      return;
+    }
+
+    const currentEvent = events.find(e => e._id === eventId || e.id === eventId);
+    if (!currentEvent) {
+      console.error('Event not found:', eventId);
+      return;
+    }
+
+    console.log('=== ATTENDANCE CLICK DEBUG ===');
+    console.log('Event ID:', eventId);
+    console.log('Current event:', currentEvent);
+    console.log('Current isUserAttending:', currentEvent.isUserAttending);
+
+    setAttendanceLoading(prev => new Set([...prev, eventId]));
+
+    try {
+      const response = await eventsAPI.toggleAttendance(eventId);
+      console.log('Toggle attendance API response:', response);
+      
+      // Get the updated event data from server response
+      let updatedEventFromServer = null;
+      if (response.data?.data) {
+        updatedEventFromServer = response.data.data;
+      } else if (response.data) {
+        updatedEventFromServer = response.data;
       }
-      return event;
-    }));
+
+      console.log('Updated event from server:', updatedEventFromServer);
+
+      // Update function that uses server data
+      const updateEventInArray = (eventArray) => {
+        return eventArray.map(event => {
+          if (event._id === eventId || event.id === eventId) {
+            // Use server-provided data for the most accurate state
+            const updatedEvent = {
+              ...event,
+              ...updatedEventFromServer, // Use server data
+              // Ensure we have the correct attendance count and status
+              attendance: updatedEventFromServer?.attendance || updatedEventFromServer?.attendees?.length || 0,
+              isUserAttending: Boolean(updatedEventFromServer?.isUserAttending)
+            };
+            console.log('Updated event with server data:', updatedEvent);
+            return updatedEvent;
+          }
+          return event;
+        });
+      };
+
+      // Apply updates to all arrays
+      setEvents(prev => updateEventInArray(prev));
+      setFilteredEvents(prev => updateEventInArray(prev));
+      setUserPostedEvents(prev => updateEventInArray(prev));
+
+      console.log('State updated successfully with server data');
+
+    } catch (err) {
+      console.error('Attendance update failed:', err);
+      if (err.response?.status === 401) {
+        alert('Please log in again to attend events');
+      } else {
+        alert('Failed to update attendance. Please try again.');
+      }
+    } finally {
+      setAttendanceLoading(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(eventId);
+        return newSet;
+      });
+    }
   };
 
   // Format date for display
   const formatDate = (dateString) => {
-    const dateObj = new Date(dateString);
-    return dateObj.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    try {
+      const dateObj = new Date(dateString);
+      return dateObj.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return 'Invalid date';
+    }
   };
 
   // Format time for display
   const formatTime = (timeString) => {
-    const [hours, minutes] = timeString.split(':');
-    const dateObj = new Date();
-    dateObj.setHours(parseInt(hours, 10), parseInt(minutes, 10));
-    return dateObj.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
+    try {
+      if (!timeString) return 'No time specified';
+      
+      const [hours, minutes] = timeString.split(':');
+      const dateObj = new Date();
+      dateObj.setHours(parseInt(hours, 10), parseInt(minutes, 10));
+      return dateObj.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (error) {
+      return 'Invalid time';
+    }
   };
 
   // Get event type display name and color
@@ -216,44 +398,63 @@ const AlumniEventPortal = () => {
 
   // Calculate time since posted
   const getTimeSincePosted = (postedDate) => {
-    const now = new Date();
-    const posted = new Date(postedDate);
-    const diffMs = now - posted;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-    
-   if (diffMins < 1) return 'just now';
-if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
-if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-
+    try {
+      if (!postedDate) return 'recently';
+      
+      const now = new Date();
+      const posted = new Date(postedDate);
+      const diffMs = now - posted;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+      
+      if (diffMins < 1) return 'just now';
+      if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+      if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+      return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    } catch (error) {
+      return 'recently';
+    }
   };
 
   // Event Card Component
   const EventCard = ({ event, onAttendanceClick }) => {
     const eventTypeDisplay = getEventTypeDisplay(event.type);
+    const isPastEvent = isEventPast(event.date);
+    const eventId = event._id || event.id;
+    const isLoadingAttendance = attendanceLoading.has(eventId);
+    
+    // Use server-provided values
+    const attendanceCount = Math.max(0, event.attendance || 0);
+    const isUserAttending = Boolean(event.isUserAttending);
+    
+    // Check if user is logged in
+    const isLoggedIn = Boolean(localStorage.getItem('token'));
+    
+    console.log(`Button Debug - Event: ${event.title}`);
+    console.log(`- isUserAttending: ${isUserAttending}`);
+    console.log(`- attendanceCount: ${attendanceCount}`);
+    console.log(`- isLoggedIn: ${isLoggedIn}`);
     
     return (
-      <div className="event-card bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow"
-           data-event-type={event.type}
-           data-event-date={event.date}
-           data-event-location={event.location}>
+      <div className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
         <div className="flex justify-between items-start mb-4">
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">{event.title}</h3>
-            <div className="flex items-center text-sm text-gray-600 mb-1">
-              <span
-  className={`${eventTypeDisplay.color} px-2 py-1 rounded-full text-xs font-medium mr-3`}
->
-  {eventTypeDisplay.text}
-</span>
-
-              <span className="mr-4">📅 {formatDate(event.date)}</span>
-              <span className="mr-4">🕐 {formatTime(event.time)}</span>
+            <div className="flex items-center text-sm text-gray-600 mb-1 flex-wrap gap-2">
+              <span className={`${eventTypeDisplay.color} px-2 py-1 rounded-full text-xs font-medium`}>
+                {eventTypeDisplay.text}
+              </span>
+              <span>{formatDate(event.date)}</span>
+              <span>{formatTime(event.time)}</span>
+              {isPastEvent && (
+                <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-medium">
+                  Event Closed
+                </span>
+              )}
             </div>
             <div className="text-sm text-gray-600 mb-3">
-              <span className="mr-4">📍 {event.location}</span>
+              <span>{event.location}</span>
             </div>
             <p className="text-gray-700 text-sm leading-relaxed mb-4">{event.description}</p>
             {event.rsvpInfo && (
@@ -261,19 +462,61 @@ return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
             )}
           </div>
         </div>
-        <div className="flex justify-between items-center pt-4 border-t border-gray-100">
-          <span className="text-xs text-gray-500">Posted {getTimeSincePosted(event.postedDate)}</span>
-          <div className="flex items-center space-x-3">
-            <span className="text-sm text-gray-600">👥 {event.attendance} willing to attend</span>
-            <button 
-              onClick={() => onAttendanceClick(event.id)}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors attendance-btn btn-interactive ${
-                event.isUserAttending 
-                  ? 'bg-green-600 hover:bg-green-700' 
-                  : 'bg-blue-600 hover:bg-blue-700'
-              } text-white`}>
-              {event.isUserAttending ? '✅ Attending' : "I'm Attending"}
-            </button>
+        
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center pt-4 border-t border-gray-100 gap-4">
+          <span className="text-xs text-gray-500">
+            Posted {getTimeSincePosted(event.postedDate || event.createdAt)}
+          </span>
+          
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="flex items-center text-sm text-gray-600">
+              <span className="mr-2">👥</span>
+              <span>{attendanceCount} {attendanceCount === 1 ? 'person' : 'people'} willing to attend</span>
+            </div>
+            
+            {/* Only show attendance button if user is logged in */}
+            {isLoggedIn && (
+              <button 
+                onClick={() => onAttendanceClick(eventId)}
+                disabled={isPastEvent || isLoadingAttendance}
+                className={`
+                  px-4 py-2 rounded-md text-sm font-medium transition-all duration-200
+                  min-w-[140px] h-10 flex items-center justify-center
+                  focus:outline-none focus:ring-2 focus:ring-offset-2
+                  ${isPastEvent 
+                    ? 'bg-gray-400 cursor-not-allowed text-white'
+                    : isLoadingAttendance
+                      ? 'bg-gray-400 cursor-not-allowed text-white'
+                      : isUserAttending 
+                        ? 'bg-green-600 hover:bg-green-700 text-white focus:ring-green-500 shadow-md' 
+                        : 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500'
+                  }
+                `}>
+                
+                {isLoadingAttendance ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Loading...</span>
+                  </div>
+                ) : isPastEvent ? (
+                  'Event Closed'
+                ) : isUserAttending ? (
+                  <span className="flex items-center gap-1">
+                    <span className="text-lg">✓</span>
+                    <span>Attending</span>
+                  </span>
+                ) : (
+                  "I'm Attending"
+                )}
+              </button>
+            )}
+            
+            {/* Show login prompt for non-logged in users */}
+            {!isLoggedIn && !isPastEvent && (
+              <span className="text-sm text-gray-500 italic">
+                Login to attend events
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -292,7 +535,7 @@ return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
           <div className="flex space-x-1 mt-6 bg-gray-100 p-1 rounded-lg w-fit">
             <button 
               onClick={() => setActiveTab('viewEvents')}
-              className={`tab-button px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 activeTab === 'viewEvents' 
                   ? 'bg-white text-blue-600 shadow-sm' 
                   : 'text-gray-600 hover:text-gray-900'
@@ -301,7 +544,7 @@ return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
             </button>
             <button 
               onClick={() => setActiveTab('postEvent')}
-              className={`tab-button px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 activeTab === 'postEvent' 
                   ? 'bg-white text-blue-600 shadow-sm' 
                   : 'text-gray-600 hover:text-gray-900'
@@ -310,12 +553,12 @@ return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
             </button>
             <button 
               onClick={() => setActiveTab('postedEvents')}
-              className={`tab-button px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 activeTab === 'postedEvents' 
                   ? 'bg-white text-blue-600 shadow-sm' 
                   : 'text-gray-600 hover:text-gray-900'
               }`}>
-              Posted Events
+              Posted Events ({userPostedEvents.length})
             </button>
           </div>
         </div>
@@ -325,7 +568,7 @@ return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
       <div className="max-w-6xl mx-auto px-6 py-8">
         {/* View Events Section */}
         {activeTab === 'viewEvents' && (
-          <div className="bg-white rounded-lg card-shadow p-8">
+          <div className="bg-white rounded-lg shadow-md p-8">
             <div className="mb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-2">Upcoming Events</h2>
               <p className="text-gray-600">Browse and RSVP to upcoming alumni events</p>
@@ -334,11 +577,9 @@ return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
               <div className="mt-6 bg-gray-50 rounded-lg p-6">
                 <h3 className="text-sm font-medium text-gray-900 mb-4">Filter Events</h3>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  {/* Event Type Filter */}
                   <div>
-                    <label htmlFor="filterEventType" className="block text-xs font-medium text-gray-700 mb-2">Event Type</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">Event Type</label>
                     <select 
-                      id="filterEventType"
                       name="eventType"
                       value={filters.eventType}
                       onChange={handleFilterChange}
@@ -354,36 +595,30 @@ return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
                     </select>
                   </div>
                   
-                  {/* Start Date Filter */}
                   <div>
-                    <label htmlFor="filterStartDate" className="block text-xs font-medium text-gray-700 mb-2">From Date</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">From Date</label>
                     <input 
                       type="date" 
-                      id="filterStartDate"
                       name="startDate"
                       value={filters.startDate}
                       onChange={handleFilterChange}
                       className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
                   </div>
                   
-                  {/* End Date Filter */}
                   <div>
-                    <label htmlFor="filterEndDate" className="block text-xs font-medium text-gray-700 mb-2">To Date</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">To Date</label>
                     <input 
                       type="date" 
-                      id="filterEndDate"
                       name="endDate"
                       value={filters.endDate}
                       onChange={handleFilterChange}
                       className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
                   </div>
                   
-                  {/* Location Filter */}
                   <div>
-                    <label htmlFor="filterLocation" className="block text-xs font-medium text-gray-700 mb-2">Location</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">Location</label>
                     <input 
                       type="text" 
-                      id="filterLocation"
                       name="location"
                       value={filters.location}
                       onChange={handleFilterChange}
@@ -392,7 +627,6 @@ return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
                   </div>
                 </div>
                 
-                {/* Filter Actions */}
                 <div className="flex justify-between items-center mt-4">
                   <button 
                     onClick={clearFilters}
@@ -400,20 +634,22 @@ return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
                     Clear all filters
                   </button>
                   <div className="text-xs text-gray-500">
-                    {filteredEvents.length === events.length 
-  ? 'Showing all events' 
-  : `Showing ${filteredEvents.length} of ${events.length} events`}
-
+                    Showing {filteredEvents.length} events
                   </div>
                 </div>
               </div>
             </div>
             
             <div className="space-y-6">
-              {filteredEvents.length > 0 ? (
+              {isLoading ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="text-gray-600 mt-4">Loading events...</p>
+                </div>
+              ) : filteredEvents.length > 0 ? (
                 filteredEvents.map(event => (
                   <EventCard 
-                    key={event.id} 
+                    key={event._id || event.id}
                     event={event} 
                     onAttendanceClick={handleAttendanceClick} 
                   />
@@ -422,7 +658,7 @@ return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
                 <div className="text-center py-12 text-gray-500">
                   <div className="text-4xl mb-4">📅</div>
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No events found</h3>
-                  <p className="text-gray-600">Try adjusting your filters</p>
+                  <p className="text-gray-600">Try adjusting your filters or check back later</p>
                 </div>
               )}
             </div>
@@ -431,144 +667,131 @@ return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
 
         {/* Post Event Form */}
         {activeTab === 'postEvent' && (
-          <div className="bg-white rounded-lg card-shadow p-8 mb-8">
+          <div className="bg-white rounded-lg shadow-md p-8">
             <div className="mb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-2">Post an Event</h2>
               <p className="text-gray-600">Fill out the form below to create a new alumni event</p>
             </div>
             
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Row 1: Event Title and Event Type */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label htmlFor="eventTitle" className="block text-sm font-medium text-gray-700 mb-2">
-                    Event Title <span className="required-asterisk text-red-500">*</span>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Event Title <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    id="eventTitle"
                     name="title"
                     value={formData.title}
                     onChange={handleInputChange}
                     required
-                    className="input-field w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                    placeholder="Enter event title"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   />
                 </div>
-                
-                <div>
-                  <label htmlFor="eventType" className="block text-sm font-medium text-gray-700 mb-2">
-                    Event Type <span className="required-asterisk text-red-500">*</span>
-                  </label>
-                  <select
-                    id="eventType"
-                    name="type"
-                    value={formData.type}
-                    onChange={handleInputChange}
-                    required
-                    className="input-field w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white transition-all"
-                  >
-                    <option value="">Select event type</option>
-                    <option value="networking">Networking Event</option>
-                    <option value="reunion">Class Reunion</option>
-                    <option value="gala">Gala/Formal Event</option>
-                    <option value="workshop">Workshop/Seminar</option>
-                    <option value="social">Social Gathering</option>
-                    <option value="fundraiser">Fundraiser</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
               </div>
-              
-              {/* Row 2: Date and Time */}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Event Type <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="type"
+                  value={formData.type}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
+                >
+                  <option value="">Select event type</option>
+                  <option value="networking">Networking Event</option>
+                  <option value="reunion">Class Reunion</option>
+                  <option value="gala">Gala/Formal Event</option>
+                  <option value="workshop">Workshop/Seminar</option>
+                  <option value="social">Social Gathering</option>
+                  <option value="fundraiser">Fundraiser</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label htmlFor="eventDate" className="block text-sm font-medium text-gray-700 mb-2">
-                    Event Date <span className="required-asterisk text-red-500">*</span>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Event Date <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="date"
-                    id="eventDate"
                     name="date"
                     value={formData.date}
                     onChange={handleInputChange}
                     required
-                    className="input-field w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    min={new Date().toISOString().split('T')[0]} // Prevents selecting past dates
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   />
                 </div>
                 
                 <div>
-                  <label htmlFor="eventTime" className="block text-sm font-medium text-gray-700 mb-2">
-                    Event Time <span className="required-asterisk text-red-500">*</span>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Event Time <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="time"
-                    id="eventTime"
                     name="time"
                     value={formData.time}
                     onChange={handleInputChange}
                     required
-                    className="input-field w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   />
                 </div>
               </div>
-              
-              {/* Row 3: Location and RSVP Info */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label htmlFor="eventLocation" className="block text-sm font-medium text-gray-700 mb-2">
-                    Event Location <span className="required-asterisk text-red-500">*</span>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Event Location <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    id="eventLocation"
                     name="location"
                     value={formData.location}
                     onChange={handleInputChange}
                     required
-                    className="input-field w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                     placeholder="Enter venue address or location"
                   />
                 </div>
                 
                 <div>
-                  <label htmlFor="rsvpInfo" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     RSVP Link or Contact Info <span className="text-gray-400 text-sm">(Optional)</span>
                   </label>
                   <input
                     type="text"
-                    id="rsvpInfo"
                     name="rsvpInfo"
                     value={formData.rsvpInfo}
                     onChange={handleInputChange}
-                    className="input-field w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                     placeholder="RSVP link or contact email"
                   />
                 </div>
               </div>
               
-              {/* Row 4: Description (Full Width) */}
               <div>
-                <label htmlFor="eventDescription" className="block text-sm font-medium text-gray-700 mb-2">
-                  Event Description <span className="required-asterisk text-red-500">*</span>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Event Description <span className="text-red-500">*</span>
                 </label>
                 <textarea
-                  id="eventDescription"
                   name="description"
                   value={formData.description}
                   onChange={handleInputChange}
                   required
                   rows="5"
-                  className="input-field w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
                   placeholder="Provide details about the event, agenda, dress code, and any other relevant information..."
                 ></textarea>
               </div>
               
-              {/* Submit Button */}
               <div className="flex justify-end pt-4">
                 <button
                   type="submit"
-                  className={`font-medium px-8 py-3 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 btn-interactive ${
+                  className={`font-medium px-8 py-3 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                     submitSuccess 
                       ? 'bg-green-600' 
                       : 'bg-blue-600 hover:bg-blue-700'
@@ -582,17 +805,22 @@ return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
 
         {/* Posted Events Section */}
         {activeTab === 'postedEvents' && (
-          <div className="bg-white rounded-lg card-shadow p-8">
+          <div className="bg-white rounded-lg shadow-md p-8">
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-2">Posted Events</h2>
               <p className="text-gray-600">Events you have created</p>
             </div>
             
             <div className="space-y-4">
-              {userPostedEvents.length > 0 ? (
+              {userPostedEventsLoading ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="text-gray-600 mt-4">Loading your events...</p>
+                </div>
+              ) : userPostedEvents.length > 0 ? (
                 userPostedEvents.map(event => (
                   <EventCard 
-                    key={event.id} 
+                    key={event._id || event.id}
                     event={event} 
                     onAttendanceClick={handleAttendanceClick} 
                   />
@@ -602,43 +830,20 @@ return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
                   <div className="text-4xl mb-4">📅</div>
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No events added</h3>
                   <p className="text-gray-600">You haven't created any events yet</p>
+                  <button
+                    onClick={() => setActiveTab('postEvent')}
+                    className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    Create Your First Event
+                  </button>
                 </div>
               )}
             </div>
           </div>
         )}
       </div>
-      
-      <style jsx global>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        .form-container { max-width: 900px; }
-        .input-field { transition: all 0.2s ease; }
-        .input-field:focus { box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
-        .card-shadow { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
-        .event-card { transition: all 0.2s ease; }
-        .event-card:hover { box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.1); }
-        .btn-interactive {
-          transition: all 0.2s ease;
-          transform: translateY(0);
-        }
-        .btn-interactive:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
-        .btn-interactive:active {
-          transform: translateY(0);
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        .tab-button {
-          transition: all 0.2s ease;
-        }
-        .tab-button:hover:not(.active) {
-          background-color: rgba(255, 255, 255, 0.5);
-        }
-      `}</style>
     </div>
   );
 };
 
-export default AlumniEventPortal;
+export default EventsAndReunions;

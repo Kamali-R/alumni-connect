@@ -4,11 +4,14 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import passport from 'passport';
 import express from 'express';
+
 // Load routes
 import alumniRoutes from './routes/alumniRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import protectedRoutes from './routes/protectedRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
+import eventRoutes from './routes/eventRoutes.js'; // ✅ Import event routes
+
 // Load Google OAuth config
 import './config/googleAuth.js';
 import path from 'path';
@@ -20,21 +23,41 @@ const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+
 // ✅ Middleware
+// In your server.js, update the CORS configuration:
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
-app.use(express.json());
+// Add this after your middleware setup but before your routes
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
+// Add this right after your API routes
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
+  });
+});
+app.use(express.json({ limit: '10mb' })); // ✅ Increased limit for event data
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
 app.use(
   session({
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: process.env.NODE_ENV === 'production',
-    maxAge: 24 * 60 * 60 * 1000  } // ✅ Use true only in HTTPS
+    cookie: { 
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 24 * 60 * 60 * 1000  // 24 hours
+    }
   })
 );
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -57,10 +80,29 @@ app.use('/', authRoutes);
 app.use('/api', protectedRoutes);
 app.use('/api', contactRoutes);
 app.use('/api', alumniRoutes);
+app.use('/api/events', eventRoutes); // ✅ Add event routes
 
 // ✅ Root Route
 app.get('/', (req, res) => {
   res.send('API is running...');
+});
+
+// ✅ Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    success: false,
+    message: 'Something went wrong!',
+    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+  });
+});
+
+// ✅ 404 handler - FIXED: Removed the '*' parameter
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found'
+  });
 });
 
 // ✅ Connect to MongoDB
