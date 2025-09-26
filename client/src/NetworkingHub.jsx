@@ -247,10 +247,9 @@ const NetworkingHub = () => {
     }
   };
 
-  // Fetch success stories
-  // Fetch success stories - FIXED VERSION
-// Fetch success stories - SIMPLIFIED FIX
-// Fetch success stories - FIXED VERSION
+ 
+// In your NetworkingHub component, add this debugging version:
+// Clean up your fetchSuccessStories function - remove debugging
 const fetchSuccessStories = async (page = 1, filters = {}) => {
   setStoryLoading(true);
   try {
@@ -272,7 +271,6 @@ const fetchSuccessStories = async (page = 1, filters = {}) => {
     const data = await response.json();
     
     if (data.success) {
-      // Use the data as returned from backend with proper author population
       setSuccessStories(data.stories);
       setFilteredStories(data.stories);
       setStoryPagination(data.pagination);
@@ -284,6 +282,7 @@ const fetchSuccessStories = async (page = 1, filters = {}) => {
     setStoryLoading(false);
   }
 };
+
   // Create new success story
   const createSuccessStory = async (storyData) => {
     try {
@@ -315,6 +314,12 @@ const fetchSuccessStories = async (page = 1, filters = {}) => {
 
   // Like/Unlike story
   // Like/Unlike story - REVERT TO WORKING VERSION
+// Like/Unlike story - FIXED VERSION
+// Like/Unlike story - FIXED VERSION
+// Like/Unlike story - FIXED VERSION
+// Like/Unlike story - COMPLETELY FIXED VERSION
+// Replace this function in your NetworkingHub component  
+// Update this function in your NetworkingHub component
 const toggleStoryLike = async (storyId) => {
   try {
     const response = await fetch(`http://localhost:5000/api/stories/${storyId}/like`, {
@@ -329,13 +334,13 @@ const toggleStoryLike = async (storyId) => {
     const data = await response.json();
     
     if (data.success) {
-      // Update the story in both states
+      // Backend sends proper boolean values
       const updateStory = (story) => {
         if (story._id === storyId) {
           return {
             ...story,
             likeCount: data.likeCount,
-            isLiked: data.isLiked
+            isLiked: data.isLiked // Use directly from backend
           };
         }
         return story;
@@ -344,46 +349,51 @@ const toggleStoryLike = async (storyId) => {
       setSuccessStories(prev => prev.map(updateStory));
       setFilteredStories(prev => prev.map(updateStory));
       
-      // Update the selected story if it's open
       if (selectedStory && selectedStory._id === storyId) {
         setSelectedStory(prev => ({
           ...prev,
           likeCount: data.likeCount,
-          isLiked: data.isLiked
+          isLiked: data.isLiked // Use directly from backend
         }));
       }
       
-      toast.success(data.isLiked ? 'Story liked!' : 'Story unliked!');
+      if (data.isLiked) {
+        toast.success('Story liked!');
+      } else {
+        toast.success('Story unliked!');
+      }
     }
   } catch (error) {
     console.error('Error toggling like:', error);
     toast.error('Failed to update like');
   }
 };
-
   // Fetch single story
-  const fetchStoryById = async (storyId) => {
-    try {
-      const response = await fetch(`http://localhost:5000/api/stories/${storyId}`, {
-        method: 'GET',
-        headers: getAuthHeaders()
-      });
+  // Fetch single story - FIXED VERSION
+// Replace this function in your NetworkingHub component
+// Update this function in your NetworkingHub component
+const fetchStoryById = async (storyId) => {
+  try {
+    const response = await fetch(`http://localhost:5000/api/stories/${storyId}`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch story');
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        setSelectedStory(data.story);
-      }
-    } catch (error) {
-      console.error('Error fetching story:', error);
-      toast.error('Failed to load story');
+    if (!response.ok) {
+      throw new Error('Failed to fetch story');
     }
-  };
 
+    const data = await response.json();
+    
+    if (data.success) {
+      // Backend sends proper values, use directly
+      setSelectedStory(data.story);
+    }
+  } catch (error) {
+    console.error('Error fetching story:', error);
+    toast.error('Failed to load story');
+  }
+};
   // Enhanced filter function
   const applyAlumniFilters = () => {
     let filtered = alumniData;
@@ -1241,9 +1251,9 @@ const toggleStoryLike = async (storyId) => {
   };
 
   // StoryCard Component
- // StoryCard Component - FIXED VERSION
-// StoryCard Component - WITH DEBUGGING
-// StoryCard Component - FIXED VERSION
+// StoryCard Component - FIXED HEART ICON DISPLAY
+// StoryCard Component - FIXED HEART ICON DISPLAY
+// StoryCard Component - FIXED HEART ICON DISPLAY
 const StoryCard = ({ story, onLike, onOpen }) => {
   const categoryNames = {
     'career': 'Career Growth',
@@ -1265,6 +1275,10 @@ const StoryCard = ({ story, onLike, onOpen }) => {
   const author = story.author || {};
   const profileImageUrl = getProfileImageUrl(author);
   const displayName = author.name || 'Anonymous';
+
+  // Now that backend properly sends the like status, use directly
+  const isLiked = story.isLiked;
+  const likeCount = story.likeCount || 0;
 
   return (
     <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
@@ -1326,24 +1340,37 @@ const StoryCard = ({ story, onLike, onOpen }) => {
           <button 
             onClick={() => onLike(story._id)} 
             className={`flex items-center space-x-2 transition-colors ${
-              story.isLiked ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'
+              isLiked ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'
             }`}
           >
-            <svg 
-              className={`w-5 h-5 ${story.isLiked ? 'fill-current' : ''}`} 
-              fill={story.isLiked ? "currentColor" : "none"} 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth="2" 
-                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" 
-              />
-            </svg>
-            <span className={story.isLiked ? 'font-medium' : ''}>
-              {story.likeCount || 0} {story.likeCount === 1 ? 'like' : 'likes'}
+            {/* FIXED: Proper heart icon logic - filled blue for liked, outlined gray for not liked */}
+            {isLiked ? (
+              // Filled blue heart for liked stories
+              <svg 
+                className="w-5 h-5 fill-current text-blue-600" 
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+              </svg>
+            ) : (
+              // Outlined gray heart for not liked stories
+              <svg 
+                className="w-5 h-5 text-gray-600" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+              >
+                <path 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" 
+                />
+              </svg>
+            )}
+            <span className={isLiked ? 'font-medium text-blue-600' : ''}>
+              {likeCount} {likeCount === 1 ? 'like' : 'likes'}
             </span>
           </button>
           <span className="text-sm text-gray-500">{story.views || 0} views</span>
@@ -1360,7 +1387,7 @@ const StoryCard = ({ story, onLike, onOpen }) => {
 };
   // StoryModal Component
   // StoryModal Component - COMPLETE FIXED VERSION
-// StoryModal Component - FIXED VERSION (without About Author section)
+// StoryModal Component - FIXED HEART DISPLAY
 const StoryModal = ({ story, onClose, onLike }) => {
   const categoryNames = {
     'career': 'Career Growth',
@@ -1388,6 +1415,10 @@ const StoryModal = ({ story, onClose, onLike }) => {
     if (!author.graduationYear) return '';
     return ` • Class of ${author.graduationYear}`;
   };
+
+  // FIX: Proper boolean conversion with strict checking
+  const isLiked = story.isLiked === true;
+  const likeCount = story.likeCount || 0;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -1462,24 +1493,34 @@ const StoryModal = ({ story, onClose, onLike }) => {
               <button 
                 onClick={() => onLike(story._id)} 
                 className={`flex items-center space-x-2 transition-colors ${
-                  story.isLiked ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'
+                  isLiked ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'
                 }`}
               >
-                <svg 
-                  className={`w-6 h-6 ${story.isLiked ? 'fill-current' : ''}`} 
-                  fill={story.isLiked ? "currentColor" : "none"} 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth="2" 
-                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" 
-                  />
-                </svg>
-                <span className={`font-medium ${story.isLiked ? 'text-blue-600' : ''}`}>
-                  {story.likeCount || 0} people liked this story
+                {/* FIXED: Proper heart icon with filled state */}
+                {isLiked ? (
+                  <svg 
+                    className="w-6 h-6 fill-current" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                  </svg>
+                ) : (
+                  <svg 
+                    className="w-6 h-6" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth="2" 
+                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" 
+                    />
+                  </svg>
+                )}
+                <span className={`font-medium ${isLiked ? 'text-blue-600' : ''}`}>
+                  {likeCount} people liked this story
                 </span>
               </button>
               
@@ -1506,9 +1547,6 @@ const StoryModal = ({ story, onClose, onLike }) => {
             </div>
           </div>
 
-          {/* REMOVED: About the Author section */}
-
-          {/* Action Buttons */}
           <div className="flex justify-end space-x-4 mt-8 pt-6 border-t">
             <button 
               onClick={onClose}
@@ -2006,14 +2044,23 @@ const StoryModal = ({ story, onClose, onLike }) => {
     activeSection
   ]);
 
-  useEffect(() => {
-    if (selectedStory) {
-      const updatedStory = successStories.find(story => story._id === selectedStory._id);
-      if (updatedStory && updatedStory.isLiked !== selectedStory.isLiked) {
-        setSelectedStory(updatedStory);
+// Add this useEffect to handle data synchronization - FIXED VERSION
+useEffect(() => {
+  // When selectedStory changes, ensure it has the latest data from the stories list
+  if (selectedStory) {
+    const updatedStory = successStories.find(story => story._id === selectedStory._id);
+    if (updatedStory) {
+      // Only update if there's an actual difference
+      if (updatedStory.isLiked !== selectedStory.isLiked || updatedStory.likeCount !== selectedStory.likeCount) {
+        setSelectedStory(prev => ({
+          ...prev,
+          likeCount: updatedStory.likeCount || 0,
+          isLiked: updatedStory.isLiked === true // Force boolean conversion
+        }));
       }
     }
-  }, [successStories, selectedStory]);
+  }
+}, [successStories, selectedStory]);
 
   return (
     <div className="bg-gray-50 min-h-screen">

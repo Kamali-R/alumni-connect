@@ -46,8 +46,8 @@ export const createStory = async (req, res) => {
   }
 };
 
-// Get all success stories with pagination and filters
-// In successStoryController.js - Fix the getStories function
+// Get all success stories with pagination and filters - CORRECTED VERSION
+// In successStoryController.js - FIXED getStories function
 export const getStories = async (req, res) => {
   try {
     const {
@@ -83,7 +83,6 @@ export const getStories = async (req, res) => {
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
-    // FIX: Enhanced population to include alumni profile data
     const stories = await SuccessStory.find(query)
       .populate({
         path: 'author',
@@ -95,25 +94,49 @@ export const getStories = async (req, res) => {
       })
       .sort(sortOptions)
       .limit(parseInt(limit))
-      .skip((parseInt(page) - 1) * parseInt(limit))
-      .lean();
+      .skip((parseInt(page) - 1) * parseInt(limit));
 
     const total = await SuccessStory.countDocuments(query);
 
-    // Check if current user liked each story
-    if (req.user) {
-      const userId = req.user.id;
-      stories.forEach(story => {
-        story.isLiked = story.likes.includes(userId);
-        story.likeCount = story.likes.length;
-        // Remove likes array from response for security
-        delete story.likes;
-      });
-    }
+    // FIXED: Better debugging and error handling
+    const userId = req.user?.id;
+    console.log('🔍 Current user ID in getStories:', userId);
+    console.log('🔍 req.user object:', req.user);
+    
+    // Convert stories to plain objects and add like information
+    const storiesWithLikes = stories.map(story => {
+      const storyObj = story.toObject ? story.toObject() : story;
+      
+      let isLiked = false;
+      
+      // Only check if we have a valid user ID
+      if (userId && typeof userId === 'string' && userId.length > 0) {
+        isLiked = story.likes && story.likes.length > 0
+          ? story.likes.some(likeUserId => {
+              const likeIdString = likeUserId.toString();
+              const userIdString = userId.toString();
+              const result = likeIdString === userIdString;
+              console.log(`🔍 Comparing like: ${likeIdString} === ${userIdString} = ${result}`);
+              return result;
+            })
+          : false;
+      } else {
+        console.log('⚠️  No valid user ID found, setting isLiked to false');
+        isLiked = false;
+      }
+      
+      console.log(`📖 Story: ${story.title}, isLiked: ${isLiked}, total likes: ${story.likes ? story.likes.length : 0}`);
+      
+      return {
+        ...storyObj,
+        likeCount: story.likes ? story.likes.length : 0,
+        isLiked: isLiked
+      };
+    });
 
     res.status(200).json({
       success: true,
-      stories,
+      stories: storiesWithLikes,
       pagination: {
         currentPage: parseInt(page),
         totalPages: Math.ceil(total / parseInt(limit)),
@@ -132,12 +155,15 @@ export const getStories = async (req, res) => {
     });
   }
 };
-
-// Get single story by ID
-// In successStoryController.js - Fix the getStoryById function
+// Get single story by ID - CORRECTED VERSION
+// In successStoryController.js - FIXED getStoryById function
 export const getStoryById = async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user?.id;
+
+    console.log('🔍 Single story - User ID:', userId);
+    console.log('🔍 Single story - req.user:', req.user);
 
     const story = await SuccessStory.findById(id)
       .populate({
@@ -147,8 +173,7 @@ export const getStoryById = async (req, res) => {
           path: 'alumniProfile',
           select: 'profileImage personalInfo academicInfo careerStatus'
         }
-      })
-      .populate('likes', 'name email');
+      });
 
     if (!story) {
       return res.status(404).json({
@@ -161,25 +186,32 @@ export const getStoryById = async (req, res) => {
     story.views += 1;
     await story.save();
 
-    // Check if current user liked the story
     let isLiked = false;
-    if (req.user) {
-      isLiked = story.likes.some(like => like._id.toString() === req.user.id);
+    
+    // Only check if we have a valid user ID
+    if (userId && typeof userId === 'string' && userId.length > 0) {
+      isLiked = story.likes && story.likes.length > 0
+        ? story.likes.some(likeUserId => {
+            return likeUserId.toString() === userId.toString();
+          })
+        : false;
     }
 
-    // Prepare response - ensure author data is properly structured
+    console.log(`📖 Single story: ${story.title}, isLiked: ${isLiked}, userId: ${userId}`);
+
+    // Prepare response
     const storyResponse = {
-      ...story.toObject(),
-      likeCount: story.likes.length,
-      isLiked,
-      author: {
-        ...story.author.toObject(),
-        // Ensure profile image is accessible
-        profileImage: story.author.profileImage || story.author.alumniProfile?.profileImage,
-        alumniProfile: story.author.alumniProfile
-      },
-      // Remove likes array for security
-      likes: undefined
+      _id: story._id,
+      title: story.title,
+      content: story.content,
+      category: story.category,
+      tags: story.tags,
+      views: story.views,
+      createdAt: story.createdAt,
+      updatedAt: story.updatedAt,
+      author: story.author,
+      likeCount: story.likes ? story.likes.length : 0,
+      isLiked: isLiked
     };
 
     res.status(200).json({
@@ -197,7 +229,7 @@ export const getStoryById = async (req, res) => {
   }
 };
 
-// Like/Unlike a story
+// Like/Unlike a story - CORRECTED VERSION
 export const toggleLike = async (req, res) => {
   try {
     const { storyId } = req.params;
@@ -212,26 +244,34 @@ export const toggleLike = async (req, res) => {
       });
     }
 
-    const isLiked = story.likes.includes(userId);
+    // CORRECTED: Proper ObjectId comparison
+    const isCurrentlyLiked = story.likes.some(likeUserId => 
+      likeUserId.toString() === userId.toString()
+    );
+    
     let message = '';
 
-    if (isLiked) {
-      // Unlike the story
-      story.likes = story.likes.filter(like => like.toString() !== userId);
+    if (isCurrentlyLiked) {
+      // Unlike the story - remove user from likes array
+      story.likes = story.likes.filter(likeUserId => 
+        likeUserId.toString() !== userId.toString()
+      );
       message = 'Story unliked successfully';
     } else {
-      // Like the story
+      // Like the story - add user to likes array
       story.likes.push(userId);
       message = 'Story liked successfully';
     }
 
     await story.save();
 
+    console.log(`Toggle like result - Story: ${story.title}, isLiked: ${!isCurrentlyLiked}, likeCount: ${story.likes.length}`); // Debug log
+
     res.status(200).json({
       success: true,
       message,
       likeCount: story.likes.length,
-      isLiked: !isLiked
+      isLiked: !isCurrentlyLiked // Return the new state
     });
 
   } catch (error) {
@@ -261,7 +301,9 @@ export const getUserStories = async (req, res) => {
 
     // Add like info for each story
     stories.forEach(story => {
-      story.isLiked = story.likes.includes(userId);
+      story.isLiked = story.likes.some(likeUserId => 
+        likeUserId.toString() === userId.toString()
+      );
       story.likeCount = story.likes.length;
       delete story.likes;
     });

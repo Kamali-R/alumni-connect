@@ -12,9 +12,9 @@ import auth from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Public routes
-router.get('/stories', getStories);
-router.get('/stories/:id', getStoryById);
+// FIXED: Add auth middleware to GET routes so we can check user's like status
+router.get('/stories', auth, getStories);           // ✅ Added auth
+router.get('/stories/:id', auth, getStoryById);     // ✅ Added auth
 
 // Protected routes
 router.post('/stories', auth, createStory);
