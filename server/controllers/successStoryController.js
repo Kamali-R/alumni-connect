@@ -47,6 +47,7 @@ export const createStory = async (req, res) => {
 };
 
 // Get all success stories with pagination and filters
+// In successStoryController.js - Fix the getStories function
 export const getStories = async (req, res) => {
   try {
     const {
@@ -82,15 +83,21 @@ export const getStories = async (req, res) => {
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
-    // Execute query
+    // FIX: Enhanced population to include alumni profile data
     const stories = await SuccessStory.find(query)
-      .populate('author', 'name email role graduationYear')
+      .populate({
+        path: 'author',
+        select: 'name email role graduationYear profileImage alumniProfile',
+        populate: {
+          path: 'alumniProfile',
+          select: 'profileImage personalInfo academicInfo careerStatus'
+        }
+      })
       .sort(sortOptions)
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit))
       .lean();
 
-    // Get total count for pagination
     const total = await SuccessStory.countDocuments(query);
 
     // Check if current user liked each story
@@ -127,12 +134,20 @@ export const getStories = async (req, res) => {
 };
 
 // Get single story by ID
+// In successStoryController.js - Fix the getStoryById function
 export const getStoryById = async (req, res) => {
   try {
     const { id } = req.params;
 
     const story = await SuccessStory.findById(id)
-      .populate('author', 'name email role graduationYear')
+      .populate({
+        path: 'author',
+        select: 'name email role graduationYear profileImage alumniProfile',
+        populate: {
+          path: 'alumniProfile',
+          select: 'profileImage personalInfo academicInfo careerStatus'
+        }
+      })
       .populate('likes', 'name email');
 
     if (!story) {
@@ -152,11 +167,17 @@ export const getStoryById = async (req, res) => {
       isLiked = story.likes.some(like => like._id.toString() === req.user.id);
     }
 
-    // Prepare response
+    // Prepare response - ensure author data is properly structured
     const storyResponse = {
       ...story.toObject(),
       likeCount: story.likes.length,
       isLiked,
+      author: {
+        ...story.author.toObject(),
+        // Ensure profile image is accessible
+        profileImage: story.author.profileImage || story.author.alumniProfile?.profileImage,
+        alumniProfile: story.author.alumniProfile
+      },
       // Remove likes array for security
       likes: undefined
     };

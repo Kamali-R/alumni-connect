@@ -16,24 +16,26 @@ import {
 
 
 // Unified helper functions for profile data
+// Enhanced unified helper functions for profile data
 const getProfileImageUrl = (user, alumniProfile = null) => {
+  if (!user) return null;
+  
   // Priority 1: Direct profileImageUrl (full URL)
   if (user?.profileImageUrl && user.profileImageUrl.startsWith('http')) {
     return user.profileImageUrl;
   }
   
-  // Priority 2: Profile image from alumni profile
-  const profileImage = alumniProfile?.profileImage || user?.alumniProfile?.profileImage;
-  if (profileImage) {
-    // Handle both relative and absolute paths
-    if (profileImage.startsWith('http')) {
-      return profileImage;
+  // Priority 2: Profile image from alumni profile (passed as parameter)
+  const profileImageFromAlumni = alumniProfile?.profileImage || user?.alumniProfile?.profileImage;
+  if (profileImageFromAlumni) {
+    if (profileImageFromAlumni.startsWith('http')) {
+      return profileImageFromAlumni;
     } else {
-      return `${process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000'}/uploads/${profileImage}`;
+      return `${process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000'}/uploads/${profileImageFromAlumni}`;
     }
   }
   
-  // Priority 3: Profile image from user data
+  // Priority 3: Profile image from user data (direct field)
   if (user?.profileImage) {
     if (user.profileImage.startsWith('http')) {
       return user.profileImage;
@@ -42,9 +44,18 @@ const getProfileImageUrl = (user, alumniProfile = null) => {
     }
   }
   
+  // Priority 4: Check if user has alumniProfile with profileImage
+  if (user?.alumniProfile?.profileImage) {
+    const profileImage = user.alumniProfile.profileImage;
+    if (profileImage.startsWith('http')) {
+      return profileImage;
+    } else {
+      return `${process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000'}/uploads/${profileImage}`;
+    }
+  }
+  
   return null;
 };
-
 const getDisplayName = (user) => {
   return user?.name || user?.personalInfo?.fullName || 'Unknown User';
 };
@@ -237,69 +248,42 @@ const NetworkingHub = () => {
   };
 
   // Fetch success stories
-  const fetchSuccessStories = async (page = 1, filters = {}) => {
-    setStoryLoading(true);
-    try {
-      const queryParams = new URLSearchParams({
-        page: page.toString(),
-        limit: '10',
-        ...filters
-      });
+  // Fetch success stories - FIXED VERSION
+// Fetch success stories - SIMPLIFIED FIX
+// Fetch success stories - FIXED VERSION
+const fetchSuccessStories = async (page = 1, filters = {}) => {
+  setStoryLoading(true);
+  try {
+    const queryParams = new URLSearchParams({
+      page: page.toString(),
+      limit: '10',
+      ...filters
+    });
 
-      const response = await fetch(`http://localhost:5000/api/stories?${queryParams}`, {
-        method: 'GET',
-        headers: getAuthHeaders()
-      });
+    const response = await fetch(`http://localhost:5000/api/stories?${queryParams}`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch success stories');
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        const currentUserId = getCurrentUserId();
-        
-        const storiesWithLikes = data.stories.map(story => {
-          const author = story.author || {};
-          
-          const graduationYear = author.alumniProfile?.academicInfo?.graduationYear 
-            || author.graduationYear 
-            || null;
-
-          return {
-            ...story,
-            likeCount: story.likeCount || story.likes?.length || 0,
-            isLiked: story.likes 
-              ? story.likes.some(like => 
-                  typeof like === 'object' ? like._id === currentUserId : like === currentUserId
-                )
-              : story.isLiked || false,
-            likes: story.likes || [],
-            author: {
-              _id: author._id,
-              name: author.name || 'Anonymous',
-              email: author.email,
-              role: author.role,
-              graduationYear: graduationYear,
-              profileImageUrl: getProfileImageUrl(author), // Use unified helper
-              alumniProfile: author.alumniProfile
-            }
-          };
-        });
-
-        setSuccessStories(storiesWithLikes);
-        setFilteredStories(storiesWithLikes);
-        setStoryPagination(data.pagination);
-      }
-    } catch (error) {
-      console.error('Error fetching success stories:', error);
-      toast.error('Failed to load success stories');
-    } finally {
-      setStoryLoading(false);
+    if (!response.ok) {
+      throw new Error('Failed to fetch success stories');
     }
-  };
 
+    const data = await response.json();
+    
+    if (data.success) {
+      // Use the data as returned from backend with proper author population
+      setSuccessStories(data.stories);
+      setFilteredStories(data.stories);
+      setStoryPagination(data.pagination);
+    }
+  } catch (error) {
+    console.error('Error fetching success stories:', error);
+    toast.error('Failed to load success stories');
+  } finally {
+    setStoryLoading(false);
+  }
+};
   // Create new success story
   const createSuccessStory = async (storyData) => {
     try {
@@ -330,55 +314,52 @@ const NetworkingHub = () => {
   };
 
   // Like/Unlike story
-  const toggleStoryLike = async (storyId) => {
-    try {
-      const response = await fetch(`http://localhost:5000/api/stories/${storyId}/like`, {
-        method: 'POST',
-        headers: getAuthHeaders()
-      });
+  // Like/Unlike story - REVERT TO WORKING VERSION
+const toggleStoryLike = async (storyId) => {
+  try {
+    const response = await fetch(`http://localhost:5000/api/stories/${storyId}/like`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
 
-      if (!response.ok) {
-        throw new Error('Failed to update like');
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        const currentUserId = getCurrentUserId();
-        
-        const updateStoryInState = (story) => {
-          if (story._id === storyId) {
-            return {
-              ...story,
-              likeCount: data.likeCount,
-              isLiked: data.isLiked,
-              likes: data.isLiked 
-                ? [...(story.likes || []), currentUserId].filter(Boolean)
-                : (story.likes || []).filter(id => id !== currentUserId)
-            };
-          }
-          return story;
-        };
-
-        setSuccessStories(prev => prev.map(updateStoryInState));
-        setFilteredStories(prev => prev.map(updateStoryInState));
-        
-        if (selectedStory && selectedStory._id === storyId) {
-          setSelectedStory(prev => ({
-            ...prev,
-            likeCount: data.likeCount,
-            isLiked: data.isLiked,
-            likes: data.isLiked 
-              ? [...(prev.likes || []), currentUserId].filter(Boolean)
-              : (prev.likes || []).filter(id => id !== currentUserId)
-          }));
-        }
-      }
-    } catch (error) {
-      console.error('Error toggling like:', error);
-      toast.error('Failed to update like');
+    if (!response.ok) {
+      throw new Error('Failed to update like');
     }
-  };
+
+    const data = await response.json();
+    
+    if (data.success) {
+      // Update the story in both states
+      const updateStory = (story) => {
+        if (story._id === storyId) {
+          return {
+            ...story,
+            likeCount: data.likeCount,
+            isLiked: data.isLiked
+          };
+        }
+        return story;
+      };
+
+      setSuccessStories(prev => prev.map(updateStory));
+      setFilteredStories(prev => prev.map(updateStory));
+      
+      // Update the selected story if it's open
+      if (selectedStory && selectedStory._id === storyId) {
+        setSelectedStory(prev => ({
+          ...prev,
+          likeCount: data.likeCount,
+          isLiked: data.isLiked
+        }));
+      }
+      
+      toast.success(data.isLiked ? 'Story liked!' : 'Story unliked!');
+    }
+  } catch (error) {
+    console.error('Error toggling like:', error);
+    toast.error('Failed to update like');
+  }
+};
 
   // Fetch single story
   const fetchStoryById = async (storyId) => {
@@ -1260,268 +1241,295 @@ const NetworkingHub = () => {
   };
 
   // StoryCard Component
-  const StoryCard = ({ story, onLike, onOpen }) => {
-    const categoryNames = {
-      'career': 'Career Growth',
-      'entrepreneurship': 'Entrepreneurship',
-      'education': 'Higher Education',
-      'innovation': 'Innovation & Research',
-      'leadership': 'Leadership',
-      'social-impact': 'Social Impact'
-    };
+ // StoryCard Component - FIXED VERSION
+// StoryCard Component - WITH DEBUGGING
+// StoryCard Component - FIXED VERSION
+const StoryCard = ({ story, onLike, onOpen }) => {
+  const categoryNames = {
+    'career': 'Career Growth',
+    'entrepreneurship': 'Entrepreneurship',
+    'education': 'Higher Education',
+    'innovation': 'Innovation & Research',
+    'leadership': 'Leadership',
+    'social-impact': 'Social Impact'
+  };
 
-    const formatDate = (dateString) => {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    };
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
 
-    const getGraduationText = () => {
-      if (!story.author?.graduationYear) return '';
-      return ` • Class of ${story.author.graduationYear}`;
-    };
+  const author = story.author || {};
+  const profileImageUrl = getProfileImageUrl(author);
+  const displayName = author.name || 'Anonymous';
 
-    const profileImageUrl = getProfileImageUrl(story.author);
-    const displayName = getDisplayName(story.author);
-
-    return (
-      <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center">
-            <div className="relative">
-              {profileImageUrl ? (
-                <img 
-                  src={profileImageUrl} 
-                  alt={displayName}
-                  className="w-12 h-12 rounded-full object-cover mr-4"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    const fallback = e.target.parentNode.querySelector('.author-fallback');
-                    if (fallback) fallback.style.display = 'flex';
-                  }}
-                />
-              ) : null}
-              <div 
-                className="author-fallback bg-blue-100 rounded-full w-12 h-12 flex items-center justify-center mr-4"
-                style={{ display: profileImageUrl ? 'none' : 'flex' }}
-              >
+  return (
+    <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center">
+          <div className="relative">
+            {profileImageUrl ? (
+              <img 
+                src={profileImageUrl} 
+                alt={displayName}
+                className="w-12 h-12 rounded-full object-cover mr-4"
+              />
+            ) : (
+              <div className="bg-blue-100 rounded-full w-12 h-12 flex items-center justify-center mr-4">
                 <span className="text-blue-600 font-semibold text-lg">
                   {displayName.charAt(0).toUpperCase()}
                 </span>
               </div>
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900">{displayName}</h3>
-              <p className="text-sm text-gray-600">
-                {story.author?.role === 'alumni' ? 'Alumni' : 'Student'}
-                {getGraduationText()}
-              </p>
-              <p className="text-xs text-gray-500">{formatDate(story.createdAt)}</p>
-            </div>
+            )}
           </div>
-          <div className="text-right">
-            <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-              {categoryNames[story.category]}
-            </span>
+          <div>
+            <h3 className="font-semibold text-gray-900">{displayName}</h3>
+            <p className="text-sm text-gray-600">
+              {author?.role === 'alumni' ? 'Alumni' : 'Student'}
+              {author?.graduationYear && ` • Class of ${author.graduationYear}`}
+            </p>
+            <p className="text-xs text-gray-500">{formatDate(story.createdAt)}</p>
           </div>
         </div>
         
-        <h2 
-          className="text-xl font-bold text-gray-900 mb-3 hover:text-blue-600 cursor-pointer"
-          onClick={() => onOpen(story._id)}
-        >
-          {story.title}
-        </h2>
-        
-        <p className="text-gray-700 mb-4 line-clamp-3">
-          {story.content.length > 200 ? `${story.content.substring(0, 200)}...` : story.content}
-        </p>
-        
-        {story.tags && story.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            {story.tags.map((tag, index) => (
-              <span key={index} className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs">
-                #{tag}
-              </span>
-            ))}
-          </div>
-        )}
-        
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <button 
-              onClick={() => onLike(story._id)} 
-              className={`flex items-center space-x-2 transition-colors ${
-                story.isLiked ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'
-              }`}
-            >
-              <svg 
-                className={`w-5 h-5 ${story.isLiked ? 'fill-current' : ''}`} 
-                fill={story.isLiked ? "currentColor" : "none"} 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round" 
-                  strokeWidth="2" 
-                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" 
-                />
-              </svg>
-              <span className={story.isLiked ? 'font-medium' : ''}>
-                {story.likeCount || 0} {story.likeCount === 1 ? 'like' : 'likes'}
-              </span>
-            </button>
-            <span className="text-sm text-gray-500">{story.views || 0} views</span>
-          </div>
-          <button 
-            onClick={() => onOpen(story._id)} 
-            className="text-blue-600 hover:text-blue-800 font-medium text-sm"
-          >
-            Read Full Story →
-          </button>
-        </div>
+        <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+          {categoryNames[story.category] || 'Uncategorized'}
+        </span>
       </div>
-    );
+      
+      <h2 
+        className="text-xl font-bold text-gray-900 mb-3 hover:text-blue-600 cursor-pointer"
+        onClick={() => onOpen(story._id)}
+      >
+        {story.title}
+      </h2>
+      
+      <p className="text-gray-700 mb-4 line-clamp-3">
+        {story.content.length > 200 ? `${story.content.substring(0, 200)}...` : story.content}
+      </p>
+      
+      {story.tags && story.tags.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {story.tags.map((tag, index) => (
+            <span key={index} className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs">
+              #{tag}
+            </span>
+          ))}
+        </div>
+      )}
+      
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <button 
+            onClick={() => onLike(story._id)} 
+            className={`flex items-center space-x-2 transition-colors ${
+              story.isLiked ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'
+            }`}
+          >
+            <svg 
+              className={`w-5 h-5 ${story.isLiked ? 'fill-current' : ''}`} 
+              fill={story.isLiked ? "currentColor" : "none"} 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth="2" 
+                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" 
+              />
+            </svg>
+            <span className={story.isLiked ? 'font-medium' : ''}>
+              {story.likeCount || 0} {story.likeCount === 1 ? 'like' : 'likes'}
+            </span>
+          </button>
+          <span className="text-sm text-gray-500">{story.views || 0} views</span>
+        </div>
+        <button 
+          onClick={() => onOpen(story._id)} 
+          className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+        >
+          Read Full Story →
+        </button>
+      </div>
+    </div>
+  );
+};
+  // StoryModal Component
+  // StoryModal Component - COMPLETE FIXED VERSION
+// StoryModal Component - FIXED VERSION (without About Author section)
+const StoryModal = ({ story, onClose, onLike }) => {
+  const categoryNames = {
+    'career': 'Career Growth',
+    'entrepreneurship': 'Entrepreneurship',
+    'education': 'Higher Education',
+    'innovation': 'Innovation & Research',
+    'leadership': 'Leadership',
+    'social-impact': 'Social Impact'
   };
 
-  // StoryModal Component
-  const StoryModal = ({ story, onClose, onLike }) => {
-    const categoryNames = {
-      'career': 'Career Growth',
-      'entrepreneurship': 'Entrepreneurship',
-      'education': 'Higher Education',
-      'innovation': 'Innovation & Research',
-      'leadership': 'Leadership',
-      'social-impact': 'Social Impact'
-    };
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
 
-    const formatDate = (dateString) => {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    };
+  // Safely get author info with fallbacks
+  const author = story.author || {};
+  const profileImageUrl = getProfileImageUrl(author);
+  const displayName = getDisplayName(author);
 
-    const getGraduationText = () => {
-      if (!story.author?.graduationYear) return '';
-      return ` • Class of ${story.author.graduationYear}`;
-    };
+  const getGraduationText = () => {
+    if (!author.graduationYear) return '';
+    return ` • Class of ${author.graduationYear}`;
+  };
 
-    const profileImageUrl = getProfileImageUrl(story.author);
-    const displayName = getDisplayName(story.author);
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-        <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-          <div className="p-6">
-            <div className="flex justify-between items-start mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Success Story</h2>
-              <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl">
-                ×
-              </button>
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6">
+          <div className="flex justify-between items-start mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">Success Story</h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl p-2">
+              ×
+            </button>
+          </div>
+          
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                {categoryNames[story.category] || 'Uncategorized'}
+              </span>
+              <span className="text-sm text-gray-500">{formatDate(story.createdAt)}</span>
             </div>
             
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                  {categoryNames[story.category]}
-                </span>
-                <span className="text-sm text-gray-500">{formatDate(story.createdAt)}</span>
-              </div>
-              
-              <h1 className="text-3xl font-bold text-gray-900 mb-6">{story.title}</h1>
-              
-              <div className="flex items-center mb-6">
-                <div className="relative">
-                  {profileImageUrl ? (
-                    <img 
-                      src={profileImageUrl} 
-                      alt={displayName}
-                      className="w-16 h-16 rounded-full object-cover mr-4"
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                        const fallback = e.target.parentNode.querySelector('.author-fallback');
-                        if (fallback) fallback.style.display = 'flex';
-                      }}
-                    />
-                  ) : null}
-                  <div 
-                    className="author-fallback bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mr-4"
-                    style={{ display: profileImageUrl ? 'none' : 'flex' }}
-                  >
-                    <span className="text-blue-600 font-semibold text-xl">
-                      {displayName.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">{displayName}</h3>
-                  <p className="text-gray-600">
-                    {story.author?.role === 'alumni' ? 'Alumni' : 'Student'}
-                    {getGraduationText()}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="prose max-w-none mb-8">
-                <div className="text-gray-700 whitespace-pre-line leading-relaxed text-lg">
-                  {story.content}
-                </div>
-              </div>
-              
-              {story.tags && story.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-6">
-                  {story.tags.map((tag, index) => (
-                    <span key={index} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm">
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-              
-              <div className="flex items-center justify-between pt-6 border-t">
-                <button 
-                  onClick={() => onLike(story._id)} 
-                  className={`flex items-center space-x-2 transition-colors ${
-                    story.isLiked ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'
-                  }`}
+            <h1 className="text-3xl font-bold text-gray-900 mb-6">{story.title}</h1>
+            
+            <div className="flex items-center mb-6">
+              <div className="relative">
+                {profileImageUrl ? (
+                  <img 
+                    src={profileImageUrl} 
+                    alt={displayName}
+                    className="w-16 h-16 rounded-full object-cover mr-4"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      const fallback = e.target.parentNode.querySelector('.author-fallback');
+                      if (fallback) fallback.style.display = 'flex';
+                    }}
+                  />
+                ) : null}
+                <div 
+                  className="author-fallback bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mr-4"
+                  style={{ display: profileImageUrl ? 'none' : 'flex' }}
                 >
-                  <svg 
-                    className={`w-6 h-6 ${story.isLiked ? 'fill-current' : ''}`} 
-                    fill={story.isLiked ? "currentColor" : "none"} 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24"
-                  >
-                    <path 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      strokeWidth="2" 
-                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" 
-                    />
-                  </svg>
-                  <span className={`font-medium ${story.isLiked ? 'text-blue-600' : ''}`}>
-                    {story.likeCount || 0} people liked this story
+                  <span className="text-blue-600 font-semibold text-xl">
+                    {displayName.charAt(0).toUpperCase()}
                   </span>
-                </button>
-                
-                <div className="flex space-x-4">
-                  <span className="text-gray-500">{story.views || 0} views</span>
-                  <button className="text-blue-600 hover:text-blue-800 font-medium">
-                    Share Story
-                  </button>
                 </div>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">{displayName}</h3>
+                <p className="text-gray-600">
+                  {author?.role === 'alumni' ? 'Alumni' : 'Student'}
+                  {getGraduationText()}
+                </p>
+              </div>
+            </div>
+            
+            <div className="prose max-w-none mb-8">
+              <div className="text-gray-700 whitespace-pre-line leading-relaxed text-lg">
+                {story.content}
+              </div>
+            </div>
+            
+            {story.tags && story.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-6">
+                {story.tags.map((tag, index) => (
+                  <span key={index} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm">
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
+            
+            <div className="flex items-center justify-between pt-6 border-t">
+              <button 
+                onClick={() => onLike(story._id)} 
+                className={`flex items-center space-x-2 transition-colors ${
+                  story.isLiked ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'
+                }`}
+              >
+                <svg 
+                  className={`w-6 h-6 ${story.isLiked ? 'fill-current' : ''}`} 
+                  fill={story.isLiked ? "currentColor" : "none"} 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth="2" 
+                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" 
+                  />
+                </svg>
+                <span className={`font-medium ${story.isLiked ? 'text-blue-600' : ''}`}>
+                  {story.likeCount || 0} people liked this story
+                </span>
+              </button>
+              
+              <div className="flex space-x-4">
+                <span className="text-gray-500">{story.views || 0} views</span>
+                <button 
+                  onClick={() => {
+                    if (navigator.share) {
+                      navigator.share({
+                        title: story.title,
+                        text: story.content.substring(0, 100) + '...',
+                        url: window.location.href,
+                      });
+                    } else {
+                      navigator.clipboard.writeText(window.location.href);
+                      toast.success('Story link copied to clipboard!');
+                    }
+                  }}
+                  className="text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Share Story
+                </button>
               </div>
             </div>
           </div>
+
+          {/* REMOVED: About the Author section */}
+
+          {/* Action Buttons */}
+          <div className="flex justify-end space-x-4 mt-8 pt-6 border-t">
+            <button 
+              onClick={onClose}
+              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Close
+            </button>
+            <button 
+              onClick={() => {
+                toast.info('Message feature will be implemented soon');
+              }}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Contact Author
+            </button>
+          </div>
         </div>
       </div>
-    );
-  };
-
+    </div>
+  );
+};
   // Render Alumni Directory
   const renderAlumniDirectory = () => (
     <div className="mb-8">
