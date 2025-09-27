@@ -104,36 +104,27 @@ export const getStories = async (req, res) => {
     console.log('🔍 req.user object:', req.user);
     
     // Convert stories to plain objects and add like information
-    const storiesWithLikes = stories.map(story => {
-      const storyObj = story.toObject ? story.toObject() : story;
-      
-      let isLiked = false;
-      
-      // Only check if we have a valid user ID
-      if (userId && typeof userId === 'string' && userId.length > 0) {
-        isLiked = story.likes && story.likes.length > 0
-          ? story.likes.some(likeUserId => {
-              const likeIdString = likeUserId.toString();
-              const userIdString = userId.toString();
-              const result = likeIdString === userIdString;
-              console.log(`🔍 Comparing like: ${likeIdString} === ${userIdString} = ${result}`);
-              return result;
-            })
-          : false;
-      } else {
-        console.log('⚠️  No valid user ID found, setting isLiked to false');
-        isLiked = false;
-      }
-      
-      console.log(`📖 Story: ${story.title}, isLiked: ${isLiked}, total likes: ${story.likes ? story.likes.length : 0}`);
-      
-      return {
-        ...storyObj,
-        likeCount: story.likes ? story.likes.length : 0,
-        isLiked: isLiked
-      };
-    });
-
+    // In your getStories function, ensure this part is correct:
+const storiesWithLikes = stories.map(story => {
+  const storyObj = story.toObject ? story.toObject() : story;
+  
+  let isLiked = false;
+  
+  // Only check if we have a valid user ID
+  if (userId && typeof userId === 'string' && userId.length > 0) {
+    isLiked = story.likes && story.likes.length > 0
+      ? story.likes.some(likeUserId => {
+          return likeUserId.toString() === userId.toString();
+        })
+      : false;
+  }
+  
+  return {
+    ...storyObj,
+    likeCount: story.likes ? story.likes.length : 0,
+    isLiked: isLiked // This must be a boolean
+  };
+});
     res.status(200).json({
       success: true,
       stories: storiesWithLikes,
