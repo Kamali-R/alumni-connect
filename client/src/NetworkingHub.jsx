@@ -11,11 +11,15 @@ import {
   FaGlobe, 
   FaLinkedin, 
   FaGithub, 
-  FaFile 
+  FaFile,
+  FaComments,
+  FaPlus,
+  FaThumbsUp,
+  FaReply,
+  FaEdit,
+  FaTrash
 } from 'react-icons/fa';
 
-
-// Unified helper functions for profile data
 // Enhanced unified helper functions for profile data
 const getProfileImageUrl = (user, alumniProfile = null) => {
   if (!user) return null;
@@ -100,11 +104,31 @@ const NetworkingHub = () => {
   });
   const [storyLoading, setStoryLoading] = useState(false);
 
+  const [discussions, setDiscussions] = useState([]);
+  const [filteredDiscussions, setFilteredDiscussions] = useState([]);
+  const [selectedDiscussion, setSelectedDiscussion] = useState(null);
+  const [showDiscussionForm, setShowDiscussionForm] = useState(false);
+  const [discussionFilters, setDiscussionFilters] = useState({
+    category: '',
+    search: '',
+    sortBy: 'createdAt',
+    sortOrder: 'desc'
+  });
+  const [discussionPagination, setDiscussionPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    hasNext: false,
+    hasPrev: false
+  });
+  const [replyContent, setReplyContent] = useState('');
+  const [replyingTo, setReplyingTo] = useState(null);
+
   // Navigation items
   const navItems = [
     { id: 'directory', label: 'Alumni Directory', icon: '👥' },
     { id: 'connections', label: 'My Connections', icon: '🔗' },
-    { id: 'stories', label: 'Success Stories', icon: '🌟' }
+    { id: 'stories', label: 'Success Stories', icon: '🌟' },
+    { id: 'discussions', label: 'Discussion Forum', icon: '💬' }
   ];
 
   // Helper function to get auth headers
@@ -289,6 +313,7 @@ const fetchSuccessStories = async (page = 1, filters = {}) => {
     setStoryLoading(false);
   }
 };
+
   // Create new success story
   const createSuccessStory = async (storyData) => {
     try {
@@ -427,6 +452,827 @@ const fetchStoryById = async (storyId) => {
     toast.error('Failed to load story');
   }
 };
+
+const fetchDiscussions = async (page = 1, filters = {}) => {
+    try {
+      const queryParams = new URLSearchParams({
+        page: page.toString(),
+        limit: '10',
+        ...filters
+      });
+
+      const response = await fetch(`http://localhost:5000/api/discussions?${queryParams}`, {
+        method: 'GET',
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch discussions');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setDiscussions(data.discussions);
+        setFilteredDiscussions(data.discussions);
+        setDiscussionPagination(data.pagination);
+      }
+    } catch (error) {
+      console.error('Error fetching discussions:', error);
+      toast.error('Failed to load discussions');
+    }
+  };
+
+  const fetchDiscussionById = async (discussionId) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/discussions/${discussionId}`, {
+        method: 'GET',
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch discussion');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setSelectedDiscussion(data);
+      }
+    } catch (error) {
+      console.error('Error fetching discussion:', error);
+      toast.error('Failed to load discussion');
+    }
+  };
+
+  const createDiscussion = async (discussionData) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/discussions', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(discussionData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create discussion');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        toast.success('Discussion started successfully!');
+        setShowDiscussionForm(false);
+        fetchDiscussions();
+        return true;
+      }
+    } catch (error) {
+      console.error('Error creating discussion:', error);
+      toast.error(error.message || 'Failed to start discussion');
+      return false;
+    }
+  };
+
+  const addReplyToDiscussion = async (discussionId, content, parentReplyId = null) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/discussions/${discussionId}/replies`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ content, parentReplyId })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add reply');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        toast.success('Reply added successfully!');
+        setReplyContent('');
+        setReplyingTo(null);
+        fetchDiscussionById(discussionId); // Refresh the discussion
+        return true;
+      }
+    } catch (error) {
+      console.error('Error adding reply:', error);
+      toast.error('Failed to add reply');
+      return false;
+    }
+  };
+
+  const toggleDiscussionLike = async (discussionId) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/discussions/${discussionId}/like`, {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update like');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update discussions list
+        const updateDiscussionInList = (discussion) => {
+          if (discussion._id === discussionId) {
+            return {
+              ...discussion,
+              likeCount: data.likeCount,
+              isLiked: data.isLiked
+            };
+          }
+          return discussion;
+        };
+
+        setDiscussions(prev => prev.map(updateDiscussionInList));
+        setFilteredDiscussions(prev => prev.map(updateDiscussionInList));
+        
+        // Update selected discussion if it's currently open
+        if (selectedDiscussion && selectedDiscussion.discussion._id === discussionId) {
+          setSelectedDiscussion(prev => ({
+            ...prev,
+            discussion: {
+              ...prev.discussion,
+              likeCount: data.likeCount,
+              isLiked: data.isLiked
+            }
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling discussion like:', error);
+      toast.error('Failed to update like');
+    }
+  };
+
+  const toggleReplyLike = async (replyId) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/replies/${replyId}/like`, {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update reply like');
+      }
+
+      const data = await response.json();
+      
+      if (data.success && selectedDiscussion) {
+        const updatedReplies = selectedDiscussion.replies.map(reply => {
+          if (reply._id === replyId) {
+            return {
+              ...reply,
+              likeCount: data.likeCount,
+              isLiked: data.isLiked
+            };
+          }
+          return reply;
+        });
+
+        setSelectedDiscussion(prev => ({
+          ...prev,
+          replies: updatedReplies
+        }));
+      }
+    } catch (error) {
+      console.error('Error toggling reply like:', error);
+      toast.error('Failed to update like');
+    }
+  };
+
+  // Discussion form submission
+  const handleDiscussionSubmit = async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const discussionData = {
+      title: formData.get('title'),
+      content: formData.get('content'),
+      category: formData.get('category'),
+      tags: formData.get('tags') ? formData.get('tags').split(',').map(tag => tag.trim()) : []
+    };
+
+    const success = await createDiscussion(discussionData);
+    if (success) {
+      e.target.reset();
+    }
+  };
+
+  // Reply form submission
+  const handleReplySubmit = async (e) => {
+    e.preventDefault();
+    if (!replyContent.trim()) {
+      toast.error('Please enter a reply');
+      return;
+    }
+
+    const success = await addReplyToDiscussion(
+      selectedDiscussion.discussion._id, 
+      replyContent, 
+      replyingTo
+    );
+    
+    if (success) {
+      e.target.reset();
+    }
+  };
+
+  // Discussion Card Component
+  const DiscussionCard = ({ discussion, onOpen, onLike }) => {
+    const categoryNames = {
+      'career': 'Career Advice',
+      'industry': 'Industry Insights',
+      'networking': 'Networking',
+      'education': 'Education',
+      'technology': 'Technology',
+      'general': 'General Discussion'
+    };
+
+    const author = discussion.author || {};
+    const profileImageUrl = getProfileImageUrl(author);
+    const displayName = getDisplayName(author);
+    const isCurrentUser = author._id === getCurrentUserId();
+
+    return (
+      <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow cursor-pointer" onClick={() => onOpen(discussion._id)}>
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center">
+            <div className="relative">
+              {profileImageUrl ? (
+                <img 
+                  src={profileImageUrl} 
+                  alt={displayName}
+                  className="w-12 h-12 rounded-full object-cover mr-4"
+                />
+              ) : (
+                <div className="bg-blue-100 rounded-full w-12 h-12 flex items-center justify-center mr-4">
+                  <span className="text-blue-600 font-semibold text-lg">
+                    {displayName.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900">
+                {isCurrentUser ? 'You' : displayName}
+              </h3>
+              <p className="text-sm text-gray-600">
+                {author?.role === 'alumni' ? 'Alumni' : 'Student'}
+                {author?.graduationYear && ` • Class of ${author.graduationYear}`}
+              </p>
+              <p className="text-xs text-gray-500">
+                {new Date(discussion.createdAt).toLocaleDateString()}
+              </p>
+            </div>
+          </div>
+          
+          <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+            {categoryNames[discussion.category] || 'Discussion'}
+          </span>
+        </div>
+        
+        <h2 className="text-xl font-bold text-gray-900 mb-3 hover:text-blue-600">
+          {discussion.title}
+        </h2>
+        
+        <p className="text-gray-700 mb-4 line-clamp-3">
+          {discussion.content.length > 200 ? `${discussion.content.substring(0, 200)}...` : discussion.content}
+        </p>
+        
+        {discussion.tags && discussion.tags.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {discussion.tags.map((tag, index) => (
+              <span key={index} className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs">
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
+        
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                onLike(discussion._id);
+              }} 
+              className={`flex items-center space-x-2 transition-colors ${
+                discussion.isLiked ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'
+              }`}
+            >
+              <FaThumbsUp className={discussion.isLiked ? 'fill-current' : ''} />
+              <span>{discussion.likeCount} likes</span>
+            </button>
+            <span className="flex items-center space-x-2 text-gray-600">
+              <FaComments />
+              <span>{discussion.replyCount || 0} replies</span>
+            </span>
+            <span className="text-sm text-gray-500">{discussion.views} views</span>
+          </div>
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen(discussion._id);
+            }} 
+            className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+          >
+            Join Discussion →
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Discussion Detail Component
+  const DiscussionDetail = ({ discussionData, onBack, onLike, onReplyLike, onAddReply }) => {
+    const discussion = discussionData.discussion;
+    const replies = discussionData.replies || [];
+    
+    const categoryNames = {
+      'career': 'Career Advice',
+      'industry': 'Industry Insights',
+      'networking': 'Networking',
+      'education': 'Education',
+      'technology': 'Technology',
+      'general': 'General Discussion'
+    };
+
+    const author = discussion.author || {};
+    const profileImageUrl = getProfileImageUrl(author);
+    const displayName = getDisplayName(author);
+    const isCurrentUser = author._id === getCurrentUserId();
+
+    const renderReplies = (repliesList, parentId = null, depth = 0) => {
+      const threadReplies = repliesList.filter(reply => 
+        (reply.parentReply?._id || null) === parentId
+      );
+
+      return threadReplies.map((reply) => {
+        const replyAuthor = reply.author || {};
+        const replyProfileImageUrl = getProfileImageUrl(replyAuthor);
+        const replyDisplayName = getDisplayName(replyAuthor);
+        const isReplyCurrentUser = replyAuthor._id === getCurrentUserId();
+
+        return (
+          <div key={reply._id} className={`ml-${depth * 6} mt-4`}>
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center">
+                  <div className="relative">
+                    {replyProfileImageUrl ? (
+                      <img 
+                        src={replyProfileImageUrl} 
+                        alt={replyDisplayName}
+                        className="w-8 h-8 rounded-full object-cover mr-3"
+                      />
+                    ) : (
+                      <div className="bg-green-100 rounded-full w-8 h-8 flex items-center justify-center mr-3">
+                        <span className="text-green-600 font-semibold text-sm">
+                          {replyDisplayName.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-900">
+                      {isReplyCurrentUser ? 'You' : replyDisplayName}
+                      {reply.parentReply && (
+                        <span className="text-gray-500 text-sm ml-2">
+                          → replying to {reply.parentReply.author?.name}
+                        </span>
+                      )}
+                    </h4>
+                    <p className="text-xs text-gray-500">
+                      {new Date(reply.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+                
+                <button 
+                  onClick={() => onReplyLike(reply._id)}
+                  className={`flex items-center space-x-1 ${
+                    reply.isLiked ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'
+                  }`}
+                >
+                  <FaThumbsUp className={reply.isLiked ? 'fill-current' : ''} size={14} />
+                  <span className="text-sm">{reply.likeCount}</span>
+                </button>
+              </div>
+              
+              <p className="text-gray-700 ml-11">{reply.content}</p>
+              
+              <div className="flex justify-end mt-2">
+                <button 
+                  onClick={() => setReplyingTo(reply._id)}
+                  className="text-blue-600 hover:text-blue-800 text-sm flex items-center"
+                >
+                  <FaReply className="mr-1" size={12} />
+                  Reply
+                </button>
+              </div>
+            </div>
+            
+            {/* Nested replies */}
+            {renderReplies(repliesList, reply._id, depth + 1)}
+          </div>
+        );
+      });
+    };
+
+    return (
+      <div className="bg-white rounded-xl shadow-sm p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">Discussion</h2>
+          <button onClick={onBack} className="text-blue-600 hover:text-blue-800 font-medium">
+            ← Back to Discussions
+          </button>
+        </div>
+        
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+              {categoryNames[discussion.category] || 'Discussion'}
+            </span>
+            <span className="text-sm text-gray-500">
+              {new Date(discussion.createdAt).toLocaleDateString()}
+            </span>
+          </div>
+          
+          <div className="flex items-start mb-6">
+            <div className="relative">
+              {profileImageUrl ? (
+                <img 
+                  src={profileImageUrl} 
+                  alt={displayName}
+                  className="w-16 h-16 rounded-full object-cover mr-4"
+                />
+              ) : (
+                <div className="bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mr-4">
+                  <span className="text-blue-600 font-semibold text-xl">
+                    {displayName.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">{discussion.title}</h1>
+              <div className="flex items-center text-gray-600">
+                <span className="font-medium">{isCurrentUser ? 'You' : displayName}</span>
+                <span className="mx-2">•</span>
+                <span>{author?.role === 'alumni' ? 'Alumni' : 'Student'}</span>
+                {author?.graduationYear && (
+                  <>
+                    <span className="mx-2">•</span>
+                    <span>Class of {author.graduationYear}</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          <div className="prose max-w-none mb-6">
+            <div className="text-gray-700 whitespace-pre-line leading-relaxed text-lg">
+              {discussion.content}
+            </div>
+          </div>
+          
+          {discussion.tags && discussion.tags.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-6">
+              {discussion.tags.map((tag, index) => (
+                <span key={index} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm">
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
+          
+          <div className="flex items-center justify-between pt-6 border-t">
+            <button 
+              onClick={() => onLike(discussion._id)}
+              className={`flex items-center space-x-2 transition-colors ${
+                discussion.isLiked ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'
+              }`}
+            >
+              <FaThumbsUp className={discussion.isLiked ? 'fill-current' : ''} />
+              <span className="font-medium">
+                {discussion.likeCount} {discussion.likeCount === 1 ? 'like' : 'likes'}
+              </span>
+            </button>
+            
+            <div className="flex space-x-4">
+              <span className="text-gray-500">{discussion.views} views</span>
+              <span className="text-gray-500">{replies.length} replies</span>
+            </div>
+          </div>
+        </div>
+        
+        {/* Reply Form */}
+        <div className="mb-8">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            {replyingTo ? 'Reply to Comment' : 'Add a Reply'}
+          </h3>
+          <form onSubmit={handleReplySubmit}>
+            <textarea
+              value={replyContent}
+              onChange={(e) => setReplyContent(e.target.value)}
+              placeholder={replyingTo ? 'Write your reply...' : 'Share your thoughts...'}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-3"
+              rows="4"
+              required
+            />
+            <div className="flex justify-between">
+              {replyingTo && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReplyingTo(null);
+                    setReplyContent('');
+                  }}
+                  className="text-gray-600 hover:text-gray-800 font-medium"
+                >
+                  Cancel Reply
+                </button>
+              )}
+              <div className="flex space-x-3 ml-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReplyingTo(null);
+                    setReplyContent('');
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Post Reply
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+        
+        {/* Replies Section */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Replies ({replies.length})
+          </h3>
+          <div className="space-y-4">
+            {replies.length > 0 ? (
+              renderReplies(replies)
+            ) : (
+              <p className="text-gray-500 text-center py-8">No replies yet. Be the first to reply!</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render Discussion Forum
+  const renderDiscussionForum = () => (
+    <div className="mb-8">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Discussion Forum</h2>
+        <p className="text-gray-600">Start conversations and engage with the community</p>
+      </div>
+      
+      {!selectedDiscussion ? (
+        <>
+          {/* Discussion List View */}
+          <div className="mb-6">
+            <button 
+              onClick={() => setShowDiscussionForm(true)} 
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium flex items-center"
+            >
+              <FaPlus className="mr-2" />
+              Start New Discussion
+            </button>
+          </div>
+          
+          {/* Discussion Filters */}
+          <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+            <div className="flex flex-wrap gap-4 items-center">
+              <label className="text-sm font-medium text-gray-700">Filter by category:</label>
+              <select 
+                value={discussionFilters.category}
+                onChange={(e) => setDiscussionFilters(prev => ({ ...prev, category: e.target.value }))}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">All Categories</option>
+                <option value="career">Career Advice</option>
+                <option value="industry">Industry Insights</option>
+                <option value="networking">Networking</option>
+                <option value="education">Education</option>
+                <option value="technology">Technology</option>
+                <option value="general">General Discussion</option>
+              </select>
+              
+              <input 
+                type="text" 
+                value={discussionFilters.search}
+                onChange={(e) => setDiscussionFilters(prev => ({ ...prev, search: e.target.value }))}
+                placeholder="Search discussions..." 
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+              />
+              
+              <select 
+                value={discussionFilters.sortBy}
+                onChange={(e) => setDiscussionFilters(prev => ({ ...prev, sortBy: e.target.value }))}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="createdAt">Newest</option>
+                <option value="likeCount">Most Liked</option>
+                <option value="replyCount">Most Active</option>
+                <option value="views">Most Viewed</option>
+              </select>
+              
+              <button 
+                onClick={() => setDiscussionFilters({ category: '', search: '', sortBy: 'createdAt', sortOrder: 'desc' })}
+                className="text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Clear Filters
+              </button>
+            </div>
+          </div>
+          
+          {/* Add Discussion Form */}
+          {showDiscussionForm && (
+            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+              <h3 className="text-xl font-semibold text-gray-900 mb-4">Start a New Discussion</h3>
+              <form onSubmit={handleDiscussionSubmit}>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Discussion Title *</label>
+                  <input 
+                    type="text" 
+                    name="title" 
+                    required 
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                    placeholder="What would you like to discuss?" 
+                  />
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+                    <select 
+                      name="category" 
+                      required 
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Select Category</option>
+                      <option value="career">Career Advice</option>
+                      <option value="industry">Industry Insights</option>
+                      <option value="networking">Networking</option>
+                      <option value="education">Education</option>
+                      <option value="technology">Technology</option>
+                      <option value="general">General Discussion</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Tags (comma separated)</label>
+                    <input 
+                      type="text" 
+                      name="tags" 
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                      placeholder="e.g., career-growth, technology, advice" 
+                    />
+                  </div>
+                </div>
+                
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Your Discussion *</label>
+                  <textarea 
+                    name="content" 
+                    required 
+                    rows="6" 
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                    placeholder="Share your thoughts, questions, or insights..."
+                  ></textarea>
+                </div>
+                
+                <div className="flex space-x-4">
+                  <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium">
+                    Start Discussion
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowDiscussionForm(false)} 
+                    className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-6 py-2 rounded-lg font-medium"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+          
+          {/* Discussions List */}
+          <div className="space-y-6">
+            {filteredDiscussions.map(discussion => (
+              <DiscussionCard 
+                key={discussion._id} 
+                discussion={discussion} 
+                onOpen={fetchDiscussionById}
+                onLike={toggleDiscussionLike}
+              />
+            ))}
+          </div>
+          
+          {filteredDiscussions.length === 0 && (
+            <div className="text-center py-8">
+              <FaComments className="mx-auto text-gray-400 text-4xl mb-4" />
+              <p className="text-gray-500">No discussions found matching your criteria.</p>
+              <button 
+                onClick={() => setShowDiscussionForm(true)} 
+                className="text-blue-600 hover:text-blue-800 font-medium mt-2"
+              >
+                Start the first discussion!
+              </button>
+            </div>
+          )}
+          
+          {/* Pagination */}
+          {discussionPagination.totalPages > 1 && (
+            <div className="flex justify-center items-center space-x-4 mt-8">
+              <button
+                onClick={() => fetchDiscussions(discussionPagination.currentPage - 1, discussionFilters)}
+                disabled={!discussionPagination.hasPrev}
+                className={`px-4 py-2 rounded-lg ${
+                  discussionPagination.hasPrev 
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                Previous
+              </button>
+              
+              <span className="text-gray-600">
+                Page {discussionPagination.currentPage} of {discussionPagination.totalPages}
+              </span>
+              
+              <button
+                onClick={() => fetchDiscussions(discussionPagination.currentPage + 1, discussionFilters)}
+                disabled={!discussionPagination.hasNext}
+                className={`px-4 py-2 rounded-lg ${
+                  discussionPagination.hasNext 
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </>
+      ) : (
+        /* Discussion Detail View */
+        <DiscussionDetail 
+          discussionData={selectedDiscussion}
+          onBack={() => setSelectedDiscussion(null)}
+          onLike={toggleDiscussionLike}
+          onReplyLike={toggleReplyLike}
+          onAddReply={addReplyToDiscussion}
+        />
+      )}
+    </div>
+  );
+
+  // Update your useEffect to include discussions
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast.error('Please login first');
+      return;
+    }
+
+    if (activeSection === 'directory') {
+      fetchAlumniDirectory();
+    } else if (activeSection === 'connections') {
+      fetchConnectionRequests();
+      fetchMyConnections();
+    } else if (activeSection === 'stories') {
+      fetchSuccessStories();
+    } else if (activeSection === 'discussions') {
+      fetchDiscussions();
+    }
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (activeSection === 'discussions') {
+      fetchDiscussions(1, discussionFilters);
+    }
+  }, [discussionFilters, activeSection]);
+
+  // Update your render method to include discussions
+  
   // Enhanced filter function
   const applyAlumniFilters = () => {
     let filtered = alumniData;
@@ -2123,6 +2969,7 @@ useEffect(() => {
         {activeSection === 'directory' && renderAlumniDirectory()}
         {activeSection === 'connections' && renderConnections()}
         {activeSection === 'stories' && renderSuccessStories()}
+        {activeSection === 'discussions' && renderDiscussionForum()}
       </div>
 
       <ProfileModal profile={selectedProfile} onClose={handleCloseProfile} />

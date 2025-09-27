@@ -13,6 +13,8 @@ import contactRoutes from './routes/contactRoutes.js';
 import jobRoutes from './routes/jobRoutes.js';
 import networkingRoutes from './routes/networkingRoutes.js';
 import successStoryRoutes from './routes/successStoryRoutes.js';
+import discussionRoutes from './routes/discussionRoutes.js';
+
 // Load Google OAuth config
 import './config/googleAuth.js';
 import path from 'path';
@@ -75,7 +77,7 @@ app.use('/api', alumniRoutes);              // Alumni profile routes
 app.use('/api', jobRoutes);                 // Job routes
 app.use('/api', networkingRoutes);
 app.use('/api', successStoryRoutes);
-
+app.use('/api', discussionRoutes);
 
 app.delete('/api/debug/fix-connections-completely', async (req, res) => {
   try {
