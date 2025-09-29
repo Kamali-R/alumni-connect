@@ -1,3 +1,5 @@
+// Fixed successStoryController.js
+
 import SuccessStory from '../models/SuccessStory.js';
 import User from '../models/User.js';
 import Alumni from '../models/Alumni.js';
@@ -27,8 +29,15 @@ export const createStory = async (req, res) => {
 
     await story.save();
 
-    // Populate author details for response
-    await story.populate('author', 'name email role graduationYear');
+    // FIXED: Populate author details with alumni profile
+    await story.populate({
+      path: 'author',
+      select: 'name email role graduationYear profileImage',
+      populate: {
+        path: 'alumniProfile',
+        select: 'profileImage personalInfo academicInfo'
+      }
+    });
 
     res.status(201).json({
       success: true,
@@ -46,8 +55,7 @@ export const createStory = async (req, res) => {
   }
 };
 
-// Get all success stories with pagination and filters - CORRECTED VERSION
-// In successStoryController.js - FIXED getStories function
+// FIXED: Get all success stories with proper population
 export const getStories = async (req, res) => {
   try {
     const {
@@ -83,10 +91,11 @@ export const getStories = async (req, res) => {
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
+    // FIXED: Proper population with alumni profile
     const stories = await SuccessStory.find(query)
       .populate({
         path: 'author',
-        select: 'name email role graduationYear profileImage alumniProfile',
+        select: 'name email role graduationYear profileImage',
         populate: {
           path: 'alumniProfile',
           select: 'profileImage personalInfo academicInfo careerStatus'
@@ -98,33 +107,55 @@ export const getStories = async (req, res) => {
 
     const total = await SuccessStory.countDocuments(query);
 
-    // FIXED: Better debugging and error handling
     const userId = req.user?.id;
-    console.log('🔍 Current user ID in getStories:', userId);
-    console.log('🔍 req.user object:', req.user);
     
-    // Convert stories to plain objects and add like information
-    // In your getStories function, ensure this part is correct:
-const storiesWithLikes = stories.map(story => {
-  const storyObj = story.toObject ? story.toObject() : story;
-  
-  let isLiked = false;
-  
-  // Only check if we have a valid user ID
-  if (userId && typeof userId === 'string' && userId.length > 0) {
-    isLiked = story.likes && story.likes.length > 0
-      ? story.likes.some(likeUserId => {
-          return likeUserId.toString() === userId.toString();
-        })
-      : false;
-  }
-  
-  return {
-    ...storyObj,
-    likeCount: story.likes ? story.likes.length : 0,
-    isLiked: isLiked // This must be a boolean
-  };
-});
+    // FIXED: Enhanced stories with proper graduation year resolution
+    const storiesWithLikes = stories.map(story => {
+      const storyObj = story.toObject ? story.toObject() : story;
+      
+      // Enhanced author data processing
+      if (storyObj.author) {
+        // Resolve graduation year from multiple sources
+        const graduationYear = storyObj.author.alumniProfile?.academicInfo?.graduationYear ||
+                              storyObj.author.graduationYear ||
+                              null;
+        
+        // Resolve role properly
+        const role = storyObj.author.role === 'alumni' || storyObj.author.alumniProfile 
+                    ? 'alumni' 
+                    : storyObj.author.role || 'student';
+
+        // Enhanced profile image handling
+        const profileImage = storyObj.author.alumniProfile?.profileImage || 
+                            storyObj.author.profileImage ||
+                            null;
+
+        // Update author object with resolved data
+        storyObj.author = {
+          ...storyObj.author,
+          graduationYear: graduationYear,
+          role: role,
+          profileImage: profileImage
+        };
+      }
+      
+      let isLiked = false;
+      
+      if (userId && typeof userId === 'string' && userId.length > 0) {
+        isLiked = story.likes && story.likes.length > 0
+          ? story.likes.some(likeUserId => {
+              return likeUserId.toString() === userId.toString();
+            })
+          : false;
+      }
+      
+      return {
+        ...storyObj,
+        likeCount: story.likes ? story.likes.length : 0,
+        isLiked: isLiked
+      };
+    });
+
     res.status(200).json({
       success: true,
       stories: storiesWithLikes,
@@ -146,20 +177,18 @@ const storiesWithLikes = stories.map(story => {
     });
   }
 };
-// Get single story by ID - CORRECTED VERSION
-// In successStoryController.js - FIXED getStoryById function
+
+// FIXED: Get single story by ID with proper population
 export const getStoryById = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id;
 
-    console.log('🔍 Single story - User ID:', userId);
-    console.log('🔍 Single story - req.user:', req.user);
-
+    // FIXED: Proper population with alumni profile
     const story = await SuccessStory.findById(id)
       .populate({
         path: 'author',
-        select: 'name email role graduationYear profileImage alumniProfile',
+        select: 'name email role graduationYear profileImage',
         populate: {
           path: 'alumniProfile',
           select: 'profileImage personalInfo academicInfo careerStatus'
@@ -179,7 +208,6 @@ export const getStoryById = async (req, res) => {
 
     let isLiked = false;
     
-    // Only check if we have a valid user ID
     if (userId && typeof userId === 'string' && userId.length > 0) {
       isLiked = story.likes && story.likes.length > 0
         ? story.likes.some(likeUserId => {
@@ -188,7 +216,28 @@ export const getStoryById = async (req, res) => {
         : false;
     }
 
-    console.log(`📖 Single story: ${story.title}, isLiked: ${isLiked}, userId: ${userId}`);
+    // FIXED: Enhanced author data processing
+    let processedAuthor = story.author;
+    if (story.author) {
+      const graduationYear = story.author.alumniProfile?.academicInfo?.graduationYear ||
+                            story.author.graduationYear ||
+                            null;
+      
+      const role = story.author.role === 'alumni' || story.author.alumniProfile 
+                  ? 'alumni' 
+                  : story.author.role || 'student';
+
+      const profileImage = story.author.alumniProfile?.profileImage || 
+                          story.author.profileImage ||
+                          null;
+
+      processedAuthor = {
+        ...story.author.toObject(),
+        graduationYear: graduationYear,
+        role: role,
+        profileImage: profileImage
+      };
+    }
 
     // Prepare response
     const storyResponse = {
@@ -200,7 +249,7 @@ export const getStoryById = async (req, res) => {
       views: story.views,
       createdAt: story.createdAt,
       updatedAt: story.updatedAt,
-      author: story.author,
+      author: processedAuthor,
       likeCount: story.likes ? story.likes.length : 0,
       isLiked: isLiked
     };
@@ -220,7 +269,7 @@ export const getStoryById = async (req, res) => {
   }
 };
 
-// Like/Unlike a story - CORRECTED VERSION
+// Like/Unlike a story
 export const toggleLike = async (req, res) => {
   try {
     const { storyId } = req.params;
@@ -235,7 +284,6 @@ export const toggleLike = async (req, res) => {
       });
     }
 
-    // CORRECTED: Proper ObjectId comparison
     const isCurrentlyLiked = story.likes.some(likeUserId => 
       likeUserId.toString() === userId.toString()
     );
@@ -243,26 +291,22 @@ export const toggleLike = async (req, res) => {
     let message = '';
 
     if (isCurrentlyLiked) {
-      // Unlike the story - remove user from likes array
       story.likes = story.likes.filter(likeUserId => 
         likeUserId.toString() !== userId.toString()
       );
       message = 'Story unliked successfully';
     } else {
-      // Like the story - add user to likes array
       story.likes.push(userId);
       message = 'Story liked successfully';
     }
 
     await story.save();
 
-    console.log(`Toggle like result - Story: ${story.title}, isLiked: ${!isCurrentlyLiked}, likeCount: ${story.likes.length}`); // Debug log
-
     res.status(200).json({
       success: true,
       message,
       likeCount: story.likes.length,
-      isLiked: !isCurrentlyLiked // Return the new state
+      isLiked: !isCurrentlyLiked
     });
 
   } catch (error) {
@@ -282,7 +326,14 @@ export const getUserStories = async (req, res) => {
     const { page = 1, limit = 10 } = req.query;
 
     const stories = await SuccessStory.find({ author: userId })
-      .populate('author', 'name email role graduationYear')
+      .populate({
+        path: 'author',
+        select: 'name email role graduationYear',
+        populate: {
+          path: 'alumniProfile',
+          select: 'personalInfo academicInfo'
+        }
+      })
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit))
@@ -290,8 +341,17 @@ export const getUserStories = async (req, res) => {
 
     const total = await SuccessStory.countDocuments({ author: userId });
 
-    // Add like info for each story
     stories.forEach(story => {
+      // Process author data
+      if (story.author) {
+        story.author.graduationYear = story.author.alumniProfile?.academicInfo?.graduationYear ||
+                                     story.author.graduationYear ||
+                                     null;
+        story.author.role = story.author.role === 'alumni' || story.author.alumniProfile 
+                           ? 'alumni' 
+                           : story.author.role || 'student';
+      }
+      
       story.isLiked = story.likes.some(likeUserId => 
         likeUserId.toString() === userId.toString()
       );
@@ -335,7 +395,6 @@ export const updateStory = async (req, res) => {
       });
     }
 
-    // Check if user is the author
     if (story.author.toString() !== userId) {
       return res.status(403).json({
         success: false,
@@ -343,14 +402,20 @@ export const updateStory = async (req, res) => {
       });
     }
 
-    // Update story
     if (title) story.title = title;
     if (content) story.content = content;
     if (category) story.category = category;
     if (tags) story.tags = tags;
 
     await story.save();
-    await story.populate('author', 'name email role graduationYear');
+    await story.populate({
+      path: 'author',
+      select: 'name email role graduationYear',
+      populate: {
+        path: 'alumniProfile',
+        select: 'personalInfo academicInfo'
+      }
+    });
 
     res.status(200).json({
       success: true,
@@ -383,7 +448,6 @@ export const deleteStory = async (req, res) => {
       });
     }
 
-    // Check if user is the author
     if (story.author.toString() !== userId) {
       return res.status(403).json({
         success: false,

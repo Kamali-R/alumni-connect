@@ -68,7 +68,6 @@ app.get('/api/test', (req, res) => {
   });
 });
 
-
 // ✅ API Routes - CORRECTED ORDER
 app.use('/', authRoutes);                    // Auth routes (login, register, etc.)
 app.use('/api', protectedRoutes);           // General protected routes

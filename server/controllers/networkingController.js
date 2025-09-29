@@ -151,6 +151,7 @@ export const sendConnectionRequest = async (req, res) => {
 };
 
 // Get connection requests
+// Fixed getConnectionRequests function in networkingController.js
 export const getConnectionRequests = async (req, res) => {
   try {
     const currentUserId = req.user.id;
@@ -161,24 +162,50 @@ export const getConnectionRequests = async (req, res) => {
       recipientId: currentUserId,
       status: 'pending'
     })
-    .populate('requesterId', 'name email graduationYear')
+    .populate({
+      path: 'requesterId',
+      select: 'name email graduationYear role',
+      populate: {
+        path: 'alumniProfile',
+        select: 'profileImage personalInfo academicInfo'
+      }
+    })
     .sort({ requestedAt: -1 })
     .lean();
 
     console.log(`📋 Found ${pendingRequests.length} pending requests`);
 
     // Format the response
-    const formattedRequests = pendingRequests.map(request => ({
-      id: request._id,
-      person: {
-        id: request.requesterId._id,
-        name: request.requesterId.name,
-        email: request.requesterId.email,
-        graduationYear: request.requesterId.graduationYear
-      },
-      requestedAt: request.requestedAt,
-      status: request.status
-    }));
+    const formattedRequests = pendingRequests.map(request => {
+      const requester = request.requesterId;
+      
+      // FIXED: Enhanced graduation year resolution
+      const graduationYear = requester.alumniProfile?.academicInfo?.graduationYear ||
+                            requester.graduationYear ||
+                            null;
+
+      // Get profile image URL
+      const profileImageUrl = requester.alumniProfile?.profileImage 
+        ? `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${requester.alumniProfile.profileImage}`
+        : null;
+
+      return {
+        id: request._id,
+        person: {
+          id: requester._id,
+          name: requester.name,
+          email: requester.email,
+          role: requester.role || 'alumni', // FIXED: Properly set role
+          graduationYear: graduationYear, // FIXED: Use resolved graduation year
+          profileImageUrl: profileImageUrl,
+          profileImage: requester.alumniProfile?.profileImage,
+          // Add alumni profile reference for compatibility
+          alumniProfile: requester.alumniProfile
+        },
+        requestedAt: request.requestedAt,
+        status: request.status
+      };
+    });
 
     res.status(200).json({
       success: true,
@@ -194,7 +221,6 @@ export const getConnectionRequests = async (req, res) => {
     });
   }
 };
-
 // Accept connection request
 export const acceptConnection = async (req, res) => {
   try {
@@ -363,6 +389,7 @@ export const cancelConnectionRequest = async (req, res) => {
 };
 
 // Get alumni directory
+// Fixed getAlumniDirectory function in networkingController.js
 export const getAlumniDirectory = async (req, res) => {
   try {
     const currentUserId = req.user.id;
@@ -378,36 +405,82 @@ export const getAlumniDirectory = async (req, res) => {
       page, limit, search, graduationYear, branch
     });
 
-    // Build search query
-    let searchQuery = { 
+    // FIXED: Get users with alumni profiles using proper aggregation
+    let matchStage = {
       role: 'alumni',
-      _id: { $ne: currentUserId } // Exclude current user
+      _id: { $ne: new mongoose.Types.ObjectId(currentUserId) }
     };
 
     if (search && search.trim() !== '') {
       const searchRegex = { $regex: search.trim(), $options: 'i' };
-      searchQuery.$or = [
+      matchStage.$or = [
         { name: searchRegex },
         { email: searchRegex }
       ];
     }
 
+    // Build aggregation pipeline
+    const pipeline = [
+      { $match: matchStage },
+      {
+        $lookup: {
+          from: 'alumnis', // Collection name for Alumni model
+          localField: '_id',
+          foreignField: 'userId',
+          as: 'alumniProfile'
+        }
+      },
+      {
+        $unwind: {
+          path: '$alumniProfile',
+          preserveNullAndEmptyArrays: false // Only include users with alumni profiles
+        }
+      }
+    ];
+
+    // Add graduation year filter if specified
     if (graduationYear && graduationYear !== '') {
-      searchQuery.graduationYear = parseInt(graduationYear);
+      pipeline.push({
+        $match: {
+          $or: [
+            { graduationYear: parseInt(graduationYear) },
+            { 'alumniProfile.academicInfo.graduationYear': parseInt(graduationYear) }
+          ]
+        }
+      });
     }
 
-    // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    // Add branch filter if specified
+    if (branch && branch.trim() !== '') {
+      pipeline.push({
+        $match: {
+          'alumniProfile.academicInfo.branch': { 
+            $regex: branch.trim(), 
+            $options: 'i' 
+          }
+        }
+      });
+    }
 
-    // Get users with alumni profiles
-    const users = await User.find(searchQuery)
-      .populate('alumniProfile')
-      .select('-password')
-      .limit(parseInt(limit))
-      .skip(skip)
-      .sort({ name: 1 });
+    // Add pagination
+    pipeline.push(
+      { $sort: { name: 1 } },
+      { $skip: (parseInt(page) - 1) * parseInt(limit) },
+      { $limit: parseInt(limit) }
+    );
 
-    const total = await User.countDocuments(searchQuery);
+    // Execute aggregation
+    const users = await User.aggregate(pipeline);
+    
+    // Get total count for pagination
+    const countPipeline = [...pipeline];
+    countPipeline.pop(); // Remove limit
+    countPipeline.pop(); // Remove skip
+    countPipeline.pop(); // Remove sort
+    countPipeline.push({ $count: "total" });
+    
+    const countResult = await User.aggregate(countPipeline);
+    const total = countResult.length > 0 ? countResult[0].total : 0;
 
     // Get connection status for each user
     const alumniWithConnections = await Promise.all(
@@ -425,7 +498,12 @@ export const getAlumniDirectory = async (req, res) => {
           }
         }
 
-        // Enhanced profile image URL handling
+        // FIXED: Enhanced graduation year resolution
+        const graduationYear = user.alumniProfile?.academicInfo?.graduationYear || 
+                              user.graduationYear || 
+                              null;
+
+        // FIXED: Enhanced profile image URL handling
         const profileImageUrl = user.alumniProfile?.profileImage 
           ? `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${user.alumniProfile.profileImage}`
           : null;
@@ -435,9 +513,10 @@ export const getAlumniDirectory = async (req, res) => {
           userId: user._id,
           name: user.name,
           email: user.email,
-          graduationYear: user.graduationYear,
+          role: 'alumni', // Explicitly set since we filtered for alumni
+          graduationYear: graduationYear, // This should now show the updated value
           alumniProfile: user.alumniProfile,
-          profileImageUrl: profileImageUrl, // This will be used by frontend
+          profileImageUrl: profileImageUrl,
           connectionStatus,
           branch: user.alumniProfile?.academicInfo?.branch,
           company: user.alumniProfile?.careerDetails?.companyName,
@@ -445,6 +524,7 @@ export const getAlumniDirectory = async (req, res) => {
         };
       })
     );
+
     console.log(`📊 Found ${alumniWithConnections.length} alumni profiles`);
 
     res.status(200).json({
@@ -453,7 +533,7 @@ export const getAlumniDirectory = async (req, res) => {
       totalPages: Math.ceil(total / parseInt(limit)),
       currentPage: parseInt(page),
       total,
-      hasMore: skip + alumniWithConnections.length < total
+      hasMore: (parseInt(page) - 1) * parseInt(limit) + alumniWithConnections.length < total
     });
 
   } catch (error) {
@@ -465,7 +545,6 @@ export const getAlumniDirectory = async (req, res) => {
     });
   }
 };
-
 // Get my connections
 // Enhanced getMyConnections function in networkingController.js
 export const getMyConnections = async (req, res) => {
@@ -483,18 +562,18 @@ export const getMyConnections = async (req, res) => {
     })
     .populate({
       path: 'requesterId',
-      select: 'name email graduationYear',
+      select: 'name email graduationYear role',
       populate: {
         path: 'alumniProfile',
-        select: 'profileImage'
+        select: 'profileImage personalInfo academicInfo'
       }
     })
     .populate({
       path: 'recipientId', 
-      select: 'name email graduationYear',
+      select: 'name email graduationYear role',
       populate: {
         path: 'alumniProfile',
-        select: 'profileImage'
+        select: 'profileImage personalInfo academicInfo'
       }
     })
     .sort({ respondedAt: -1 });
@@ -505,6 +584,11 @@ export const getMyConnections = async (req, res) => {
     const formattedConnections = connections.map(connection => {
       const isRequester = connection.requesterId._id.toString() === currentUserId;
       const otherPerson = isRequester ? connection.recipientId : connection.requesterId;
+
+      // FIXED: Enhanced graduation year resolution
+      const graduationYear = otherPerson.alumniProfile?.academicInfo?.graduationYear ||
+                            otherPerson.graduationYear ||
+                            null;
 
       // Get profile image URL
       const profileImageUrl = otherPerson.alumniProfile?.profileImage 
@@ -517,9 +601,12 @@ export const getMyConnections = async (req, res) => {
           id: otherPerson._id,
           name: otherPerson.name,
           email: otherPerson.email,
-          graduationYear: otherPerson.graduationYear,
+          role: otherPerson.role || 'alumni', // FIXED: Properly set role
+          graduationYear: graduationYear, // FIXED: Use resolved graduation year
           profileImageUrl: profileImageUrl,
-          profileImage: otherPerson.alumniProfile?.profileImage
+          profileImage: otherPerson.alumniProfile?.profileImage,
+          // Add alumni profile reference for compatibility
+          alumniProfile: otherPerson.alumniProfile
         },
         connectedSince: connection.respondedAt,
         status: connection.status,

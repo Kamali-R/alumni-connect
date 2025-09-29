@@ -1,3 +1,4 @@
+// controllers/discussionController.js
 import Discussion from '../models/Discussion.js';
 import DiscussionReply from '../models/DiscussionReply.js';
 import User from '../models/User.js';
@@ -28,10 +29,10 @@ export const createDiscussion = async (req, res) => {
 
     await discussion.save();
 
-    // Populate author details for response
+    // FIXED: Populate author details with alumni profile
     await discussion.populate({
       path: 'author',
-      select: 'name email role graduationYear profileImage alumniProfile',
+      select: 'name email role graduationYear profileImage',
       populate: {
         path: 'alumniProfile',
         select: 'profileImage personalInfo academicInfo'
@@ -54,7 +55,7 @@ export const createDiscussion = async (req, res) => {
   }
 };
 
-// Get all discussions with pagination and filters
+// FIXED: Get all discussions with proper population
 export const getDiscussions = async (req, res) => {
   try {
     const {
@@ -87,10 +88,11 @@ export const getDiscussions = async (req, res) => {
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
+    // FIXED: Proper population with alumni profile
     const discussions = await Discussion.find(query)
       .populate({
         path: 'author',
-        select: 'name email role graduationYear profileImage alumniProfile',
+        select: 'name email role graduationYear profileImage',
         populate: {
           path: 'alumniProfile',
           select: 'profileImage personalInfo academicInfo'
@@ -103,7 +105,7 @@ export const getDiscussions = async (req, res) => {
 
     const total = await Discussion.countDocuments(query);
 
-    // Add like information and reply count for each discussion
+    // FIXED: Add like information and reply count with proper author data processing
     const discussionsWithDetails = await Promise.all(
       discussions.map(async (discussion) => {
         const replyCount = await DiscussionReply.countDocuments({ 
@@ -113,6 +115,28 @@ export const getDiscussions = async (req, res) => {
         const isLiked = discussion.likes.some(likeUserId => 
           likeUserId.toString() === userId.toString()
         );
+
+        // FIXED: Enhanced author data processing
+        if (discussion.author) {
+          const graduationYear = discussion.author.alumniProfile?.academicInfo?.graduationYear ||
+                                discussion.author.graduationYear ||
+                                null;
+          
+          const role = discussion.author.role === 'alumni' || discussion.author.alumniProfile 
+                      ? 'alumni' 
+                      : discussion.author.role || 'student';
+
+          const profileImage = discussion.author.alumniProfile?.profileImage || 
+                              discussion.author.profileImage ||
+                              null;
+
+          discussion.author = {
+            ...discussion.author,
+            graduationYear: graduationYear,
+            role: role,
+            profileImage: profileImage
+          };
+        }
 
         return {
           ...discussion,
@@ -145,16 +169,17 @@ export const getDiscussions = async (req, res) => {
   }
 };
 
-// Get single discussion by ID
+// FIXED: Get single discussion by ID with proper population
 export const getDiscussionById = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
 
+    // FIXED: Proper population with alumni profile
     const discussion = await Discussion.findById(id)
       .populate({
         path: 'author',
-        select: 'name email role graduationYear profileImage alumniProfile',
+        select: 'name email role graduationYear profileImage',
         populate: {
           path: 'alumniProfile',
           select: 'profileImage personalInfo academicInfo'
@@ -172,11 +197,11 @@ export const getDiscussionById = async (req, res) => {
     discussion.views += 1;
     await discussion.save();
 
-    // Get replies for this discussion
+    // FIXED: Get replies with proper population
     const replies = await DiscussionReply.find({ discussion: id })
       .populate({
         path: 'author',
-        select: 'name email role graduationYear profileImage alumniProfile',
+        select: 'name email role graduationYear profileImage',
         populate: {
           path: 'alumniProfile',
           select: 'profileImage personalInfo academicInfo'
@@ -192,14 +217,38 @@ export const getDiscussionById = async (req, res) => {
       .sort({ createdAt: 1 })
       .lean();
 
-    // Add like information to replies
-    const repliesWithLikes = replies.map(reply => ({
-      ...reply,
-      likeCount: reply.likes.length,
-      isLiked: reply.likes.some(likeUserId => 
-        likeUserId.toString() === userId.toString()
-      )
-    }));
+    // FIXED: Process replies with enhanced author data
+    const repliesWithLikes = replies.map(reply => {
+      // Enhanced author data processing for replies
+      if (reply.author) {
+        const graduationYear = reply.author.alumniProfile?.academicInfo?.graduationYear ||
+                              reply.author.graduationYear ||
+                              null;
+        
+        const role = reply.author.role === 'alumni' || reply.author.alumniProfile 
+                    ? 'alumni' 
+                    : reply.author.role || 'student';
+
+        const profileImage = reply.author.alumniProfile?.profileImage || 
+                            reply.author.profileImage ||
+                            null;
+
+        reply.author = {
+          ...reply.author,
+          graduationYear: graduationYear,
+          role: role,
+          profileImage: profileImage
+        };
+      }
+
+      return {
+        ...reply,
+        likeCount: reply.likes.length,
+        isLiked: reply.likes.some(likeUserId => 
+          likeUserId.toString() === userId.toString()
+        )
+      };
+    });
 
     const isLiked = discussion.likes.some(likeUserId => 
       likeUserId.toString() === userId.toString()
@@ -207,10 +256,33 @@ export const getDiscussionById = async (req, res) => {
 
     const replyCount = await DiscussionReply.countDocuments({ discussion: id });
 
+    // FIXED: Enhanced author data processing for main discussion
+    let processedDiscussion = discussion.toObject();
+    if (processedDiscussion.author) {
+      const graduationYear = processedDiscussion.author.alumniProfile?.academicInfo?.graduationYear ||
+                            processedDiscussion.author.graduationYear ||
+                            null;
+      
+      const role = processedDiscussion.author.role === 'alumni' || processedDiscussion.author.alumniProfile 
+                  ? 'alumni' 
+                  : processedDiscussion.author.role || 'student';
+
+      const profileImage = processedDiscussion.author.alumniProfile?.profileImage || 
+                          processedDiscussion.author.profileImage ||
+                          null;
+
+      processedDiscussion.author = {
+        ...processedDiscussion.author,
+        graduationYear: graduationYear,
+        role: role,
+        profileImage: profileImage
+      };
+    }
+
     res.status(200).json({
       success: true,
       discussion: {
-        ...discussion.toObject(),
+        ...processedDiscussion,
         replyCount,
         likeCount: discussion.likes.length,
         isLiked
@@ -250,13 +322,11 @@ export const toggleDiscussionLike = async (req, res) => {
     let message = '';
 
     if (isCurrentlyLiked) {
-      // Unlike the discussion
       discussion.likes = discussion.likes.filter(likeUserId => 
         likeUserId.toString() !== userId.toString()
       );
       message = 'Discussion unliked successfully';
     } else {
-      // Like the discussion
       discussion.likes.push(userId);
       message = 'Discussion liked successfully';
     }
@@ -280,7 +350,7 @@ export const toggleDiscussionLike = async (req, res) => {
   }
 };
 
-// Add reply to discussion
+// FIXED: Add reply to discussion with proper population
 export const addReply = async (req, res) => {
   try {
     const { discussionId } = req.params;
@@ -313,10 +383,10 @@ export const addReply = async (req, res) => {
 
     await reply.save();
 
-    // Populate author details for response
+    // FIXED: Populate author details with alumni profile
     await reply.populate({
       path: 'author',
-      select: 'name email role graduationYear profileImage alumniProfile',
+      select: 'name email role graduationYear profileImage',
       populate: {
         path: 'alumniProfile',
         select: 'profileImage personalInfo academicInfo'
@@ -333,10 +403,33 @@ export const addReply = async (req, res) => {
       });
     }
 
+    // FIXED: Process reply author data
+    let processedReply = reply.toObject();
+    if (processedReply.author) {
+      const graduationYear = processedReply.author.alumniProfile?.academicInfo?.graduationYear ||
+                            processedReply.author.graduationYear ||
+                            null;
+      
+      const role = processedReply.author.role === 'alumni' || processedReply.author.alumniProfile 
+                  ? 'alumni' 
+                  : processedReply.author.role || 'student';
+
+      const profileImage = processedReply.author.alumniProfile?.profileImage || 
+                          processedReply.author.profileImage ||
+                          null;
+
+      processedReply.author = {
+        ...processedReply.author,
+        graduationYear: graduationYear,
+        role: role,
+        profileImage: profileImage
+      };
+    }
+
     res.status(201).json({
       success: true,
       message: 'Reply added successfully',
-      reply
+      reply: processedReply
     });
 
   } catch (error) {
@@ -371,13 +464,11 @@ export const toggleReplyLike = async (req, res) => {
     let message = '';
 
     if (isCurrentlyLiked) {
-      // Unlike the reply
       reply.likes = reply.likes.filter(likeUserId => 
         likeUserId.toString() !== userId.toString()
       );
       message = 'Reply unliked successfully';
     } else {
-      // Like the reply
       reply.likes.push(userId);
       message = 'Reply liked successfully';
     }
@@ -410,7 +501,11 @@ export const getUserDiscussions = async (req, res) => {
     const discussions = await Discussion.find({ author: userId })
       .populate({
         path: 'author',
-        select: 'name email role graduationYear'
+        select: 'name email role graduationYear',
+        populate: {
+          path: 'alumniProfile',
+          select: 'personalInfo academicInfo'
+        }
       })
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
@@ -419,12 +514,22 @@ export const getUserDiscussions = async (req, res) => {
 
     const total = await Discussion.countDocuments({ author: userId });
 
-    // Add reply count for each discussion
+    // Add reply count and process author data for each discussion
     const discussionsWithCounts = await Promise.all(
       discussions.map(async (discussion) => {
         const replyCount = await DiscussionReply.countDocuments({ 
           discussion: discussion._id 
         });
+        
+        // Process author data
+        if (discussion.author) {
+          discussion.author.graduationYear = discussion.author.alumniProfile?.academicInfo?.graduationYear ||
+                                           discussion.author.graduationYear ||
+                                           null;
+          discussion.author.role = discussion.author.role === 'alumni' || discussion.author.alumniProfile 
+                                 ? 'alumni' 
+                                 : discussion.author.role || 'student';
+        }
         
         return {
           ...discussion,
@@ -487,7 +592,11 @@ export const updateDiscussion = async (req, res) => {
     await discussion.save();
     await discussion.populate({
       path: 'author',
-      select: 'name email role graduationYear'
+      select: 'name email role graduationYear',
+      populate: {
+        path: 'alumniProfile',
+        select: 'personalInfo academicInfo'
+      }
     });
 
     res.status(200).json({
