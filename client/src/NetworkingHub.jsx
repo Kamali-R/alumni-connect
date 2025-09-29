@@ -62,24 +62,24 @@ const getDisplayName = (user) => {
 
 // FIXED: Enhanced graduation year detection
 const getGraduationYear = (user) => {
-  console.log('Getting graduation year for user:', user.name, {
-    direct: user.graduationYear,
-    fromAlumniProfile: user.alumniProfile?.academicInfo?.graduationYear,
-    fromAcademicInfo: user.academicInfo?.graduationYear
+  console.log('Getting graduation year for user:', user?.name, {
+    userGraduationYear: user?.graduationYear,
+    fromAlumniProfile: user?.alumniProfile?.academicInfo?.graduationYear,
+    fromAcademicInfo: user?.academicInfo?.graduationYear
   });
 
-  // Priority 1: Direct graduationYear field from user (updated from profile)
-  if (user.graduationYear) {
+  // Priority 1: User model graduationYear (most recent from profile updates)
+  if (user?.graduationYear) {
     return user.graduationYear;
   }
   
-  // Priority 2: From academicInfo in alumniProfile (most recent profile data)
-  if (user.alumniProfile?.academicInfo?.graduationYear) {
+  // Priority 2: From academicInfo in alumniProfile
+  if (user?.alumniProfile?.academicInfo?.graduationYear) {
     return user.alumniProfile.academicInfo.graduationYear;
   }
   
   // Priority 3: From academicInfo directly (fallback)
-  if (user.academicInfo?.graduationYear) {
+  if (user?.academicInfo?.graduationYear) {
     return user.academicInfo.graduationYear;
   }
   
@@ -2970,7 +2970,12 @@ const NetworkingHub = () => {
     alumniData, 
     activeSection
   ]);
-
+  // Add this useEffect after the existing ones
+useEffect(() => {
+  if (activeSection === 'stories') {
+    fetchSuccessStories(1, storyFilters);
+  }
+}, [storyFilters, activeSection]);
   useEffect(() => {
     // When selectedStory changes, ensure it has the latest data from the stories list
     if (selectedStory) {

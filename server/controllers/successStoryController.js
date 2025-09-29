@@ -75,13 +75,15 @@ export const getStories = async (req, res) => {
       query.category = category;
     }
 
-    if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { content: { $regex: search, $options: 'i' } },
-        { tags: { $in: [new RegExp(search, 'i')] } }
-      ];
-    }
+    // In getStories function, replace the existing search logic with:
+if (search) {
+  const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  query.$or = [
+    { title: { $regex: escapedSearch, $options: 'i' } },
+    { content: { $regex: escapedSearch, $options: 'i' } },
+    { tags: { $regex: escapedSearch, $options: 'i' } }
+  ];
+}
 
     if (author) {
       query.author = author;

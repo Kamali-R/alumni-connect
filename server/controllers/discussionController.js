@@ -4,6 +4,47 @@ import DiscussionReply from '../models/DiscussionReply.js';
 import User from '../models/User.js';
 import Alumni from '../models/Alumni.js';
 
+// Helper function to get fresh author data with proper graduation year resolution
+const getFreshAuthorData = async (authorId) => {
+  try {
+    // Fetch fresh user data
+    const freshUser = await User.findById(authorId)
+      .select('name email role graduationYear profileImage')
+      .lean();
+    
+    if (!freshUser) return null;
+    
+    // Fetch alumni profile
+    const alumniProfile = await Alumni.findOne({ userId: authorId })
+      .select('profileImage personalInfo academicInfo')
+      .lean();
+    
+    // Resolve graduation year with proper priority
+    const graduationYear = alumniProfile?.academicInfo?.graduationYear || 
+                          freshUser.graduationYear || 
+                          null;
+    
+    // Resolve role
+    const role = freshUser.role === 'alumni' || alumniProfile ? 'alumni' : freshUser.role || 'student';
+    
+    // Resolve profile image
+    const profileImage = alumniProfile?.profileImage || 
+                         freshUser.profileImage || 
+                         null;
+    
+    return {
+      ...freshUser,
+      graduationYear,
+      role,
+      profileImage,
+      alumniProfile
+    };
+  } catch (error) {
+    console.error('Error fetching fresh author data:', error);
+    return null;
+  }
+};
+
 // Create a new discussion
 export const createDiscussion = async (req, res) => {
   try {
@@ -29,20 +70,16 @@ export const createDiscussion = async (req, res) => {
 
     await discussion.save();
 
-    // FIXED: Populate author details with alumni profile
-    await discussion.populate({
-      path: 'author',
-      select: 'name email role graduationYear profileImage',
-      populate: {
-        path: 'alumniProfile',
-        select: 'profileImage personalInfo academicInfo'
-      }
-    });
-
+    // Get fresh author data
+    const authorData = await getFreshAuthorData(authorId);
+    
     res.status(201).json({
       success: true,
       message: 'Discussion created successfully',
-      discussion
+      discussion: {
+        ...discussion.toObject(),
+        author: authorData
+      }
     });
 
   } catch (error) {
@@ -55,7 +92,7 @@ export const createDiscussion = async (req, res) => {
   }
 };
 
-// FIXED: Get all discussions with proper population
+// Get all discussions with proper population
 export const getDiscussions = async (req, res) => {
   try {
     const {
@@ -88,16 +125,8 @@ export const getDiscussions = async (req, res) => {
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
-    // FIXED: Proper population with alumni profile
+    // Get discussions
     const discussions = await Discussion.find(query)
-      .populate({
-        path: 'author',
-        select: 'name email role graduationYear profileImage',
-        populate: {
-          path: 'alumniProfile',
-          select: 'profileImage personalInfo academicInfo'
-        }
-      })
       .sort(sortOptions)
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit))
@@ -105,7 +134,7 @@ export const getDiscussions = async (req, res) => {
 
     const total = await Discussion.countDocuments(query);
 
-    // FIXED: Add like information and reply count with proper author data processing
+    // Process discussions with fresh author data
     const discussionsWithDetails = await Promise.all(
       discussions.map(async (discussion) => {
         const replyCount = await DiscussionReply.countDocuments({ 
@@ -116,30 +145,12 @@ export const getDiscussions = async (req, res) => {
           likeUserId.toString() === userId.toString()
         );
 
-        // FIXED: Enhanced author data processing
-        if (discussion.author) {
-          const graduationYear = discussion.author.alumniProfile?.academicInfo?.graduationYear ||
-                                discussion.author.graduationYear ||
-                                null;
-          
-          const role = discussion.author.role === 'alumni' || discussion.author.alumniProfile 
-                      ? 'alumni' 
-                      : discussion.author.role || 'student';
-
-          const profileImage = discussion.author.alumniProfile?.profileImage || 
-                              discussion.author.profileImage ||
-                              null;
-
-          discussion.author = {
-            ...discussion.author,
-            graduationYear: graduationYear,
-            role: role,
-            profileImage: profileImage
-          };
-        }
+        // Get fresh author data
+        const authorData = await getFreshAuthorData(discussion.author);
 
         return {
           ...discussion,
+          author: authorData,
           replyCount,
           likeCount: discussion.likes.length,
           isLiked
@@ -169,22 +180,14 @@ export const getDiscussions = async (req, res) => {
   }
 };
 
-// FIXED: Get single discussion by ID with proper population
+// Get single discussion by ID with proper population
 export const getDiscussionById = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
 
-    // FIXED: Proper population with alumni profile
-    const discussion = await Discussion.findById(id)
-      .populate({
-        path: 'author',
-        select: 'name email role graduationYear profileImage',
-        populate: {
-          path: 'alumniProfile',
-          select: 'profileImage personalInfo academicInfo'
-        }
-      });
+    // Get discussion
+    const discussion = await Discussion.findById(id).lean();
 
     if (!discussion) {
       return res.status(404).json({
@@ -194,19 +197,13 @@ export const getDiscussionById = async (req, res) => {
     }
 
     // Increment view count
-    discussion.views += 1;
-    await discussion.save();
+    await Discussion.findByIdAndUpdate(id, { $inc: { views: 1 } });
 
-    // FIXED: Get replies with proper population
+    // Get fresh author data for discussion
+    const discussionAuthorData = await getFreshAuthorData(discussion.author);
+
+    // Get replies
     const replies = await DiscussionReply.find({ discussion: id })
-      .populate({
-        path: 'author',
-        select: 'name email role graduationYear profileImage',
-        populate: {
-          path: 'alumniProfile',
-          select: 'profileImage personalInfo academicInfo'
-        }
-      })
       .populate({
         path: 'parentReply',
         populate: {
@@ -217,38 +214,22 @@ export const getDiscussionById = async (req, res) => {
       .sort({ createdAt: 1 })
       .lean();
 
-    // FIXED: Process replies with enhanced author data
-    const repliesWithLikes = replies.map(reply => {
-      // Enhanced author data processing for replies
-      if (reply.author) {
-        const graduationYear = reply.author.alumniProfile?.academicInfo?.graduationYear ||
-                              reply.author.graduationYear ||
-                              null;
-        
-        const role = reply.author.role === 'alumni' || reply.author.alumniProfile 
-                    ? 'alumni' 
-                    : reply.author.role || 'student';
+    // Process replies with fresh author data
+    const repliesWithLikes = await Promise.all(
+      replies.map(async (reply) => {
+        // Get fresh author data for reply
+        const replyAuthorData = await getFreshAuthorData(reply.author);
 
-        const profileImage = reply.author.alumniProfile?.profileImage || 
-                            reply.author.profileImage ||
-                            null;
-
-        reply.author = {
-          ...reply.author,
-          graduationYear: graduationYear,
-          role: role,
-          profileImage: profileImage
+        return {
+          ...reply,
+          author: replyAuthorData,
+          likeCount: reply.likes.length,
+          isLiked: reply.likes.some(likeUserId => 
+            likeUserId.toString() === userId.toString()
+          )
         };
-      }
-
-      return {
-        ...reply,
-        likeCount: reply.likes.length,
-        isLiked: reply.likes.some(likeUserId => 
-          likeUserId.toString() === userId.toString()
-        )
-      };
-    });
+      })
+    );
 
     const isLiked = discussion.likes.some(likeUserId => 
       likeUserId.toString() === userId.toString()
@@ -256,33 +237,11 @@ export const getDiscussionById = async (req, res) => {
 
     const replyCount = await DiscussionReply.countDocuments({ discussion: id });
 
-    // FIXED: Enhanced author data processing for main discussion
-    let processedDiscussion = discussion.toObject();
-    if (processedDiscussion.author) {
-      const graduationYear = processedDiscussion.author.alumniProfile?.academicInfo?.graduationYear ||
-                            processedDiscussion.author.graduationYear ||
-                            null;
-      
-      const role = processedDiscussion.author.role === 'alumni' || processedDiscussion.author.alumniProfile 
-                  ? 'alumni' 
-                  : processedDiscussion.author.role || 'student';
-
-      const profileImage = processedDiscussion.author.alumniProfile?.profileImage || 
-                          processedDiscussion.author.profileImage ||
-                          null;
-
-      processedDiscussion.author = {
-        ...processedDiscussion.author,
-        graduationYear: graduationYear,
-        role: role,
-        profileImage: profileImage
-      };
-    }
-
     res.status(200).json({
       success: true,
       discussion: {
-        ...processedDiscussion,
+        ...discussion,
+        author: discussionAuthorData,
         replyCount,
         likeCount: discussion.likes.length,
         isLiked
@@ -350,7 +309,7 @@ export const toggleDiscussionLike = async (req, res) => {
   }
 };
 
-// FIXED: Add reply to discussion with proper population
+// Add reply to discussion with proper population
 export const addReply = async (req, res) => {
   try {
     const { discussionId } = req.params;
@@ -383,53 +342,28 @@ export const addReply = async (req, res) => {
 
     await reply.save();
 
-    // FIXED: Populate author details with alumni profile
-    await reply.populate({
-      path: 'author',
-      select: 'name email role graduationYear profileImage',
-      populate: {
-        path: 'alumniProfile',
-        select: 'profileImage personalInfo academicInfo'
-      }
-    });
+    // Get fresh author data
+    const authorData = await getFreshAuthorData(authorId);
 
+    // Get parent reply info if needed
+    let parentReplyInfo = null;
     if (parentReplyId) {
-      await reply.populate({
-        path: 'parentReply',
-        populate: {
+      parentReplyInfo = await DiscussionReply.findById(parentReplyId)
+        .populate({
           path: 'author',
           select: 'name'
-        }
-      });
-    }
-
-    // FIXED: Process reply author data
-    let processedReply = reply.toObject();
-    if (processedReply.author) {
-      const graduationYear = processedReply.author.alumniProfile?.academicInfo?.graduationYear ||
-                            processedReply.author.graduationYear ||
-                            null;
-      
-      const role = processedReply.author.role === 'alumni' || processedReply.author.alumniProfile 
-                  ? 'alumni' 
-                  : processedReply.author.role || 'student';
-
-      const profileImage = processedReply.author.alumniProfile?.profileImage || 
-                          processedReply.author.profileImage ||
-                          null;
-
-      processedReply.author = {
-        ...processedReply.author,
-        graduationYear: graduationYear,
-        role: role,
-        profileImage: profileImage
-      };
+        })
+        .lean();
     }
 
     res.status(201).json({
       success: true,
       message: 'Reply added successfully',
-      reply: processedReply
+      reply: {
+        ...reply.toObject(),
+        author: authorData,
+        parentReply: parentReplyInfo
+      }
     });
 
   } catch (error) {
@@ -499,14 +433,6 @@ export const getUserDiscussions = async (req, res) => {
     const { page = 1, limit = 10 } = req.query;
 
     const discussions = await Discussion.find({ author: userId })
-      .populate({
-        path: 'author',
-        select: 'name email role graduationYear',
-        populate: {
-          path: 'alumniProfile',
-          select: 'personalInfo academicInfo'
-        }
-      })
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit))
@@ -521,18 +447,12 @@ export const getUserDiscussions = async (req, res) => {
           discussion: discussion._id 
         });
         
-        // Process author data
-        if (discussion.author) {
-          discussion.author.graduationYear = discussion.author.alumniProfile?.academicInfo?.graduationYear ||
-                                           discussion.author.graduationYear ||
-                                           null;
-          discussion.author.role = discussion.author.role === 'alumni' || discussion.author.alumniProfile 
-                                 ? 'alumni' 
-                                 : discussion.author.role || 'student';
-        }
+        // Get fresh author data
+        const authorData = await getFreshAuthorData(discussion.author);
         
         return {
           ...discussion,
+          author: authorData,
           replyCount,
           likeCount: discussion.likes.length
         };
@@ -590,19 +510,17 @@ export const updateDiscussion = async (req, res) => {
     if (tags) discussion.tags = tags;
 
     await discussion.save();
-    await discussion.populate({
-      path: 'author',
-      select: 'name email role graduationYear',
-      populate: {
-        path: 'alumniProfile',
-        select: 'personalInfo academicInfo'
-      }
-    });
+
+    // Get fresh author data
+    const authorData = await getFreshAuthorData(discussion.author);
 
     res.status(200).json({
       success: true,
       message: 'Discussion updated successfully',
-      discussion
+      discussion: {
+        ...discussion.toObject(),
+        author: authorData
+      }
     });
 
   } catch (error) {

@@ -157,16 +157,16 @@ export const saveAlumniProfile = async (req, res) => {
     
     // Update graduation year if provided
     if (profileData.academicInfo && profileData.academicInfo.graduationYear) {
-      updateData.graduationYear = profileData.academicInfo.graduationYear;
-    }
-    
-    console.log('Updating user with data:', updateData);
-    
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      updateData,
-      { new: true }
-    ).select('-password');
+  updateData.graduationYear = profileData.academicInfo.graduationYear;
+}
+
+console.log('Updating user with data:', updateData);
+
+const updatedUser = await User.findByIdAndUpdate(
+  userId,
+  updateData,
+  { new: true }
+).select('-password');
     
     console.log('User updated successfully:', {
       id: updatedUser._id,
