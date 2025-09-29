@@ -14,6 +14,8 @@ import jobRoutes from './routes/jobRoutes.js';
 import networkingRoutes from './routes/networkingRoutes.js';
 import successStoryRoutes from './routes/successStoryRoutes.js';
 import discussionRoutes from './routes/discussionRoutes.js';
+import eventRoutes from './routes/eventRoutes.js';
+import newsAndAchievementsRoutes from './routes/NewsAndAchievementsRoutes.js'; // ✅ Add this import
 
 // Load Google OAuth config
 import './config/googleAuth.js';
@@ -28,10 +30,10 @@ const __dirname = path.dirname(__filename);
 
 // ✅ CORS Configuration
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 // ✅ Middleware
@@ -39,6 +41,22 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ✅ Session Configuration
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
+  });
+});
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'fallback-secret-key',
@@ -46,13 +64,21 @@ app.use(
     saveUninitialized: false,
     cookie: { 
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 24 * 60 * 60 * 1000  // 24 hours
+      maxAge: 24 * 60 * 60 * 1000  
     }
   })
 );
 
 // ✅ Static Files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// ✅ Test endpoint
+app.get('/api/test', (req, res) => {
+  res.json({ 
+    success: true, 
+    message: '✅ Backend is working!',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // ✅ Passport initialization
 app.use(passport.initialize());
@@ -441,6 +467,14 @@ app.delete('/api/debug/cleanup-corrupted-connections', async (req, res) => {
   }
 });
 
+// ✅ API Routes
+app.use('/', authRoutes);
+app.use('/api', protectedRoutes);
+app.use('/api', contactRoutes);
+app.use('/api', alumniRoutes);
+app.use('/api/events', eventRoutes);
+app.use('/api', newsAndAchievementsRoutes); // ✅ Add this line
+app.use('/api', jobRoutes);
 
 // ✅ Root Route
 app.get('/', (req, res) => {
@@ -622,6 +656,24 @@ app.delete('/api/debug/clear-connections', async (req, res) => {
       error: error.message 
     });
   }
+});
+
+// ✅ Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    success: false,
+    message: 'Something went wrong!',
+    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+  });
+});
+
+// ✅ 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found'
+  });
 });
 
 // ✅ Connect to MongoDB
