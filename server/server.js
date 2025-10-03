@@ -20,7 +20,7 @@ import messageRoutes from './routes/messageRoutes.js';
 import Message from './models/Message.js';
 import Conversation from './models/Conversation.js';
 import User from './models/User.js';
-import auth from './middleware/authMiddleware.js'; // Add this line
+import auth from './middleware/authMiddleware.js';
 
 // Load Google OAuth config
 import './config/googleAuth.js';
@@ -103,134 +103,88 @@ app.use('/api/messages', messageRoutes);
 
 // ========== DEBUG ROUTES ==========
 
-// Reset conversations collection (development only)
-app.delete('/api/debug/reset-conversations', async (req, res) => {
-  try {
-    const Conversation = mongoose.model('Conversation');
-    console.log('🔄 Resetting conversations collection...');
-    
-    const result = await Conversation.deleteMany({});
-    console.log('✅ Deleted conversations:', result.deletedCount);
-    
-    const db = mongoose.connection.db;
-    try {
-      await db.collection('conversations').dropIndexes();
-      console.log('✅ Dropped conversation indexes');
-    } catch (e) {
-      console.log('ℹ️ Could not drop indexes:', e.message);
-    }
-    
-    await db.collection('conversations').createIndex(
-      { participants: 1 }, 
-      { name: 'participants_index' }
-    );
-    console.log('✅ Recreated conversation index');
-    
-    res.json({
-      message: 'Conversations reset successfully',
-      deletedCount: result.deletedCount,
-      status: 'Indexes recreated'
-    });
-    
-  } catch (error) {
-    console.error('❌ Reset conversations error:', error);
-    res.status(500).json({ 
-      error: error.message,
-      hint: 'Make sure Conversation model is properly defined'
-    });
-  }
-});
-app.get('/api/debug/messages', auth, async (req, res) => {
+// Debug route to check all messages in database
+app.get('/api/debug/all-messages', auth, async (req, res) => {
   try {
     const Message = mongoose.model('Message');
-    const Conversation = mongoose.model('Conversation');
-    
     const messages = await Message.find({})
-      .populate('senderId', 'name')
-      .populate('receiverId', 'name')
+      .populate('senderId', 'name email')
+      .populate('receiverId', 'name email')
       .sort({ createdAt: -1 })
-      .limit(50)
-      .lean();
-    
-    const conversations = await Conversation.find({})
-      .populate('participants', 'name')
+      .limit(100)
       .lean();
     
     res.json({
-      messagesCount: messages.length,
-      messages: messages,
-      conversationsCount: conversations.length,
-      conversations: conversations
+      totalMessages: messages.length,
+      messages: messages.map(msg => ({
+        _id: msg._id,
+        message: msg.message,
+        messageType: msg.messageType,
+        callType: msg.callType,
+        callStatus: msg.callStatus,
+        callDuration: msg.callDuration,
+        sender: msg.senderId?.name,
+        receiver: msg.receiverId?.name,
+        createdAt: msg.createdAt,
+        conversationId: msg.conversationId
+      }))
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
-app.get('/api/debug/reset-conversations', async (req, res) => {
+
+// Debug route to check database collections
+app.get('/api/debug/database-status', auth, async (req, res) => {
   try {
-    const Conversation = mongoose.model('Conversation');
-    console.log('🔄 Resetting conversations collection via GET...');
-    
-    const result = await Conversation.deleteMany({});
-    
     const db = mongoose.connection.db;
-    try {
-      await db.collection('conversations').dropIndexes();
-    } catch (e) {
-      console.log('ℹ️ Could not drop indexes:', e.message);
+    const collections = await db.listCollections().toArray();
+    
+    const collectionStats = {};
+    
+    for (const collection of collections) {
+      const collectionName = collection.name;
+      const count = await db.collection(collectionName).countDocuments();
+      collectionStats[collectionName] = {
+        count: count,
+        size: collection.size
+      };
     }
     
-    await db.collection('conversations').createIndex(
-      { participants: 1 }, 
-      { name: 'participants_index' }
-    );
-    
-    res.send(`
-      <html>
-        <head>
-          <title>Reset Conversations</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 40px; background: #f5f5f5; }
-            .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            .success { color: #059669; background: #d1fae5; padding: 15px; border-radius: 5px; margin: 20px 0; }
-            .info { color: #0369a1; background: #e0f2fe; padding: 15px; border-radius: 5px; margin: 20px 0; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>🔄 Conversations Reset</h1>
-            <div class="success">
-              <h3>✅ Success!</h3>
-              <p>Deleted ${result.deletedCount} conversations</p>
-              <p>Recreated indexes</p>
-            </div>
-            <div class="info">
-              <p><strong>Next Steps:</strong></p>
-              <ol>
-                <li>Update your Conversation model with the fixed version</li>
-                <li>Test the messaging feature</li>
-                <li>Remove this reset route in production</li>
-              </ol>
-            </div>
-            <a href="/" style="color: #3b82f6; text-decoration: none;">← Back to Home</a>
-          </div>
-        </body>
-      </html>
-    `);
+    res.json({
+      database: mongoose.connection.name,
+      collections: collectionStats
+    });
   } catch (error) {
-    res.send(`
-      <html>
-        <body style="font-family: Arial, sans-serif; padding: 40px; background: #fef2f2;">
-          <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-            <h1 style="color: #dc2626;">❌ Error Resetting Conversations</h1>
-            <div style="color: #dc2626; background: #fee2e2; padding: 15px; border-radius: 5px; margin: 20px 0;">
-              <p><strong>Error:</strong> ${error.message}</p>
-            </div>
-            <a href="/" style="color: #3b82f6; text-decoration: none;">← Back to Home</a>
-          </div>
-        </body>
-      </html>
-    `);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Reset conversations collection (development only)
+app.delete('/api/debug/reset-conversations', async (req, res) => {
+  try {
+    const Conversation = mongoose.model('Conversation');
+    const Message = mongoose.model('Message');
+    
+    console.log('🔄 Resetting conversations and messages...');
+    
+    const convResult = await Conversation.deleteMany({});
+    const msgResult = await Message.deleteMany({});
+    
+    console.log('✅ Deleted conversations:', convResult.deletedCount);
+    console.log('✅ Deleted messages:', msgResult.deletedCount);
+    
+    res.json({
+      message: 'Database reset successfully',
+      conversationsDeleted: convResult.deletedCount,
+      messagesDeleted: msgResult.deletedCount
+    });
+    
+  } catch (error) {
+    console.error('❌ Reset error:', error);
+    res.status(500).json({ 
+      error: error.message
+    });
   }
 });
 
@@ -243,7 +197,9 @@ app.get('/', (req, res) => {
       auth: '/login, /register, /auth/google',
       alumni: '/api/alumni/*',
       networking: '/api/connection-request, /api/alumni-directory',
-      health: '/api/test'
+      messages: '/api/messages/*',
+      health: '/api/test',
+      debug: '/api/debug/*'
     }
   });
 });
@@ -285,6 +241,27 @@ mongoose
     process.exit(1);
   });
 
+// After MongoDB connection
+mongoose.connection.on('connected', () => {
+  console.log('✅ MongoDB Connected');
+  
+  // Verify models are registered
+  const models = mongoose.modelNames();
+  console.log('📊 Registered models:', models);
+});
+
+// Enable MongoDB debug for messages collection
+mongoose.set('debug', function(collectionName, method, query, doc) {
+  if (collectionName === 'messages' || collectionName === 'conversations') {
+    console.log('🗂️ MongoDB Operation:', {
+      collection: collectionName,
+      method: method,
+      query: query,
+      doc: doc
+    });
+  }
+});
+
 // Create HTTP server
 const server = createServer(app);
 const io = new Server(server, {
@@ -315,7 +292,7 @@ io.use((socket, next) => {
 });
 
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id, 'User ID:', socket.userId);
+  console.log('🔌 User connected:', socket.id, 'User ID:', socket.userId);
 
   if (socket.userId) {
     connectedUsers.set(socket.userId.toString(), {
@@ -327,32 +304,55 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('userOnline', { userId: socket.userId });
   }
 
+  // DEBUG: Log all socket events
+  const originalEmit = socket.emit;
+  socket.emit = function(event, data) {
+    console.log(`📤 [SOCKET EMIT] ${event}:`, typeof data === 'object' ? JSON.stringify(data).substring(0, 200) + '...' : data);
+    return originalEmit.apply(this, arguments);
+  };
+
+  const originalOn = socket.on;
+  socket.on = function(event, callback) {
+    return originalOn.call(this, event, function(data) {
+      console.log(`📥 [SOCKET RECEIVED] ${event}:`, typeof data === 'object' ? JSON.stringify(data).substring(0, 200) + '...' : data);
+      try {
+        return callback.apply(this, arguments);
+      } catch (error) {
+        console.error(`❌ Socket handler error for ${event}:`, error);
+      }
+    });
+  };
+
   // Join user's personal room
   socket.on('joinUserRoom', () => {
     if (socket.userId) {
       socket.join(`user_${socket.userId}`);
-      console.log(`User ${socket.userId} joined their room`);
+      console.log(`👤 User ${socket.userId} joined their room`);
     }
   });
 
   // Join conversation room
   socket.on('joinConversation', (conversationId) => {
     socket.join(`conversation_${conversationId}`);
-    console.log(`User ${socket.userId} joined conversation ${conversationId}`);
+    console.log(`💬 User ${socket.userId} joined conversation ${conversationId}`);
   });
 
   // Handle sending messages
   socket.on('sendMessage', async (data) => {
     try {
+      console.log('📤 Sending message via socket:', data);
       const { conversationId, message } = data;
+      
+      // Broadcast to other users in the conversation
       socket.to(`conversation_${conversationId}`).emit('newMessage', message);
       
+      // Send delivery confirmation
       socket.to(`conversation_${conversationId}`).emit('messageDelivered', {
         messageId: message._id,
         conversationId
       });
     } catch (error) {
-      console.error('Socket send message error:', error);
+      console.error('❌ Socket send message error:', error);
     }
   });
 
@@ -383,26 +383,32 @@ io.on('connection', (socket) => {
 
   // ========== WEBRTC CALL HANDLERS ==========
 
-  // Voice call initiation
+  // Voice call initiation - FIXED VERSION
   socket.on('initiateVoiceCall', async (data) => {
     console.log('📞 Voice call initiated:', data);
     
     try {
       const User = mongoose.model('User');
       const Message = mongoose.model('Message');
-      const Conversation = mongoose.model('Conversation');
+      
       const caller = await User.findById(socket.userId).select('name');
       const callerName = caller?.name || 'Unknown User';
       
+      console.log('💾 Attempting to save voice call message to database...');
+      
       // Save call initiation message
-      await Message.saveCallMessage({
-  conversationId: data.conversationId,
-  senderId: socket.userId,
-  receiverId: data.toUserId,
-  callType: 'voice', // or 'video'
-  callStatus: 'initiated',
-  callRoomId: data.callRoomId
-});
+      const savedMessage = await Message.saveCallMessage({
+        conversationId: data.conversationId,
+        senderId: socket.userId,
+        receiverId: data.toUserId,
+        callType: 'voice',
+        callStatus: 'initiated',
+        callRoomId: data.callRoomId,
+        callDuration: 0
+      });
+      
+      console.log('✅ Voice call message saved to DB:', savedMessage._id);
+      
       // Track active call
       activeCalls.set(data.callRoomId, {
         roomId: data.callRoomId,
@@ -411,7 +417,8 @@ io.on('connection', (socket) => {
         callType: 'voice',
         conversationId: data.conversationId,
         status: 'ringing',
-        createdAt: new Date()
+        createdAt: new Date(),
+        messageId: savedMessage._id
       });
       
       // Notify recipient
@@ -427,11 +434,11 @@ io.on('connection', (socket) => {
       
     } catch (error) {
       console.error('❌ Error handling voice call:', error);
-      socket.emit('callError', { error: 'Failed to initiate call' });
+      socket.emit('callError', { error: 'Failed to initiate call: ' + error.message });
     }
   });
 
-  // Video call initiation
+  // Video call initiation - FIXED VERSION
   socket.on('initiateVideoCall', async (data) => {
     console.log('📹 Video call initiated:', data);
     
@@ -442,15 +449,20 @@ io.on('connection', (socket) => {
       const caller = await User.findById(socket.userId).select('name');
       const callerName = caller?.name || 'Unknown User';
       
+      console.log('💾 Attempting to save video call message to database...');
+      
       // Save call initiation message
-      await Message.saveCallMessage({
+      const savedMessage = await Message.saveCallMessage({
         conversationId: data.conversationId,
         senderId: socket.userId,
         receiverId: data.toUserId,
         callType: 'video',
         callStatus: 'initiated',
-        callRoomId: data.callRoomId
+        callRoomId: data.callRoomId,
+        callDuration: 0
       });
+      
+      console.log('✅ Video call message saved to DB:', savedMessage._id);
       
       // Track active call
       activeCalls.set(data.callRoomId, {
@@ -460,7 +472,8 @@ io.on('connection', (socket) => {
         callType: 'video',
         conversationId: data.conversationId,
         status: 'ringing',
-        createdAt: new Date()
+        createdAt: new Date(),
+        messageId: savedMessage._id
       });
       
       // Notify recipient
@@ -476,11 +489,11 @@ io.on('connection', (socket) => {
       
     } catch (error) {
       console.error('❌ Error handling video call:', error);
-      socket.emit('callError', { error: 'Failed to initiate call' });
+      socket.emit('callError', { error: 'Failed to initiate call: ' + error.message });
     }
   });
 
-  // Call acceptance
+  // Call acceptance - FIXED VERSION
   socket.on('callAccepted', async (data) => {
     console.log('✅ Call accepted:', data);
     
@@ -493,6 +506,8 @@ io.on('connection', (socket) => {
         call.connectedAt = new Date();
         activeCalls.set(data.callRoomId, call);
         
+        console.log('💾 Saving call accepted message...');
+        
         // Save call acceptance message
         await Message.saveCallMessage({
           conversationId: data.conversationId,
@@ -500,7 +515,8 @@ io.on('connection', (socket) => {
           receiverId: call.callerId,
           callType: data.callType,
           callStatus: 'connected',
-          callRoomId: data.callRoomId
+          callRoomId: data.callRoomId,
+          callDuration: 0
         });
         
         // Notify caller
@@ -514,11 +530,11 @@ io.on('connection', (socket) => {
       }
     } catch (error) {
       console.error('❌ Error handling call acceptance:', error);
-      socket.emit('callError', { error: 'Failed to accept call' });
+      socket.emit('callError', { error: 'Failed to accept call: ' + error.message });
     }
   });
 
-  // Call rejection
+  // Call rejection - FIXED VERSION
   socket.on('callRejected', async (data) => {
     console.log('❌ Call rejected:', data);
     
@@ -527,6 +543,8 @@ io.on('connection', (socket) => {
       const call = activeCalls.get(data.callRoomId);
       
       if (call) {
+        console.log('💾 Saving call rejected message...');
+        
         // Save call rejection message
         await Message.saveCallMessage({
           conversationId: data.conversationId,
@@ -534,7 +552,8 @@ io.on('connection', (socket) => {
           receiverId: call.callerId,
           callType: data.callType,
           callStatus: 'declined',
-          callRoomId: data.callRoomId
+          callRoomId: data.callRoomId,
+          callDuration: 0
         });
         
         // Notify caller
@@ -553,7 +572,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Call end
+  // Call end - FIXED VERSION
   socket.on('endCall', async (data) => {
     console.log('📞 Call ended:', data);
     
@@ -564,6 +583,8 @@ io.on('connection', (socket) => {
       if (call) {
         const duration = data.duration || 
           (call.connectedAt ? Math.round((new Date() - call.connectedAt) / 1000) : 0);
+        
+        console.log('💾 Saving call ended message...');
         
         // Save call end message
         await Message.saveCallMessage({
@@ -632,38 +653,14 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Toggle audio/video during call
-  socket.on('callToggleMedia', (data) => {
-    const call = activeCalls.get(data.callRoomId);
-    if (call) {
-      const otherUserId = socket.userId === call.callerId ? call.receiverId : call.callerId;
-      socket.to(`user_${otherUserId}`).emit('callMediaToggled', {
-        callRoomId: data.callRoomId,
-        mediaType: data.mediaType,
-        isEnabled: data.isEnabled
-      });
-    }
-  });
-
-  // Get active call info
-  socket.on('getCallInfo', (data) => {
-    const call = activeCalls.get(data.callRoomId);
-    if (call) {
-      socket.emit('callInfo', {
-        callRoomId: data.callRoomId,
-        callInfo: call
-      });
-    }
-  });
-
   // Handle disconnect - clean up active calls
   socket.on('disconnect', (reason) => {
-    console.log('User disconnected:', socket.id, 'Reason:', reason);
+    console.log('🔌 User disconnected:', socket.id, 'Reason:', reason);
     
     // End any active calls this user was part of
     for (const [roomId, call] of activeCalls.entries()) {
       if (call.callerId === socket.userId || call.receiverId === socket.userId) {
-        console.log(`Ending call ${roomId} due to user disconnect`);
+        console.log(`📞 Ending call ${roomId} due to user disconnect`);
         
         // Notify other participant
         const otherUserId = call.callerId === socket.userId ? call.receiverId : call.callerId;
@@ -686,50 +683,16 @@ io.on('connection', (socket) => {
 
   // Error handling
   socket.on('error', (error) => {
-    console.error('Socket error:', error);
+    console.error('❌ Socket error:', error);
   });
 });
-
-// Helper functions
-const getUserSocket = (userId) => {
-  return connectedUsers.get(userId.toString());
-};
-
-const isUserOnline = (userId) => {
-  return connectedUsers.has(userId.toString());
-};
-
-const getActiveCall = (roomId) => {
-  return activeCalls.get(roomId);
-};
-
-const getAllActiveCalls = () => {
-  return Array.from(activeCalls.entries());
-};
-
-const extractUserIdFromToken = (token) => {
-  try {
-    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-    return payload.id;
-  } catch (error) {
-    console.error('Error extracting user ID from token:', error);
-    return null;
-  }
-};
-
-// Export helper functions for use in other modules
-export {
-  getUserSocket,
-  isUserOnline,
-  getActiveCall,
-  getAllActiveCalls
-};
 
 // Start server
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
   console.log(`📡 API Test: http://localhost:${PORT}/api/test`);
+  console.log(`🐛 Debug Routes: http://localhost:${PORT}/api/debug/all-messages`);
   console.log(`📞 WebRTC Support: Enabled`);
   console.log(`🔧 Active Call Tracking: Enabled`);
 });

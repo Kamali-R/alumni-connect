@@ -134,10 +134,11 @@ messageSchema.virtual('formattedDuration').get(function() {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 });
 
-// Static method to save call messages
-// In message.js - Fix the static method
+// Static method to save call messages - FIXED VERSION
 messageSchema.statics.saveCallMessage = async function(callData) {
   try {
+    console.log('💾 saveCallMessage called with:', callData);
+    
     const messageTexts = {
       voice: {
         initiated: 'Voice call started',
@@ -155,11 +156,15 @@ messageSchema.statics.saveCallMessage = async function(callData) {
       }
     };
 
+    const messageText = messageTexts[callData.callType]?.[callData.callStatus] || 'Call activity';
+    
+    console.log('📝 Creating message with text:', messageText);
+
     const message = new this({
       conversationId: callData.conversationId,
       senderId: callData.senderId,
       receiverId: callData.receiverId,
-      message: messageTexts[callData.callType][callData.callStatus],
+      message: messageText,
       messageType: 'call',
       callType: callData.callType,
       callStatus: callData.callStatus,
@@ -169,25 +174,40 @@ messageSchema.statics.saveCallMessage = async function(callData) {
       securityFlags: ['verified']
     });
 
+    console.log('💾 Saving message to database...');
     const savedMessage = await message.save();
+    console.log('✅ Message saved successfully:', savedMessage._id);
     
-    // Update conversation last message
+    // Update conversation
     const Conversation = mongoose.model('Conversation');
     const conversation = await Conversation.findById(callData.conversationId);
+    
     if (conversation) {
-      conversation.lastMessage = messageTexts[callData.callType][callData.callStatus];
+      console.log('💬 Updating conversation:', conversation._id);
+      conversation.lastMessage = messageText;
       conversation.lastMessageAt = new Date();
       
       // Increment unread count for receiver
-      const currentUnread = conversation.unreadCount.get(callData.receiverId.toString()) || 0;
-      conversation.unreadCount.set(callData.receiverId.toString(), currentUnread + 1);
+      const receiverIdStr = callData.receiverId.toString();
+      const currentUnread = conversation.unreadCount.get(receiverIdStr) || 0;
+      conversation.unreadCount.set(receiverIdStr, currentUnread + 1);
       
       await conversation.save();
+      console.log('✅ Conversation updated successfully');
+    } else {
+      console.log('⚠️ Conversation not found:', callData.conversationId);
     }
 
     return savedMessage;
   } catch (error) {
-    console.error('❌ Save call message error:', error);
+    console.error('❌ saveCallMessage error:', error);
+    console.error('❌ Error details:', {
+      conversationId: callData.conversationId,
+      senderId: callData.senderId,
+      receiverId: callData.receiverId,
+      callType: callData.callType,
+      callStatus: callData.callStatus
+    });
     throw error;
   }
 };

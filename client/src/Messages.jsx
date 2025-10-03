@@ -100,7 +100,6 @@ const CallStatus = ({ callStatus, activeCall, onEndCall, callDuration }) => {
 };
 
 // Call Interface Component with WebRTC
-// Call Interface Component with WebRTC
 const CallInterface = ({ 
   call, 
   onEndCall, 
@@ -296,6 +295,7 @@ const CallInterface = ({
     </div>
   );
 };
+
 // File Upload Component
 const FileUploadButton = ({ onFileSelect, disabled }) => {
   const fileInputRef = useRef(null);
@@ -856,6 +856,29 @@ const Messages = () => {
       }
     }
     return null;
+  };
+
+  // Debug database function
+  const debugDatabase = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/debug/all-messages', {
+        headers: getAuthHeaders()
+      });
+      const data = await response.json();
+      console.log('🐛 Database Debug Info:', data);
+      
+      // Also check database status
+      const statusResponse = await fetch('http://localhost:5000/api/debug/database-status', {
+        headers: getAuthHeaders()
+      });
+      const statusData = await statusResponse.json();
+      console.log('🗃️ Database Status:', statusData);
+      
+      toast.info(`Database check complete. Found ${data.totalMessages} messages.`);
+    } catch (error) {
+      console.error('Debug error:', error);
+      toast.error('Debug failed: ' + error.message);
+    }
   };
 
   // Initialize WebRTC
@@ -1499,12 +1522,12 @@ const Messages = () => {
       
       if (conversationData.success && conversationData.conversation) {
         const messagesResponse = await fetch(
-          `http://localhost:5000/api/messages/conversations/${otherUserId}/messages`,
-          {
-            method: 'GET',
-            headers: getAuthHeaders()
-          }
-        );
+  `http://localhost:5000/api/messages/conversations/${otherUserId}/messages`,
+  {
+    method: 'GET',
+    headers: getAuthHeaders()
+  }
+);
 
         if (!messagesResponse.ok) {
           throw new Error(`Failed to fetch messages: ${messagesResponse.status}`);
@@ -1889,6 +1912,14 @@ const Messages = () => {
               <span className="ml-2 text-sm text-blue-100 bg-blue-700 px-2 py-1 rounded-full">
                 Connected Alumni Only
               </span>
+              
+              {/* DEBUG BUTTON ADDED HERE */}
+              <button 
+                onClick={debugDatabase}
+                className="ml-4 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm font-medium"
+              >
+                🐛 Debug DB
+              </button>
             </div>
             
             <div className="flex-1 max-w-md ml-6">

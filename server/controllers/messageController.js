@@ -139,7 +139,13 @@ export const sendMessage = async (req, res) => {
     const currentUserId = req.user.id;
     const { receiverId, message, messageType = 'text', replyTo } = req.body;
 
-    console.log('📤 Sending message:', { currentUserId, receiverId, messageType, replyTo });
+    console.log('📤 Sending message:', { 
+      currentUserId, 
+      receiverId, 
+      messageType, 
+      hasFile: !!req.file,
+      replyTo 
+    });
 
     if (!receiverId || (!message && !req.file)) {
       return res.status(400).json({
@@ -147,7 +153,6 @@ export const sendMessage = async (req, res) => {
         message: 'Receiver ID and message or file are required'
       });
     }
-
     // Security: Prevent self-messaging
     if (currentUserId === receiverId) {
       return res.status(400).json({
@@ -297,6 +302,7 @@ export const sendMessage = async (req, res) => {
         messageType: populatedMessage.replyTo.messageId.messageType
       };
     }
+    
 
     const responseMessage = {
       ...populatedMessage,
