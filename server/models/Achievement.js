@@ -1,40 +1,44 @@
 import mongoose from 'mongoose';
 
 const achievementSchema = new mongoose.Schema({
-  personType: {
-    type: String,
-    enum: ['alumni', 'student'],
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
     required: true
   },
-  name: {
+  userProfile: {
+    name: {
+      type: String,
+      required: true
+    },
+    initials: {
+      type: String,
+      required: true
+    },
+    department: {
+      type: String,
+      required: true
+    },
+    graduationYear: {
+      type: String,
+      required: true
+    },
+    currentPosition: {
+      type: String,
+      required: true
+    }
+  },
+  title: {
     type: String,
     required: true,
     trim: true
   },
-  initials: {
-    type: String,
-    required: true,
-    maxlength: 3
-  },
-  department: {
-    type: String,
-    required: true
-  },
-  graduationYear: {
-    type: String
-  },
-  currentPosition: {
-    type: String
-  },
-  currentYear: {
-    type: String
-  },
-  title: {
-    type: String,
-    required: true
-  },
   description: {
     type: String,
+    required: true
+  },
+  achievementDate: {
+    type: Date,
     required: true
   },
   category: {
@@ -44,23 +48,40 @@ const achievementSchema = new mongoose.Schema({
   },
   time: {
     type: String,
-    required: true
+    default: 'Just now'
+  },
+  avatarColor: {
+    type: String,
+    default: 'from-blue-500 to-purple-500'
   },
   company: String,
   level: String,
   deal: String,
   publication: String,
   recognition: String,
-  scope: String,
-  status: String,
-  avatarColor: {
-    type: String,
-    required: true
+  congratulations: {
+    count: {
+      type: Number,
+      default: 0
+    },
+    users: [{
+      userId: {
+        type: String,
+        required: true
+      },
+      timestamp: {
+        type: Date,
+        default: Date.now
+      }
+    }]
   },
   createdAt: {
     type: Date,
     default: Date.now
   }
 });
+
+achievementSchema.index({ userId: 1, createdAt: -1 });
+achievementSchema.index({ 'congratulations.users.userId': 1 });
 
 export default mongoose.model('Achievement', achievementSchema);

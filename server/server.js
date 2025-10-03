@@ -11,7 +11,7 @@ import authRoutes from './routes/authRoutes.js';
 import protectedRoutes from './routes/protectedRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
 import eventRoutes from './routes/eventRoutes.js';
-import newsAndAchievementsRoutes from './routes/NewsAndAchievementsRoutes.js'; // ✅ Add this import
+import NewsAndAchievementsRoutes from './routes/NewsAndAchievementsRoutes.js';
 
 // Load Google OAuth config
 import './config/googleAuth.js';
@@ -81,7 +81,7 @@ app.use('/api', protectedRoutes);
 app.use('/api', contactRoutes);
 app.use('/api', alumniRoutes);
 app.use('/api/events', eventRoutes);
-app.use('/api', newsAndAchievementsRoutes); // ✅ Add this line
+app.use('/api', NewsAndAchievementsRoutes); // ✅ Add this line
 app.use('/api', jobRoutes);
 
 // ✅ Root Route
