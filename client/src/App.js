@@ -10,6 +10,7 @@ import AlumniConnectProfile from './AlumniProfile';
 import EventsAndReunions from "./EventsAndReunions";
 import GoogleAuthHandler from './GoogleAuthHandler';
 import './index.css';
+import Messages from './Messages';
 
 function App() {
   const [userData, setUserData] = useState(null);
@@ -35,6 +36,7 @@ function App() {
           <Route path="/dashboard" element={<AlumniDashboard />} />
           {/* Add this route for Events */}
           <Route path="/events" element={<EventsAndReunions />} />
+          <Route path="/messages" element={<Messages />} />
           <Route path="/auth/google/callback" element={<GoogleAuthHandler />} />
         </Routes>
       </div>

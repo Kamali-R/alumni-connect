@@ -5,7 +5,7 @@ import AlumniJobDashboard from './AlumniJobDashboard';
 import NetworkingHub from './NetworkingHub';
 import NewsAndAchievements from './NewsAndAchievements';
 import EventsAndReunions from './EventsAndReunions';
-
+import Messages from './Messages';
 const AlumniConnectDashboard = () => {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -586,6 +586,13 @@ const AlumniConnectDashboard = () => {
               <NetworkingHub/>
             </div>
           )}
+          {/* Networking Section */}
+          {activeSection === 'messages' && (
+            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
+              <Messages/>
+            </div>
+          )}
+          
           
         </main>
       </div>
