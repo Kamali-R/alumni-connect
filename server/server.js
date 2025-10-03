@@ -15,13 +15,19 @@ import networkingRoutes from './routes/networkingRoutes.js';
 import successStoryRoutes from './routes/successStoryRoutes.js';
 import discussionRoutes from './routes/discussionRoutes.js';
 import eventRoutes from './routes/eventRoutes.js';
-import newsAndAchievementsRoutes from './routes/NewsAndAchievementsRoutes.js'; // ✅ Add this import
+import newsAndAchievementsRoutes from './routes/NewsAndAchievementsRoutes.js';
+import messageRoutes from './routes/messageRoutes.js';
+import Message from './models/Message.js';
+import Conversation from './models/Conversation.js';
+import User from './models/User.js';
+import auth from './middleware/authMiddleware.js'; // Add this line
 
 // Load Google OAuth config
 import './config/googleAuth.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 dotenv.config();
 
 const app = express();
@@ -54,9 +60,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'fallback-secret-key',
@@ -71,6 +74,7 @@ app.use(
 
 // ✅ Static Files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // ✅ Test endpoint
 app.get('/api/test', (req, res) => {
   res.json({ 
@@ -84,397 +88,151 @@ app.get('/api/test', (req, res) => {
 app.use(passport.initialize());
 app.use(passport.session());
 
-// ✅ Health Check Endpoint
-app.get('/api/test', (req, res) => {
-  res.json({ 
-    success: true, 
-    message: '✅ Backend is working!',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
-  });
-});
-
 // ✅ API Routes - CORRECTED ORDER
-app.use('/', authRoutes);                    // Auth routes (login, register, etc.)
-app.use('/api', protectedRoutes);           // General protected routes
-app.use('/api', contactRoutes);             // Contact routes
-app.use('/api', alumniRoutes);              // Alumni profile routes
-app.use('/api', jobRoutes);                 // Job routes
-app.use('/api', networkingRoutes);
-app.use('/api', successStoryRoutes);
-app.use('/api', discussionRoutes);
-
-app.delete('/api/debug/fix-connections-completely', async (req, res) => {
-  try {
-    const Connection = mongoose.model('Connection');
-    
-    console.log('🛠️ Starting complete connections fix...');
-    
-    // 1. Delete ALL connections
-    const deleteResult = await Connection.deleteMany({});
-    console.log('✅ Deleted all connections:', deleteResult.deletedCount);
-    
-    // 2. Drop ALL indexes from connections collection
-    const db = mongoose.connection.db;
-    const collection = db.collection('connections');
-    
-    try {
-      const indexes = await collection.indexes();
-      console.log('📋 Current indexes:', indexes.map(idx => idx.name));
-      
-      // Drop all indexes except _id_
-      for (const index of indexes) {
-        if (index.name !== '_id_') {
-          try {
-            await collection.dropIndex(index.name);
-            console.log('✅ Dropped index:', index.name);
-          } catch (e) {
-            console.log('ℹ️ Could not drop index', index.name, ':', e.message);
-          }
-        }
-      }
-    } catch (e) {
-      console.log('ℹ️ Error handling indexes:', e.message);
-    }
-    
-    // 3. Create ONE clean, proper index
-    await collection.createIndex(
-      { requesterId: 1, recipientId: 1 }, 
-      { 
-        unique: true, 
-        name: 'unique_connection_pair'
-      }
-    );
-    console.log('✅ Created clean unique index');
-    
-    // 4. Test creating a valid connection
-    const User = mongoose.model('User');
-    const users = await User.find({ role: 'alumni' }).limit(2);
-    
-    if (users.length >= 2) {
-      const testConnection = new Connection({
-        requesterId: users[0]._id,
-        recipientId: users[1]._id,
-        status: 'pending',
-        requestedAt: new Date()
-      });
-      
-      await testConnection.save();
-      console.log('✅ Test connection created successfully');
-      
-      // Clean up test connection
-      await Connection.findByIdAndDelete(testConnection._id);
-      console.log('✅ Test connection cleaned up');
-    }
-    
-    // 5. Verify the fix
-    const finalStats = await collection.stats();
-    const finalIndexes = await collection.indexes();
-    
-    res.json({
-      message: 'Connections completely fixed!',
-      actions: {
-        deletedConnections: deleteResult.deletedCount,
-        createdIndexes: finalIndexes.map(idx => idx.name),
-        collectionSize: finalStats.size,
-        testSuccessful: users.length >= 2
-      },
-      nextSteps: [
-        'Now replace your Connection model with the fixed version',
-        'Update your networking controller',
-        'Restart the server',
-        'Test connection functionality'
-      ]
-    });
-    
-  } catch (error) {
-    console.error('❌ Fix error:', error);
-    res.status(500).json({ 
-      error: error.message,
-      stack: error.stack 
-    });
-  }
-});
-// Networking routes
-app.get('/api/debug/check-connections-state', async (req, res) => {
-  try {
-    const Connection = mongoose.model('Connection');
-    const User = mongoose.model('User');
-    
-    console.log('🔍 Checking connections state...');
-    
-    // Get ALL connections with details
-    const allConnections = await Connection.find({})
-      .populate('requesterId', 'name email')
-      .populate('recipientId', 'name email')
-      .lean();
-    
-    // Get basic collection info (compatible method)
-    const db = mongoose.connection.db;
-    const collection = db.collection('connections');
-    
-    // Count documents using compatible method
-    const totalCount = await collection.countDocuments();
-    
-    // Get indexes
-    const indexes = await collection.indexes();
-    
-    // Check for any users in the database
-    const totalUsers = await User.countDocuments({ role: 'alumni' });
-    const sampleUsers = await User.find({ role: 'alumni' }).limit(3).select('name email');
-    
-    console.log('📊 Connection analysis:', {
-      totalConnections: allConnections.length,
-      totalCountFromCollection: totalCount,
-      totalAlumniUsers: totalUsers
-    });
-    
-    res.json({
-      // Basic counts
-      totalConnections: allConnections.length,
-      totalCountFromCollection: totalCount,
-      totalAlumniUsers: totalUsers,
-      
-      // Index information
-      indexes: indexes.map(index => index.name),
-      
-      // Sample users available for testing
-      sampleUsers: sampleUsers.map(user => ({
-        id: user._id,
-        name: user.name,
-        email: user.email
-      })),
-      
-      // Detailed connection analysis
-      connections: allConnections.map(conn => {
-        const hasRequester = conn.requesterId && mongoose.Types.ObjectId.isValid(conn.requesterId);
-        const hasRecipient = conn.recipientId && mongoose.Types.ObjectId.isValid(conn.recipientId);
-        
-        return {
-          id: conn._id,
-          requesterId: conn.requesterId,
-          recipientId: conn.recipientId,
-          requesterName: conn.requesterId?.name || 'null/missing',
-          recipientName: conn.recipientId?.name || 'null/missing', 
-          status: conn.status,
-          requestedAt: conn.requestedAt,
-          hasNullValues: !hasRequester || !hasRecipient,
-          isValid: hasRequester && hasRecipient,
-          // Detailed validation
-          requesterValid: hasRequester,
-          recipientValid: hasRecipient,
-          canBeUsed: hasRequester && hasRecipient && conn.requesterId.toString() !== conn.recipientId.toString()
-        };
-      }),
-      
-      // Summary statistics
-      summary: {
-        validConnections: allConnections.filter(conn => 
-          conn.requesterId && conn.recipientId &&
-          mongoose.Types.ObjectId.isValid(conn.requesterId) &&
-          mongoose.Types.ObjectId.isValid(conn.recipientId)
-        ).length,
-        
-        corruptedConnections: allConnections.filter(conn => 
-          !conn.requesterId || !conn.recipientId ||
-          !mongoose.Types.ObjectId.isValid(conn.requesterId) ||
-          !mongoose.Types.ObjectId.isValid(conn.recipientId)
-        ).length,
-        
-        pendingConnections: allConnections.filter(conn => conn.status === 'pending').length,
-        acceptedConnections: allConnections.filter(conn => conn.status === 'accepted').length,
-        declinedConnections: allConnections.filter(conn => conn.status === 'declined').length
-      }
-    });
-    
-  } catch (error) {
-    console.error('❌ Diagnostic error:', error);
-    res.status(500).json({ 
-      error: error.message,
-      hint: 'Check if Connection model is properly defined'
-    });
-  }
-});
-
-app.post('/api/debug/test-connection-creation', async (req, res) => {
-  try {
-    const Connection = mongoose.model('Connection');
-    const User = mongoose.model('User');
-    
-    // Get two alumni users to test with
-    const users = await User.find({ role: 'alumni' }).limit(2);
-    
-    if (users.length < 2) {
-      return res.status(400).json({ 
-        message: 'Need at least 2 alumni users for testing',
-        availableUsers: users.length
-      });
-    }
-    
-    const [user1, user2] = users;
-    
-    console.log('Testing connection between:', {
-      user1: user1.name,
-      user2: user2.name
-    });
-    
-    // Try to create a connection
-    const testConnection = new Connection({
-      requesterId: user1._id,
-      recipientId: user2._id,
-      status: 'pending'
-    });
-    
-    // Validate first
-    try {
-      await testConnection.validate();
-      console.log('✅ Validation passed');
-    } catch (validationError) {
-      return res.status(400).json({
-        message: 'Validation failed',
-        error: validationError.message
-      });
-    }
-    
-    // Try to save
-    await testConnection.save();
-    console.log('✅ Connection saved successfully');
-    
-    // Clean up the test connection
-    await Connection.findByIdAndDelete(testConnection._id);
-    
-    res.json({
-      success: true,
-      message: 'Connection creation test passed!',
-      testUsers: {
-        requester: user1.name,
-        recipient: user2.name
-      }
-    });
-    
-  } catch (error) {
-    console.error('Test connection error:', error);
-    
-    if (error.code === 11000) {
-      return res.status(400).json({
-        success: false,
-        message: 'Duplicate key error (connection already exists)',
-        error: error.message
-      });
-    }
-    
-    res.status(500).json({
-      success: false,
-      message: 'Connection creation test failed',
-      error: error.message,
-      code: error.code
-    });
-  }
-});
-
-app.delete('/api/debug/reset-all-connections', async (req, res) => {
-  try {
-    const Connection = mongoose.model('Connection');
-    
-    // Delete ALL connections (nuclear option)
-    const deleteResult = await Connection.deleteMany({});
-    
-    // Drop all indexes and recreate simple one
-    const db = mongoose.connection.db;
-    
-    try {
-      await db.collection('connections').dropIndexes();
-      console.log('✅ Dropped all indexes');
-    } catch (e) {
-      console.log('ℹ️ Could not drop indexes:', e.message);
-    }
-    
-    // Create simple unique index
-    await db.collection('connections').createIndex(
-      { requesterId: 1, recipientId: 1 }, 
-      { unique: true, name: 'unique_connection_pair' }
-    );
-    
-    res.json({
-      message: 'All connections reset successfully',
-      deletedCount: deleteResult.deletedCount
-    });
-    
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/debug/simple-connection-test', async (req, res) => {
-  try {
-    const Connection = mongoose.model('Connection');
-    
-    // Just try to count connections - most basic test
-    const count = await Connection.countDocuments();
-    
-    // Try to find one connection
-    const sampleConnection = await Connection.findOne({});
-    
-    res.json({
-      success: true,
-      totalConnections: count,
-      sampleConnection: sampleConnection ? {
-        id: sampleConnection._id,
-        requesterId: sampleConnection.requesterId,
-        recipientId: sampleConnection.recipientId,
-        status: sampleConnection.status
-      } : null,
-      message: `Found ${count} connections in database`
-    });
-    
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      hint: 'Connection model might not be properly defined'
-    });
-  }
-});
-app.delete('/api/debug/cleanup-corrupted-connections', async (req, res) => {
-  try {
-    const Connection = mongoose.model('Connection');
-    
-    console.log('🧹 Starting simple cleanup of corrupted connections...');
-    
-    // SIMPLE: Delete any connection with null values
-    const deleteResult = await Connection.deleteMany({
-      $or: [
-        { requesterId: null },
-        { recipientId: null }
-      ]
-    });
-    
-    console.log('✅ Cleanup completed. Deleted:', deleteResult.deletedCount, 'corrupted connections');
-    
-    // Don't recreate indexes here - let your Connection model handle it
-    console.log('✅ Indexes will be handled by Connection model');
-    
-    res.json({
-      message: 'Cleanup completed successfully',
-      deletedCount: deleteResult.deletedCount
-    });
-    
-  } catch (error) {
-    console.error('❌ Cleanup error:', error);
-    res.status(500).json({ 
-      error: error.message
-    });
-  }
-});
-
-// ✅ API Routes
 app.use('/', authRoutes);
 app.use('/api', protectedRoutes);
 app.use('/api', contactRoutes);
 app.use('/api', alumniRoutes);
-app.use('/api/events', eventRoutes);
-app.use('/api', newsAndAchievementsRoutes); // ✅ Add this line
 app.use('/api', jobRoutes);
+app.use('/api', networkingRoutes);
+app.use('/api', successStoryRoutes);
+app.use('/api', discussionRoutes);
+app.use('/api/events', eventRoutes);
+app.use('/api', newsAndAchievementsRoutes);
+app.use('/api/messages', messageRoutes);
+
+// ========== DEBUG ROUTES ==========
+
+// Reset conversations collection (development only)
+app.delete('/api/debug/reset-conversations', async (req, res) => {
+  try {
+    const Conversation = mongoose.model('Conversation');
+    console.log('🔄 Resetting conversations collection...');
+    
+    const result = await Conversation.deleteMany({});
+    console.log('✅ Deleted conversations:', result.deletedCount);
+    
+    const db = mongoose.connection.db;
+    try {
+      await db.collection('conversations').dropIndexes();
+      console.log('✅ Dropped conversation indexes');
+    } catch (e) {
+      console.log('ℹ️ Could not drop indexes:', e.message);
+    }
+    
+    await db.collection('conversations').createIndex(
+      { participants: 1 }, 
+      { name: 'participants_index' }
+    );
+    console.log('✅ Recreated conversation index');
+    
+    res.json({
+      message: 'Conversations reset successfully',
+      deletedCount: result.deletedCount,
+      status: 'Indexes recreated'
+    });
+    
+  } catch (error) {
+    console.error('❌ Reset conversations error:', error);
+    res.status(500).json({ 
+      error: error.message,
+      hint: 'Make sure Conversation model is properly defined'
+    });
+  }
+});
+app.get('/api/debug/messages', auth, async (req, res) => {
+  try {
+    const Message = mongoose.model('Message');
+    const Conversation = mongoose.model('Conversation');
+    
+    const messages = await Message.find({})
+      .populate('senderId', 'name')
+      .populate('receiverId', 'name')
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+    
+    const conversations = await Conversation.find({})
+      .populate('participants', 'name')
+      .lean();
+    
+    res.json({
+      messagesCount: messages.length,
+      messages: messages,
+      conversationsCount: conversations.length,
+      conversations: conversations
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+app.get('/api/debug/reset-conversations', async (req, res) => {
+  try {
+    const Conversation = mongoose.model('Conversation');
+    console.log('🔄 Resetting conversations collection via GET...');
+    
+    const result = await Conversation.deleteMany({});
+    
+    const db = mongoose.connection.db;
+    try {
+      await db.collection('conversations').dropIndexes();
+    } catch (e) {
+      console.log('ℹ️ Could not drop indexes:', e.message);
+    }
+    
+    await db.collection('conversations').createIndex(
+      { participants: 1 }, 
+      { name: 'participants_index' }
+    );
+    
+    res.send(`
+      <html>
+        <head>
+          <title>Reset Conversations</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 40px; background: #f5f5f5; }
+            .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .success { color: #059669; background: #d1fae5; padding: 15px; border-radius: 5px; margin: 20px 0; }
+            .info { color: #0369a1; background: #e0f2fe; padding: 15px; border-radius: 5px; margin: 20px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>🔄 Conversations Reset</h1>
+            <div class="success">
+              <h3>✅ Success!</h3>
+              <p>Deleted ${result.deletedCount} conversations</p>
+              <p>Recreated indexes</p>
+            </div>
+            <div class="info">
+              <p><strong>Next Steps:</strong></p>
+              <ol>
+                <li>Update your Conversation model with the fixed version</li>
+                <li>Test the messaging feature</li>
+                <li>Remove this reset route in production</li>
+              </ol>
+            </div>
+            <a href="/" style="color: #3b82f6; text-decoration: none;">← Back to Home</a>
+          </div>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    res.send(`
+      <html>
+        <body style="font-family: Arial, sans-serif; padding: 40px; background: #fef2f2;">
+          <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <h1 style="color: #dc2626;">❌ Error Resetting Conversations</h1>
+            <div style="color: #dc2626; background: #fee2e2; padding: 15px; border-radius: 5px; margin: 20px 0;">
+              <p><strong>Error:</strong> ${error.message}</p>
+            </div>
+            <a href="/" style="color: #3b82f6; text-decoration: none;">← Back to Home</a>
+          </div>
+        </body>
+      </html>
+    `);
+  }
+});
 
 // ✅ Root Route
 app.get('/', (req, res) => {
@@ -490,26 +248,7 @@ app.get('/', (req, res) => {
   });
 });
 
-// ✅ Debug Route for Connection Issues
-app.get('/api/debug/connections', async (req, res) => {
-  try {
-    const Connection = mongoose.model('Connection');
-    const totalConnections = await Connection.countDocuments();
-    const pendingConnections = await Connection.countDocuments({ status: 'pending' });
-    const acceptedConnections = await Connection.countDocuments({ status: 'accepted' });
-    
-    res.json({
-      totalConnections,
-      pendingConnections,
-      acceptedConnections,
-      message: 'Connection debug info'
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ✅ 404 Handler - FIXED: Remove the problematic * route
+// ✅ 404 Handler
 app.use((req, res) => {
   res.status(404).json({ 
     message: 'Route not found',
@@ -527,155 +266,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Debug script to test connection functionality
-// Add this to your backend temporarily to test connections
-
-// Add this route to your server.js or create a separate debug route file
-app.get('/api/debug/test-connection-flow', async (req, res) => {
-  try {
-    const Connection = mongoose.model('Connection');
-    const User = mongoose.model('User');
-    const Alumni = mongoose.model('Alumni');
-    
-    // Get all users with alumni profiles
-    const users = await User.find({ role: 'alumni' })
-      .select('name email')
-      .limit(5);
-    
-    const usersWithProfiles = [];
-    for (const user of users) {
-      const alumniProfile = await Alumni.findOne({ userId: user._id });
-      if (alumniProfile) {
-        usersWithProfiles.push({
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          hasProfile: !!alumniProfile
-        });
-      }
-    }
-    
-    // Get all connections
-    const allConnections = await Connection.find({})
-      .populate('requesterId', 'name email')
-      .populate('recipientId', 'name email')
-      .lean();
-    
-    const connectionStats = {
-      total: allConnections.length,
-      pending: allConnections.filter(c => c.status === 'pending').length,
-      accepted: allConnections.filter(c => c.status === 'accepted').length,
-      declined: allConnections.filter(c => c.status === 'declined').length
-    };
-    
-    res.json({
-      message: 'Debug info for connection functionality',
-      usersWithProfiles,
-      connectionStats,
-      recentConnections: allConnections.slice(0, 10).map(conn => ({
-        id: conn._id,
-        requester: conn.requesterId?.name || 'Unknown',
-        recipient: conn.recipientId?.name || 'Unknown',
-        status: conn.status,
-        requestedAt: conn.requestedAt
-      })),
-      endpoints: {
-        directory: 'GET /api/alumni-directory',
-        sendRequest: 'POST /api/connection-request { recipientId }',
-        viewRequests: 'GET /api/connection-requests',
-        acceptRequest: 'POST /api/accept-connection { connectionId }',
-        declineRequest: 'POST /api/decline-connection { connectionId }',
-        cancelRequest: 'POST /api/cancel-connection { connectionId }'
-      }
-    });
-    
-  } catch (error) {
-    console.error('Debug script error:', error);
-    res.status(500).json({ 
-      error: error.message,
-      stack: error.stack 
-    });
-  }
-});
-
-// Test endpoint for creating sample connections (for development only)
-app.post('/api/debug/create-test-connection', async (req, res) => {
-  try {
-    const { requesterId, recipientId } = req.body;
-    
-    if (!requesterId || !recipientId) {
-      return res.status(400).json({ message: 'Both requesterId and recipientId required' });
-    }
-    
-    const Connection = mongoose.model('Connection');
-    
-    const connection = new Connection({
-      requesterId,
-      recipientId,
-      status: 'pending',
-      requestedAt: new Date()
-    });
-    
-    await connection.save();
-    
-    const populated = await Connection.findById(connection._id)
-      .populate('requesterId', 'name email')
-      .populate('recipientId', 'name email');
-    
-    res.json({
-      message: 'Test connection created',
-      connection: populated
-    });
-    
-  } catch (error) {
-    if (error.code === 11000) {
-      return res.status(400).json({ message: 'Connection already exists' });
-    }
-    
-    res.status(500).json({ 
-      message: 'Error creating test connection',
-      error: error.message 
-    });
-  }
-});
-
-// Clear all connections (for development/testing only - REMOVE IN PRODUCTION)
-app.delete('/api/debug/clear-connections', async (req, res) => {
-  try {
-    const Connection = mongoose.model('Connection');
-    const result = await Connection.deleteMany({});
-    
-    res.json({
-      message: 'All connections cleared',
-      deletedCount: result.deletedCount
-    });
-    
-  } catch (error) {
-    res.status(500).json({ 
-      message: 'Error clearing connections',
-      error: error.message 
-    });
-  }
-});
-
-// ✅ Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    success: false,
-    message: 'Something went wrong!',
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
-  });
-});
-
-// ✅ 404 handler
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Route not found'
-  });
-});
-
 // ✅ Connect to MongoDB
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
@@ -684,139 +274,462 @@ if (!MONGO_URI) {
   console.error('❌ MONGO_URI is not defined in environment variables');
   process.exit(1);
 }
-// Add to server.js - Data validation middleware
-app.use('/api/connection-request', (req, res, next) => {
-  if (req.method === 'POST') {
-    const { recipientId } = req.body;
-    
-    if (!recipientId) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Recipient ID is required' 
-      });
-    }
-    
-    if (!mongoose.Types.ObjectId.isValid(recipientId)) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Invalid recipient ID format' 
-      });
-    }
-  }
-  next();
-});
-// Add this temporary cleanup route to server.js
-// Add this to server.js - CORRUPTED DATA CLEANUP
-// Add this cleanup route to your EXISTING server.js file
 
 mongoose
-  .connect(MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
+  .connect(MONGO_URI)
   .then(() => {
     console.log('✅ MongoDB Connected');
-    
-    // Create indexes after connection is established
-    const createIndexes = async () => {
-      try {
-        const db = mongoose.connection.db;
-        
-        // Create indexes for Connection model
-        await db.collection('connections').createIndex(
-          { "requesterId": 1, "recipientId": 1 }, 
-          { unique: true, sparse: true }
-        );
-        await db.collection('connections').createIndex({ "requesterId": 1, "status": 1 });
-        await db.collection('connections').createIndex({ "recipientId": 1, "status": 1 });
-        await db.collection('connections').createIndex({ "status": 1, "requestedAt": -1 });
-        
-        // Create indexes for Alumni model
-        await db.collection('alumnis').createIndex({ "userId": 1 }, { unique: true });
-        await db.collection('alumnis').createIndex({ "personalInfo.personalEmail": 1 });
-        await db.collection('alumnis').createIndex({ "academicInfo.collegeEmail": 1 });
-        await db.collection('alumnis').createIndex({ "status": 1 });
-        
-        // Create indexes for User model
-        await db.collection('users').createIndex({ "email": 1 }, { unique: true });
-        
-        console.log('✅ Database indexes created successfully');
-      } catch (error) {
-        console.log('ℹ️ Some indexes may already exist:', error.message);
-      }
-    };
-    
-    createIndexes();
-    
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
-      console.log(`📡 API Test: http://localhost:${PORT}/api/test`);
-    });
   })
   .catch((err) => {
     console.error('❌ MongoDB connection failed:', err.message);
     process.exit(1);
   });
-// Enhanced index creation function
-const createConnectionIndexes = async () => {
+
+// Create HTTP server
+const server = createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
+
+// Socket.io connection handling with WebRTC support
+const connectedUsers = new Map();
+const activeCalls = new Map();
+
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+  if (!token) {
+    return next(new Error('Authentication error'));
+  }
+  
   try {
-    const db = mongoose.connection.db;
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+    socket.userId = payload.id;
+    next();
+  } catch (error) {
+    next(new Error('Invalid token'));
+  }
+});
+
+io.on('connection', (socket) => {
+  console.log('User connected:', socket.id, 'User ID:', socket.userId);
+
+  if (socket.userId) {
+    connectedUsers.set(socket.userId.toString(), {
+      socketId: socket.id,
+      userId: socket.userId,
+      connectedAt: new Date()
+    });
     
-    console.log('🔄 Creating database indexes...');
+    socket.broadcast.emit('userOnline', { userId: socket.userId });
+  }
+
+  // Join user's personal room
+  socket.on('joinUserRoom', () => {
+    if (socket.userId) {
+      socket.join(`user_${socket.userId}`);
+      console.log(`User ${socket.userId} joined their room`);
+    }
+  });
+
+  // Join conversation room
+  socket.on('joinConversation', (conversationId) => {
+    socket.join(`conversation_${conversationId}`);
+    console.log(`User ${socket.userId} joined conversation ${conversationId}`);
+  });
+
+  // Handle sending messages
+  socket.on('sendMessage', async (data) => {
+    try {
+      const { conversationId, message } = data;
+      socket.to(`conversation_${conversationId}`).emit('newMessage', message);
+      
+      socket.to(`conversation_${conversationId}`).emit('messageDelivered', {
+        messageId: message._id,
+        conversationId
+      });
+    } catch (error) {
+      console.error('Socket send message error:', error);
+    }
+  });
+
+  // Handle typing indicators
+  socket.on('typing', (data) => {
+    socket.to(`conversation_${data.conversationId}`).emit('typing', {
+      userId: socket.userId,
+      isTyping: data.isTyping
+    });
+  });
+
+  // Handle read receipts
+  socket.on('markAsRead', (data) => {
+    socket.to(`conversation_${data.conversationId}`).emit('messageRead', {
+      conversationId: data.conversationId,
+      userId: socket.userId
+    });
+  });
+
+  // Handle message deletion
+  socket.on('deleteMessage', (data) => {
+    console.log('🗑️ Message deletion requested:', data);
+    socket.to(`conversation_${data.conversationId}`).emit('messageDeleted', {
+      messageId: data.messageId,
+      conversationId: data.conversationId
+    });
+  });
+
+  // ========== WEBRTC CALL HANDLERS ==========
+
+  // Voice call initiation
+  socket.on('initiateVoiceCall', async (data) => {
+    console.log('📞 Voice call initiated:', data);
     
-    // Clean up any problematic indexes first
-    const existingIndexes = await db.collection('connections').getIndexes();
-    const indexesToDrop = ['fromUser_1_toUser_1', 'requesterId_1_recipientId_1'];
+    try {
+      const User = mongoose.model('User');
+      const Message = mongoose.model('Message');
+      const Conversation = mongoose.model('Conversation');
+      const caller = await User.findById(socket.userId).select('name');
+      const callerName = caller?.name || 'Unknown User';
+      
+      // Save call initiation message
+      await Message.saveCallMessage({
+  conversationId: data.conversationId,
+  senderId: socket.userId,
+  receiverId: data.toUserId,
+  callType: 'voice', // or 'video'
+  callStatus: 'initiated',
+  callRoomId: data.callRoomId
+});
+      // Track active call
+      activeCalls.set(data.callRoomId, {
+        roomId: data.callRoomId,
+        callerId: socket.userId,
+        receiverId: data.toUserId,
+        callType: 'voice',
+        conversationId: data.conversationId,
+        status: 'ringing',
+        createdAt: new Date()
+      });
+      
+      // Notify recipient
+      socket.to(`user_${data.toUserId}`).emit('incomingVoiceCall', {
+        fromUserId: socket.userId,
+        callerName: callerName,
+        callRoomId: data.callRoomId,
+        conversationId: data.conversationId,
+        type: 'voice'
+      });
+      
+      console.log(`📞 Voice call initiated in room: ${data.callRoomId}`);
+      
+    } catch (error) {
+      console.error('❌ Error handling voice call:', error);
+      socket.emit('callError', { error: 'Failed to initiate call' });
+    }
+  });
+
+  // Video call initiation
+  socket.on('initiateVideoCall', async (data) => {
+    console.log('📹 Video call initiated:', data);
     
-    for (const indexName of indexesToDrop) {
-      if (existingIndexes[indexName]) {
-        try {
-          await db.collection('connections').dropIndex(indexName);
-          console.log(`✅ Dropped index: ${indexName}`);
-        } catch (e) {
-          console.log(`ℹ️ Could not drop index ${indexName}:`, e.message);
-        }
+    try {
+      const User = mongoose.model('User');
+      const Message = mongoose.model('Message');
+      
+      const caller = await User.findById(socket.userId).select('name');
+      const callerName = caller?.name || 'Unknown User';
+      
+      // Save call initiation message
+      await Message.saveCallMessage({
+        conversationId: data.conversationId,
+        senderId: socket.userId,
+        receiverId: data.toUserId,
+        callType: 'video',
+        callStatus: 'initiated',
+        callRoomId: data.callRoomId
+      });
+      
+      // Track active call
+      activeCalls.set(data.callRoomId, {
+        roomId: data.callRoomId,
+        callerId: socket.userId,
+        receiverId: data.toUserId,
+        callType: 'video',
+        conversationId: data.conversationId,
+        status: 'ringing',
+        createdAt: new Date()
+      });
+      
+      // Notify recipient
+      socket.to(`user_${data.toUserId}`).emit('incomingVideoCall', {
+        fromUserId: socket.userId,
+        callerName: callerName,
+        callRoomId: data.callRoomId,
+        conversationId: data.conversationId,
+        type: 'video'
+      });
+      
+      console.log(`📹 Video call initiated in room: ${data.callRoomId}`);
+      
+    } catch (error) {
+      console.error('❌ Error handling video call:', error);
+      socket.emit('callError', { error: 'Failed to initiate call' });
+    }
+  });
+
+  // Call acceptance
+  socket.on('callAccepted', async (data) => {
+    console.log('✅ Call accepted:', data);
+    
+    try {
+      const Message = mongoose.model('Message');
+      const call = activeCalls.get(data.callRoomId);
+      
+      if (call) {
+        call.status = 'connected';
+        call.connectedAt = new Date();
+        activeCalls.set(data.callRoomId, call);
+        
+        // Save call acceptance message
+        await Message.saveCallMessage({
+          conversationId: data.conversationId,
+          senderId: socket.userId,
+          receiverId: call.callerId,
+          callType: data.callType,
+          callStatus: 'connected',
+          callRoomId: data.callRoomId
+        });
+        
+        // Notify caller
+        socket.to(`user_${call.callerId}`).emit('callAccepted', {
+          callRoomId: data.callRoomId,
+          callType: data.callType,
+          conversationId: data.conversationId
+        });
+        
+        console.log(`✅ Call connected in room: ${data.callRoomId}`);
+      }
+    } catch (error) {
+      console.error('❌ Error handling call acceptance:', error);
+      socket.emit('callError', { error: 'Failed to accept call' });
+    }
+  });
+
+  // Call rejection
+  socket.on('callRejected', async (data) => {
+    console.log('❌ Call rejected:', data);
+    
+    try {
+      const Message = mongoose.model('Message');
+      const call = activeCalls.get(data.callRoomId);
+      
+      if (call) {
+        // Save call rejection message
+        await Message.saveCallMessage({
+          conversationId: data.conversationId,
+          senderId: socket.userId,
+          receiverId: call.callerId,
+          callType: data.callType,
+          callStatus: 'declined',
+          callRoomId: data.callRoomId
+        });
+        
+        // Notify caller
+        socket.to(`user_${call.callerId}`).emit('callRejected', {
+          callRoomId: data.callRoomId,
+          callType: data.callType
+        });
+        
+        // Remove from active calls
+        activeCalls.delete(data.callRoomId);
+        
+        console.log(`❌ Call rejected in room: ${data.callRoomId}`);
+      }
+    } catch (error) {
+      console.error('❌ Error handling call rejection:', error);
+    }
+  });
+
+  // Call end
+  socket.on('endCall', async (data) => {
+    console.log('📞 Call ended:', data);
+    
+    try {
+      const Message = mongoose.model('Message');
+      const call = activeCalls.get(data.callRoomId);
+      
+      if (call) {
+        const duration = data.duration || 
+          (call.connectedAt ? Math.round((new Date() - call.connectedAt) / 1000) : 0);
+        
+        // Save call end message
+        await Message.saveCallMessage({
+          conversationId: data.conversationId,
+          senderId: socket.userId,
+          receiverId: call.receiverId,
+          callType: data.callType,
+          callStatus: 'ended',
+          callDuration: duration,
+          callRoomId: data.callRoomId
+        });
+        
+        // Notify other participant
+        const otherUserId = socket.userId === call.callerId ? call.receiverId : call.callerId;
+        socket.to(`user_${otherUserId}`).emit('callEnded', {
+          callRoomId: data.callRoomId,
+          duration: duration,
+          callType: data.callType
+        });
+        
+        // Remove from active calls
+        activeCalls.delete(data.callRoomId);
+        
+        console.log(`📞 Call ended in room: ${data.callRoomId}, duration: ${duration}s`);
+      }
+    } catch (error) {
+      console.error('❌ Error handling call end:', error);
+    }
+  });
+
+  // WebRTC Signaling: Offer
+  socket.on('webrtc-offer', (data) => {
+    console.log('📡 WebRTC offer received');
+    socket.to(`user_${data.toUserId}`).emit('webrtc-offer', {
+      callRoomId: data.callRoomId,
+      offer: data.offer,
+      fromUserId: socket.userId
+    });
+  });
+
+  // WebRTC Signaling: Answer
+  socket.on('webrtc-answer', (data) => {
+    console.log('📡 WebRTC answer received');
+    socket.to(`user_${data.toUserId}`).emit('webrtc-answer', {
+      callRoomId: data.callRoomId,
+      answer: data.answer,
+      fromUserId: socket.userId
+    });
+  });
+
+  // WebRTC Signaling: ICE Candidate
+  socket.on('ice-candidate', (data) => {
+    socket.to(`user_${data.toUserId}`).emit('ice-candidate', {
+      callRoomId: data.callRoomId,
+      candidate: data.candidate,
+      fromUserId: socket.userId
+    });
+  });
+
+  // Call ringing notification
+  socket.on('callRinging', (data) => {
+    console.log('🔔 Call ringing:', data);
+    socket.to(`user_${data.toUserId}`).emit('callRinging', {
+      callRoomId: data.callRoomId,
+      fromUserId: socket.userId
+    });
+  });
+
+  // Toggle audio/video during call
+  socket.on('callToggleMedia', (data) => {
+    const call = activeCalls.get(data.callRoomId);
+    if (call) {
+      const otherUserId = socket.userId === call.callerId ? call.receiverId : call.callerId;
+      socket.to(`user_${otherUserId}`).emit('callMediaToggled', {
+        callRoomId: data.callRoomId,
+        mediaType: data.mediaType,
+        isEnabled: data.isEnabled
+      });
+    }
+  });
+
+  // Get active call info
+  socket.on('getCallInfo', (data) => {
+    const call = activeCalls.get(data.callRoomId);
+    if (call) {
+      socket.emit('callInfo', {
+        callRoomId: data.callRoomId,
+        callInfo: call
+      });
+    }
+  });
+
+  // Handle disconnect - clean up active calls
+  socket.on('disconnect', (reason) => {
+    console.log('User disconnected:', socket.id, 'Reason:', reason);
+    
+    // End any active calls this user was part of
+    for (const [roomId, call] of activeCalls.entries()) {
+      if (call.callerId === socket.userId || call.receiverId === socket.userId) {
+        console.log(`Ending call ${roomId} due to user disconnect`);
+        
+        // Notify other participant
+        const otherUserId = call.callerId === socket.userId ? call.receiverId : call.callerId;
+        socket.to(`user_${otherUserId}`).emit('callEnded', {
+          callRoomId: roomId,
+          reason: 'User disconnected',
+          callType: call.callType
+        });
+        
+        // Remove from active calls
+        activeCalls.delete(roomId);
       }
     }
     
-    // Create new, proper indexes
-    await db.collection('connections').createIndex(
-      { requesterId: 1, recipientId: 1 }, 
-      { 
-        unique: true, 
-        name: 'unique_connection_pair',
-        partialFilterExpression: {
-          requesterId: { $exists: true, $ne: null, $type: 'objectId' },
-          recipientId: { $exists: true, $ne: null, $type: 'objectId' },
-          status: { $in: ['pending', 'accepted'] }
-        }
-      }
-    );
-    
-    await db.collection('connections').createIndex(
-      { recipientId: 1, status: 1 }, 
-      { name: 'pending_requests_index' }
-    );
-    
-    await db.collection('connections').createIndex(
-      { requesterId: 1, status: 1 }, 
-      { name: 'sent_requests_index' }
-    );
-    
-    await db.collection('connections').createIndex(
-      { status: 1, requestedAt: -1 }, 
-      { name: 'status_timestamp_index' }
-    );
-    
-    console.log('✅ All connection indexes created successfully');
-    
+    if (socket.userId) {
+      connectedUsers.delete(socket.userId.toString());
+      socket.broadcast.emit('userOffline', { userId: socket.userId });
+    }
+  });
+
+  // Error handling
+  socket.on('error', (error) => {
+    console.error('Socket error:', error);
+  });
+});
+
+// Helper functions
+const getUserSocket = (userId) => {
+  return connectedUsers.get(userId.toString());
+};
+
+const isUserOnline = (userId) => {
+  return connectedUsers.has(userId.toString());
+};
+
+const getActiveCall = (roomId) => {
+  return activeCalls.get(roomId);
+};
+
+const getAllActiveCalls = () => {
+  return Array.from(activeCalls.entries());
+};
+
+const extractUserIdFromToken = (token) => {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+    return payload.id;
   } catch (error) {
-    console.log('ℹ️ Index creation note:', error.message);
+    console.error('Error extracting user ID from token:', error);
+    return null;
   }
 };
 
-// Call after mongoose connection
-mongoose.connection.once('open', () => {
-  createConnectionIndexes();
+// Export helper functions for use in other modules
+export {
+  getUserSocket,
+  isUserOnline,
+  getActiveCall,
+  getAllActiveCalls
+};
+
+// Start server
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
+  console.log(`📡 API Test: http://localhost:${PORT}/api/test`);
+  console.log(`📞 WebRTC Support: Enabled`);
+  console.log(`🔧 Active Call Tracking: Enabled`);
 });
