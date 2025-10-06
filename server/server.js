@@ -4,7 +4,6 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import passport from 'passport';
 import express from 'express';
-
 // Load routes
 import alumniRoutes from './routes/alumniRoutes.js';
 import authRoutes from './routes/authRoutes.js';
@@ -523,7 +522,8 @@ io.on('connection', (socket) => {
         socket.to(`user_${call.callerId}`).emit('callAccepted', {
           callRoomId: data.callRoomId,
           callType: data.callType,
-          conversationId: data.conversationId
+          conversationId: data.conversationId,
+          fromUserId: socket.userId
         });
         
         console.log(`✅ Call connected in room: ${data.callRoomId}`);

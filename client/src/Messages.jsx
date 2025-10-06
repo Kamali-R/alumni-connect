@@ -114,11 +114,22 @@ const CallInterface = ({
   isMuted,
   onToggleMute,
   isVideoEnabled,
-  onToggleVideo
+  onToggleVideo,
+  remoteAudioRef,
+  remoteAudioBlocked,
+  handleSpeakerToggleLocal,
+  handleEnableRemoteAudio
 }) => {
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const [isSpeaker, setIsSpeaker] = useState(false);
+
+  // Local preview position & size (draggable, resizable)
+  const [previewPos, setPreviewPos] = useState({ left: null, top: 16 });
+  const [previewSize, setPreviewSize] = useState({ width: 176, height: 128 });
+  const draggingRef = useRef(null); // {startX, startY, origLeft, origTop}
+  const resizingRef = useRef(null); // {startX, startY, origW, origH}
+  const previewRef = useRef(null);
 
   // Set up video streams when available - MOVED BEFORE EARLY RETURN
   useEffect(() => {
@@ -128,7 +139,42 @@ const CallInterface = ({
     if (remoteVideoRef.current && remoteStream) {
       remoteVideoRef.current.srcObject = remoteStream;
     }
+    if (remoteAudioRef.current && remoteStream) {
+      try {
+        remoteAudioRef.current.srcObject = remoteStream;
+        // Ensure volume is up
+        remoteAudioRef.current.volume = 1.0;
+        // Unmute remote audio by default
+        remoteAudioRef.current.muted = !isSpeaker ? false : false;
+      } catch (e) {
+        console.warn('Failed to attach remote stream to audio element', e);
+      }
+    }
   }, [localStream, remoteStream]);
+
+  // Try to play remote audio when remoteStream becomes available (autoplay policies may block this)
+  useEffect(() => {
+    // autoplay handled in parent Messages component via remoteAudioRef
+  }, [remoteStream]);
+
+  // initialize default preview left to top-right corner on mount
+  useEffect(() => {
+    const setDefaultPos = () => {
+      try {
+        const parent = remoteVideoRef.current?.parentElement || document.body;
+        const parentRect = parent.getBoundingClientRect();
+        const left = Math.max(8, parentRect.width - previewSize.width - 16);
+        setPreviewPos({ left, top: 16 });
+      } catch (e) {
+        setPreviewPos({ left: null, top: 16 });
+      }
+    };
+    setDefaultPos();
+    const onResize = () => setDefaultPos();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Early return after hooks
   if (!call && !isIncoming) return null;
@@ -143,10 +189,81 @@ const CallInterface = ({
 
   const handleSpeakerToggle = () => {
     setIsSpeaker(!isSpeaker);
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.muted = !isSpeaker;
+    if (typeof handleSpeakerToggleLocal === 'function') {
+      handleSpeakerToggleLocal();
+    } else {
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.muted = !isSpeaker;
+      }
     }
     toast.info(isSpeaker ? 'Speaker off' : 'Speaker on');
+  };
+
+  // Drag handlers (pointer events for mouse & touch)
+  const onPreviewPointerDown = (e) => {
+    // if resize handle, start resizing
+    const target = e.target;
+    const rect = previewRef.current?.getBoundingClientRect();
+    if (!previewRef.current || !rect) return;
+
+    const handle = target.dataset && target.dataset.resize === 'true';
+    const px = e.clientX;
+    const py = e.clientY;
+    if (handle) {
+      resizingRef.current = {
+        startX: px,
+        startY: py,
+        origW: previewSize.width,
+        origH: previewSize.height,
+      };
+      previewRef.current.setPointerCapture(e.pointerId);
+    } else {
+      // start dragging
+      // compute current left/top relative to container
+      const parentRect = previewRef.current.parentElement.getBoundingClientRect();
+      const curLeft = previewRef.current.offsetLeft;
+      const curTop = previewRef.current.offsetTop;
+      draggingRef.current = {
+        startX: px,
+        startY: py,
+        origLeft: curLeft,
+        origTop: curTop,
+        parentLeft: parentRect.left,
+        parentTop: parentRect.top,
+        parentW: parentRect.width,
+        parentH: parentRect.height,
+      };
+      previewRef.current.setPointerCapture(e.pointerId);
+    }
+  };
+
+  const onPreviewPointerMove = (e) => {
+    if (draggingRef.current) {
+      const d = draggingRef.current;
+      const dx = e.clientX - d.startX;
+      const dy = e.clientY - d.startY;
+      let newLeft = d.origLeft + dx;
+      let newTop = d.origTop + dy;
+      // clamp inside parent
+      newLeft = Math.max(8, Math.min(newLeft, d.parentW - previewSize.width - 8));
+      newTop = Math.max(8, Math.min(newTop, d.parentH - previewSize.height - 8));
+      setPreviewPos({ left: newLeft, top: newTop });
+    } else if (resizingRef.current) {
+      const r = resizingRef.current;
+      const dx = e.clientX - r.startX;
+      const dy = e.clientY - r.startY;
+      const newW = Math.max(120, Math.min(640, Math.round(r.origW + dx)));
+      const newH = Math.max(90, Math.min(480, Math.round(r.origH + dy)));
+      setPreviewSize({ width: newW, height: newH });
+    }
+  };
+
+  const onPreviewPointerUp = (e) => {
+    try {
+      if (previewRef.current) previewRef.current.releasePointerCapture(e.pointerId);
+    } catch (e) {}
+    draggingRef.current = null;
+    resizingRef.current = null;
   };
 
   return (
@@ -154,28 +271,56 @@ const CallInterface = ({
       <div className="text-center text-white w-full h-full">
         {/* Video Streams */}
         {currentCall?.type === 'video' && (
-          <div className="relative w-full h-full">
-            {/* Remote Video */}
-            {remoteStream && (
+          <div className="relative w-full h-full flex items-stretch">
+            {/* Remote video as full background */}
+            {remoteStream ? (
               <video
                 ref={remoteVideoRef}
                 autoPlay
                 playsInline
-                muted={!isSpeaker}
-                className="w-full h-full object-cover"
+                className="absolute inset-0 w-full h-full object-cover"
               />
+            ) : (
+              <div className="absolute inset-0 bg-black flex items-center justify-center text-gray-400">No remote video</div>
             )}
-            
-            {/* Local Video Preview */}
-            {localStream && (
-              <video
-                ref={localVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="absolute bottom-4 right-4 w-48 h-36 object-cover rounded-lg border-2 border-white"
+
+            {/* Small smart local preview box (draggable & resizable) */}
+            <div
+              ref={previewRef}
+              onPointerDown={onPreviewPointerDown}
+              onPointerMove={onPreviewPointerMove}
+              onPointerUp={onPreviewPointerUp}
+              style={{
+                position: 'absolute',
+                top: previewPos.top,
+                left: previewPos.left != null ? previewPos.left : undefined,
+                right: previewPos.left == null ? 16 : undefined,
+                width: previewSize.width,
+                height: previewSize.height,
+                touchAction: 'none',
+              }}
+              className="rounded-lg overflow-hidden border-2 border-white shadow-lg bg-black z-50"
+            >
+              {localStream ? (
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-gray-400">No local video</div>
+              )}
+              {/* Resize handle (bottom-right) */}
+              <div
+                data-resize="true"
+                className="absolute right-1 bottom-1 w-4 h-4 bg-white/30 rounded cursor-se-resize"
+                title="Resize"
               />
-            )}
+            </div>
+
+            {/* Remote audio element removed from here; the parent `Messages` mounts a single hidden audio element so audio is available early */}
           </div>
         )}
 
@@ -290,6 +435,36 @@ const CallInterface = ({
               </button>
             </div>
           )}
+
+          {/* Bottom floating control bar (responsive) */}
+          <div className="absolute left-0 right-0 bottom-6 flex justify-center z-50 px-4">
+            <div className="bg-black/60 backdrop-blur-md rounded-full px-4 py-2 flex items-center space-x-6 shadow-lg max-w-md w-full justify-center mx-auto">
+              <button onClick={onToggleMute} className={`p-3 rounded-full ${isMuted ? 'bg-red-600 text-white' : 'bg-white/10 text-white'}`} title="Mute/Unmute">
+                {isMuted ? '🎤❌' : '🎤'}
+              </button>
+
+              <button onClick={onToggleVideo} className={`p-3 rounded-full ${!isVideoEnabled ? 'bg-red-600 text-white' : 'bg-white/10 text-white'}`} title="Toggle Camera">
+                {isVideoEnabled ? '📹' : '📹❌'}
+              </button>
+
+              <button onClick={onEndCall} className="p-3 rounded-full bg-red-600 text-white shadow-lg" title="End Call">
+                📞
+              </button>
+              {/* Speaker toggle and enable audio if autoplay blocked */}
+              {remoteStream && (
+                <>
+                  <button onClick={handleSpeakerToggleLocal} className="p-3 rounded-full bg-white/10 text-white" title="Speaker">
+                    🔊
+                  </button>
+                  {remoteAudioBlocked && (
+                    <button onClick={handleEnableRemoteAudio} className="p-2 px-3 rounded bg-blue-600 text-white">
+                      Enable audio
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -811,6 +986,10 @@ const Messages = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [peerConnection, setPeerConnection] = useState(null);
+  const [remoteAudioBlocked, setRemoteAudioBlocked] = useState(false);
+  const remoteAudioRef = useRef(null);
+  const peerConnectionRef = useRef(null);
+  const localAudioTrackRef = useRef(null);
 
   // New states for enhanced features
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -826,6 +1005,8 @@ const Messages = () => {
   const socketRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const callTimeoutRef = useRef(null);
+  const currentCallRoomRef = useRef(null);
+  const otherUserRef = useRef(null);
 
   // WebRTC Configuration
   const rtcConfiguration = {
@@ -881,16 +1062,29 @@ const Messages = () => {
     }
   };
 
+
   // Initialize WebRTC
-  const initializeWebRTC = async (type = 'voice') => {
+  const initializeWebRTC = async (type = 'voice', callRoomId = null, otherUserId = null) => {
     try {
+      // Close any existing peer connection first
+      if (peerConnectionRef.current) {
+        try { peerConnectionRef.current.close(); } catch (e) {}
+        peerConnectionRef.current = null;
+        setPeerConnection(null);
+      }
       // Get user media
       const constraints = {
         audio: true,
         video: type === 'video'
       };
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+  console.log('[webrtc] requesting media with constraints:', constraints);
+  const stream = await navigator.mediaDevices.getUserMedia(constraints);
+  console.log('[webrtc] obtained local stream:', stream);
+  stream.getTracks().forEach(t => console.log('[webrtc] local track:', t.kind, t.enabled));
+  // store local audio track for easy mute/unmute
+  const audioTrack = stream.getAudioTracks()[0];
+  if (audioTrack) localAudioTrackRef.current = audioTrack;
       setLocalStream(stream);
       
       // Create peer connection
@@ -901,23 +1095,79 @@ const Messages = () => {
         pc.addTrack(track, stream);
       });
 
-      // Handle remote stream
+      // Handle remote stream: log, set remote stream state and attach to audio element (or fallback)
       pc.ontrack = (event) => {
-        setRemoteStream(event.streams[0]);
+        console.log('[webrtc] ontrack event:', event);
+        const s = event.streams && event.streams[0];
+        if (s) {
+          console.log('[webrtc] remote stream tracks:', s.getTracks().map(t => t.kind));
+          setRemoteStream(s);
+          setRemoteAudioBlocked(false);
+          try {
+            if (remoteAudioRef && remoteAudioRef.current) {
+              remoteAudioRef.current.srcObject = s;
+              remoteAudioRef.current.volume = 1.0;
+              remoteAudioRef.current.play?.().then(() => {
+                console.log('[webrtc] remote audio play succeeded (ontrack)');
+                setRemoteAudioBlocked(false);
+              }).catch((err) => {
+                console.warn('[webrtc] remote audio play blocked (ontrack)', err);
+                setRemoteAudioBlocked(true);
+                console.debug('[webrtc] play error name/message', err?.name, err?.message);
+              });
+            } else {
+              const fallback = document.createElement('audio');
+              fallback.autoplay = true;
+              fallback.playsInline = true;
+              fallback.style.display = 'none';
+              try {
+                fallback.srcObject = s;
+                document.body.appendChild(fallback);
+                if (remoteAudioRef) remoteAudioRef.current = fallback;
+                fallback.play?.().then(() => {
+                  console.log('[webrtc] fallback remote audio play succeeded');
+                  setRemoteAudioBlocked(false);
+                }).catch((err) => {
+                  console.warn('[webrtc] fallback remote audio play blocked', err);
+                  setRemoteAudioBlocked(true);
+                });
+              } catch (e) {
+                console.warn('[webrtc] failed to attach remote stream to fallback audio', e);
+              }
+            }
+          } catch (e) {
+            console.warn('[webrtc] error attaching remote stream to audio element', e);
+            setRemoteAudioBlocked(true);
+          }
+        }
       };
+
+      pc.onconnectionstatechange = () => {
+        console.log('[webrtc] pc.connectionState:', pc.connectionState);
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.log('[webrtc] pc.iceConnectionState:', pc.iceConnectionState);
+      };
+
+      // Save current context so handlers can reference
+      if (callRoomId) currentCallRoomRef.current = callRoomId;
+      if (otherUserId) otherUserRef.current = otherUserId;
 
       // Handle ICE candidates
       pc.onicecandidate = (event) => {
+        console.log('[webrtc] onicecandidate', event.candidate);
         if (event.candidate && socketRef.current) {
           socketRef.current.emit('ice-candidate', {
             candidate: event.candidate,
-            callRoomId: activeCall?.roomId,
-            toUserId: activeConversation?.otherUser.id
+            callRoomId: currentCallRoomRef.current,
+            toUserId: otherUserRef.current
           });
         }
       };
 
       setPeerConnection(pc);
+      peerConnectionRef.current = pc;
       return pc;
 
     } catch (error) {
@@ -1063,8 +1313,8 @@ const Messages = () => {
       
       const callRoomId = `call_${activeConversation.id}_${Date.now()}`;
       
-      // Initialize WebRTC for voice
-      await initializeWebRTC('voice');
+  // Initialize WebRTC for voice (provide callRoom and target user)
+  await initializeWebRTC('voice', callRoomId, activeConversation.otherUser.id);
       
       if (socketRef.current) {
         socketRef.current.emit('initiateVoiceCall', {
@@ -1110,8 +1360,8 @@ const Messages = () => {
       
       const callRoomId = `call_${activeConversation.id}_${Date.now()}`;
       
-      // Initialize WebRTC for video
-      await initializeWebRTC('video');
+  // Initialize WebRTC for video (provide callRoom and target user)
+  await initializeWebRTC('video', callRoomId, activeConversation.otherUser.id);
       
       if (socketRef.current) {
         socketRef.current.emit('initiateVideoCall', {
@@ -1154,7 +1404,8 @@ const Messages = () => {
 
     try {
       // Initialize WebRTC
-      await initializeWebRTC(incomingCall.type);
+      // Pass the callRoomId and caller id so ICE and signaling are routed correctly
+      await initializeWebRTC(incomingCall.type, incomingCall.callRoomId, incomingCall.fromUserId);
       
       setActiveCall({ 
         type: incomingCall.type, 
@@ -1215,8 +1466,9 @@ const Messages = () => {
     }
 
     // Close peer connection
-    if (peerConnection) {
-      peerConnection.close();
+    if (peerConnectionRef.current) {
+      try { peerConnectionRef.current.close(); } catch (e) {}
+      peerConnectionRef.current = null;
     }
 
     if (activeCall && socketRef.current) {
@@ -1235,9 +1487,36 @@ const Messages = () => {
     setCallDuration(0);
     setLocalStream(null);
     setRemoteStream(null);
-    setPeerConnection(null);
+  setPeerConnection(null);
+  peerConnectionRef.current = null;
     setIsMuted(false);
     setIsVideoEnabled(true);
+    // cleanup local audio track ref
+    if (localAudioTrackRef.current) {
+      try { localAudioTrackRef.current.stop?.(); } catch (e) {}
+      localAudioTrackRef.current = null;
+    }
+    // cleanup fallback remote audio element if appended to DOM
+    try {
+      if (remoteAudioRef && remoteAudioRef.current) {
+        const el = remoteAudioRef.current;
+        if (el && el.srcObject) {
+          try {
+            // stop tracks
+            const tracks = el.srcObject.getTracks?.() || [];
+            tracks.forEach(t => { try { t.stop(); } catch (e) {} });
+          } catch (e) {}
+        }
+        // if fallback appended to body (we set style.display='none'), remove
+        if (el.parentElement === document.body) {
+          try { document.body.removeChild(el); } catch (e) {}
+        }
+        try { el.srcObject = null; } catch (e) {}
+        remoteAudioRef.current = null;
+      }
+    } catch (e) {
+      console.warn('Error cleaning up remote audio element', e);
+    }
     
     if (callTimeoutRef.current) {
       clearTimeout(callTimeoutRef.current);
@@ -1246,13 +1525,16 @@ const Messages = () => {
 
   // Toggle mute
   const handleToggleMute = () => {
-    if (localStream) {
+    if (localAudioTrackRef.current) {
+      localAudioTrackRef.current.enabled = !localAudioTrackRef.current.enabled;
+      setIsMuted(!localAudioTrackRef.current.enabled);
+      toast.info(!localAudioTrackRef.current.enabled ? 'Microphone muted' : 'Microphone unmuted');
+    } else if (localStream) {
+      // fallback
       const audioTracks = localStream.getAudioTracks();
-      audioTracks.forEach(track => {
-        track.enabled = isMuted;
-      });
+      audioTracks.forEach(track => track.enabled = !isMuted);
       setIsMuted(!isMuted);
-      toast.info(isMuted ? 'Microphone unmuted' : 'Microphone muted');
+      toast.info(!isMuted ? 'Microphone muted' : 'Microphone unmuted');
     }
   };
 
@@ -1264,9 +1546,86 @@ const Messages = () => {
         track.enabled = !isVideoEnabled;
       });
       setIsVideoEnabled(!isVideoEnabled);
-      toast.info(isVideoEnabled ? 'Video turned off' : 'Video turned on');
+      toast.info(!isVideoEnabled ? 'Video muted' : 'Video unmuted');
     }
   };
+
+  // Toggle speaker (remote audio element)
+  const handleSpeakerToggleLocal = () => {
+    if (remoteAudioRef.current) {
+      const el = remoteAudioRef.current;
+      const newMuted = !el.muted;
+      el.muted = newMuted;
+      toast.info(newMuted ? 'Speaker muted' : 'Speaker unmuted');
+      // if we're unmuting, attempt to play in case autoplay was blocked
+      if (!newMuted) {
+        try {
+          const p = el.play?.();
+          if (p && typeof p.then === 'function') {
+            p.then(() => {
+              console.log('[audio] play succeeded after unmute');
+              setRemoteAudioBlocked(false);
+            }).catch((err) => {
+              console.warn('[audio] play failed after unmute', err);
+              setRemoteAudioBlocked(true);
+            });
+          }
+        } catch (e) {
+          console.warn('[audio] error calling play after unmute', e);
+        }
+      }
+    }
+  };
+
+  const handleEnableRemoteAudio = () => {
+    tryPlayRemoteAudio().then((ok) => {
+      if (ok) {
+        toast.success('Audio enabled');
+      } else {
+        toast.error('Unable to enable audio automatically');
+      }
+    });
+  };
+
+  const tryPlayRemoteAudio = async () => {
+    try {
+      if (remoteAudioRef.current) {
+        await remoteAudioRef.current.play();
+        setRemoteAudioBlocked(false);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.warn('[audio] tryPlayRemoteAudio failed', err);
+      setRemoteAudioBlocked(true);
+      return false;
+    }
+  };
+
+  // One-time user interaction to unlock audio autoplay on mobile/browsers
+  useEffect(() => {
+    const onAnyUserGesture = async () => {
+      try {
+        if (remoteAudioRef.current && remoteAudioRef.current.paused) {
+          await remoteAudioRef.current.play();
+          setRemoteAudioBlocked(false);
+          console.log('[audio] unlocked autoplay via user gesture');
+        }
+      } catch (e) {
+        console.warn('[audio] user gesture play failed', e);
+      }
+      document.removeEventListener('click', onAnyUserGesture);
+      document.removeEventListener('touchstart', onAnyUserGesture);
+    };
+
+    document.addEventListener('click', onAnyUserGesture, { passive: true });
+    document.addEventListener('touchstart', onAnyUserGesture, { passive: true });
+
+    return () => {
+      document.removeEventListener('click', onAnyUserGesture);
+      document.removeEventListener('touchstart', onAnyUserGesture);
+    };
+  }, []);
 
   // Initialize Socket.io connection with WebRTC handlers
   const initializeSocket = () => {
@@ -1277,9 +1636,13 @@ const Messages = () => {
     }
 
     try {
+      // Prefer polling first (more robust in restrictive networks) then upgrade to websocket when possible
       socketRef.current = io('http://localhost:5000', {
         auth: { token },
-        transports: ['websocket', 'polling']
+        transports: ['polling', 'websocket'],
+        upgrade: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
       });
 
       socketRef.current.on('connect', () => {
@@ -1292,7 +1655,26 @@ const Messages = () => {
       });
 
       socketRef.current.on('connect_error', (error) => {
-        console.error('Socket connection error:', error);
+        console.error('Socket connection error:', error, error?.message, error?.data);
+        toast.error('Socket connect error: ' + (error?.message || String(error)));
+      });
+
+      // engine-level upgrade errors (useful when ws upgrade fails)
+      try {
+        socketRef.current.io.engine.on('upgradeError', (err) => {
+          console.error('[engine] upgradeError', err);
+          toast.error('WebSocket upgrade error: ' + (err?.message || String(err)));
+        });
+      } catch (e) {
+        // ignore if engine not available yet
+      }
+
+      socketRef.current.on('reconnect_attempt', (attempt) => {
+        console.log('[socket] reconnect attempt', attempt);
+      });
+      socketRef.current.on('reconnect_failed', () => {
+        console.warn('[socket] reconnect failed');
+        toast.error('Socket reconnect failed');
       });
 
       // Socket event listeners
@@ -1401,23 +1783,37 @@ const Messages = () => {
 
       socketRef.current.on('callAccepted', async (data) => {
         console.log('✅ Call accepted by recipient:', data);
-        
-        if (peerConnection && activeCall) {
+
+        // Only the original caller should create the offer
+        if (activeCall && activeCall.roomId === data.callRoomId) {
+          // Ensure peerConnection exists (race can happen). Initialize if missing.
+          if (!peerConnectionRef.current) {
+            console.log('[webrtc] peerConnection missing on callAccepted, initializing...');
+            try {
+              await initializeWebRTC(activeCall.type, activeCall.roomId, otherUserRef.current || data.fromUserId);
+            } catch (err) {
+              console.error('[webrtc] Failed to initialize WebRTC on callAccepted:', err);
+            }
+          }
+          if (peerConnectionRef.current) {
           try {
             // Create and send offer
-            const offer = await peerConnection.createOffer();
-            await peerConnection.setLocalDescription(offer);
-            
+            const offer = await peerConnectionRef.current.createOffer();
+            await peerConnectionRef.current.setLocalDescription(offer);
+
             socketRef.current.emit('webrtc-offer', {
               callRoomId: activeCall.roomId,
               offer: offer,
-              toUserId: activeConversation.otherUser.id
+              toUserId: data.fromUserId || otherUserRef.current
             });
           } catch (error) {
             console.error('Error creating offer:', error);
           }
+          } else {
+            console.warn('[webrtc] still no peerConnection after init; offer not sent');
+          }
         }
-        
+
         setCallStatus('connected');
         setCallDuration(0);
         toast.success('Call connected!');
@@ -1425,40 +1821,61 @@ const Messages = () => {
       });
 
       socketRef.current.on('webrtc-offer', async (data) => {
-        if (peerConnection && data.callRoomId === activeCall?.roomId) {
+        console.log('📡 webrtc-offer received', data);
+        // Callee receives offer - ensure it's for this room
+        if (!data || !data.callRoomId) return;
+
+        // If this is an incoming call, the active incomingCall holds the room
+        const expectedRoom = incomingCall?.callRoomId || activeCall?.roomId;
+        if (peerConnectionRef.current && data.callRoomId === expectedRoom) {
           try {
-            await peerConnection.setRemoteDescription(data.offer);
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-            
+            await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.offer));
+            console.log('[webrtc] remote description set (offer)');
+            const answer = await peerConnectionRef.current.createAnswer();
+            await peerConnectionRef.current.setLocalDescription(answer);
+            console.log('[webrtc] created & set local description (answer)');
+
             socketRef.current.emit('webrtc-answer', {
-              callRoomId: activeCall.roomId,
+              callRoomId: data.callRoomId,
               answer: answer,
-              toUserId: activeConversation.otherUser.id
+              toUserId: data.fromUserId
             });
           } catch (error) {
             console.error('Error handling offer:', error);
           }
+        } else {
+          console.warn('[webrtc] offer ignored: no peerConnection or room mismatch', { expectedRoom, dataRoom: data.callRoomId });
         }
       });
 
       socketRef.current.on('webrtc-answer', async (data) => {
-        if (peerConnection && data.callRoomId === activeCall?.roomId) {
+        console.log('📡 webrtc-answer received', data);
+        if (!data || !data.callRoomId) return;
+        if (peerConnectionRef.current && data.callRoomId === activeCall?.roomId) {
           try {
-            await peerConnection.setRemoteDescription(data.answer);
+            await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data.answer));
+            console.log('[webrtc] remote description set (answer)');
           } catch (error) {
             console.error('Error handling answer:', error);
           }
+        } else {
+          console.warn('[webrtc] answer ignored: no peerConnection or room mismatch', { activeRoom: activeCall?.roomId, dataRoom: data.callRoomId });
         }
       });
 
       socketRef.current.on('ice-candidate', async (data) => {
-        if (peerConnection && data.callRoomId === activeCall?.roomId) {
+        if (!data || !data.callRoomId) return;
+        const expectedRoom = activeCall?.roomId || incomingCall?.callRoomId;
+        console.log('[webrtc] received ice-candidate for room', data.callRoomId, 'expectedRoom', expectedRoom);
+        if (peerConnectionRef.current && data.callRoomId === expectedRoom) {
           try {
-            await peerConnection.addIceCandidate(data.candidate);
+            await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+            console.log('[webrtc] ICE candidate added');
           } catch (error) {
             console.error('Error adding ICE candidate:', error);
           }
+        } else {
+          console.warn('[webrtc] ICE candidate ignored: no peerConnection or room mismatch', { expectedRoom, dataRoom: data.callRoomId });
         }
       });
 
@@ -1871,12 +2288,42 @@ const Messages = () => {
     };
   }, []);
 
+  // Try to play remote audio when remoteStream becomes available (autoplay policies may block this)
+  useEffect(() => {
+    if (remoteStream && remoteAudioRef.current) {
+      try {
+        remoteAudioRef.current.srcObject = remoteStream;
+        remoteAudioRef.current.volume = 1.0;
+        console.log('[audio] attempting to play remote audio element', remoteAudioRef.current);
+        const playPromise = remoteAudioRef.current.play?.();
+        if (playPromise && typeof playPromise.then === 'function') {
+          playPromise.then(() => {
+            console.log('[audio] Remote audio playback started (parent)');
+            setRemoteAudioBlocked(false);
+          }).catch((err) => {
+            console.warn('[audio] Autoplay blocked remote audio; user gesture may be required', err);
+            setRemoteAudioBlocked(true);
+            // expose detailed error if available
+            console.debug('[audio] play() rejected, name:', err?.name, 'message:', err?.message);
+          });
+        } else {
+          console.log('[audio] play returned no promise (synchronous or not supported)');
+        }
+      } catch (e) {
+        console.warn('[audio] Error attempting remoteAudio.play() (parent)', e);
+        setRemoteAudioBlocked(true);
+      }
+    }
+  }, [remoteStream]);
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
+      {/* Single hidden remote audio element mounted at parent so it is available for all calls */}
+      <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: 'none' }} />
       <CallStatus 
         callStatus={callStatus} 
         activeCall={activeCall}
@@ -1901,6 +2348,10 @@ const Messages = () => {
           onToggleMute={handleToggleMute}
           isVideoEnabled={isVideoEnabled}
           onToggleVideo={handleToggleVideo}
+          remoteAudioRef={remoteAudioRef}
+          remoteAudioBlocked={remoteAudioBlocked}
+          handleSpeakerToggleLocal={handleSpeakerToggleLocal}
+          handleEnableRemoteAudio={handleEnableRemoteAudio}
         />
       )}
 
@@ -1913,13 +2364,7 @@ const Messages = () => {
                 Connected Alumni Only
               </span>
               
-              {/* DEBUG BUTTON ADDED HERE */}
-              <button 
-                onClick={debugDatabase}
-                className="ml-4 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm font-medium"
-              >
-                🐛 Debug DB
-              </button>
+              {/* debug button removed */}
             </div>
             
             <div className="flex-1 max-w-md ml-6">
@@ -2240,16 +2685,9 @@ const Messages = () => {
                         title="Send message"
                       >
                         {sendingMessage || uploadingFile ? (
-                          <div className="w-5 h-5 border-t-2 border-white rounded-full animate-spin"></div>
+                          <div className="w-5 h-5 border-t-2 border-white rounded-full animate-spin" aria-hidden="true"></div>
                         ) : (
-                          <svg 
-                            className="w-5 h-5" 
-                            fill="currentColor" 
-                            viewBox="0 0 20 20"
-                            style={{ transform: 'rotate(45deg)' }}
-                          >
-                            <path d="M10.894 2.553a1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"></path>
-                          </svg>
+                          <span aria-hidden="true" className="text-xl">📤</span>
                         )}
                       </button>
                     </div>
