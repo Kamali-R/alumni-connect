@@ -64,4 +64,22 @@ getUserEvents: () => api.get('/events/my-events'),
   getUserEventsById: (userId) => api.get(`/events/user/${userId}`),
 };
 
+// Job API - ADD THIS TO YOUR EXISTING api.js
+export const jobAPI = {
+  // Get current user's jobs
+  getMyJobs: () => {
+    return api.get('/jobs/my-jobs');
+  },
+
+  // Close job (update status to closed)
+  close: (jobId) => {
+    return api.patch(`/jobs/${jobId}/close`);
+  },
+
+  // Delete job completely
+  delete: (jobId) => {
+    return api.delete(`/jobs/${jobId}`);
+  }
+};
+
 export default api;
