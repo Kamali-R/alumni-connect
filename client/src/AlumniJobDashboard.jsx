@@ -386,7 +386,7 @@ const AlumniJobDashboard = () => {
                     <p className="text-xs text-gray-500 mt-1">Required field</p>
                   </div>
                   
-                  {/* Company Name */}
+                  {/* Company Name - FIXED THIS INPUT */}
                   <div>
                     <label htmlFor="companyName" className="block text-sm font-semibold text-gray-700 mb-2">
                       Company Name <span className="text-red-500">*</span>
@@ -519,18 +519,18 @@ const AlumniJobDashboard = () => {
                   <label htmlFor="applyLink" className="block text-sm font-semibold text-gray-700 mb-2">
                     Apply Link <span className="text-red-500">*</span>
                   </label>
-                    <input 
-                      type="url" 
-                      id="applyLink" 
-                      name="applyLink" 
-                      value={formData.applyLink}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                      placeholder="https://company.com/careers/job-id"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Required field - Must be a valid URL</p>
-                  </div>
+                  <input 
+                    type="url" 
+                    id="applyLink" 
+                    name="applyLink" 
+                    value={formData.applyLink}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="https://company.com/careers/job-id"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Required field - Must be a valid URL</p>
+                </div>
                 
                 {/* Submit Button */}
                 <div className="pt-4">

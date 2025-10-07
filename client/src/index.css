@@ -30,3 +30,24 @@ html {
   opacity: 0;
   transition: opacity 300ms;
 }
+/* Add to your CSS file */
+.profile-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+/* Ensure images don't stretch */
+/* Add to your CSS */
+.profile-fallback {
+  display: none; /* Hidden by default, shown when image fails */
+}
+
+.relative img + .profile-fallback {
+  display: none; /* Keep fallback hidden when image is displayed */
+}
+
+.relative img[style*="display: none"] + .profile-fallback {
+  display: flex; /* Show fallback when image is hidden */
+}

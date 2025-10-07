@@ -1,8 +1,13 @@
+// controllers/alumniController.js
 import Alumni from '../models/Alumni.js';
 import User from '../models/User.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -57,12 +62,12 @@ export const uploadFiles = upload.fields([
 ]);
 
 // Create or update alumni profile
+// Fixed saveAlumniProfile function in alumniController.js
 export const saveAlumniProfile = async (req, res) => {
   try {
     const userId = req.user.id;
     
     console.log('Creating/Updating alumni profile for user:', userId);
-    console.log('Request body keys:', Object.keys(req.body));
     
     // Parse JSON strings from FormData
     const profileData = {};
@@ -90,38 +95,17 @@ export const saveAlumniProfile = async (req, res) => {
     }
     
     // Handle file uploads
-// In saveAlumniProfile function, update the file handling:
-if (req.files) {
-  if (req.files.profileImage) {
-    profileData.profileImage = req.files.profileImage[0].filename;
-    
-    // Also store the full path for easier frontend access
-    profileData.profileImageUrl = `/uploads/${req.files.profileImage[0].filename}`;
-  }
-  if (req.files.resume) {
-    profileData.resumeFileName = req.files.resume[0].originalname;
-    profileData.resumeFile = req.files.resume[0].filename;
-    profileData.resumeUrl = `/uploads/${req.files.resume[0].filename}`;
-  }
-}
-    
-    console.log('Processed profile data:', {
-      personalInfo: profileData.personalInfo ? 'present' : 'missing',
-      academicInfo: profileData.academicInfo ? 'present' : 'missing',
-      careerStatus: profileData.careerStatus,
-      skills: profileData.skills ? profileData.skills.length : 0,
-      interests: profileData.interests ? profileData.interests.length : 0,
-      achievements: profileData.achievements ? profileData.achievements.length : 0,
-      awards: profileData.awards ? profileData.awards.length : 0,
-      recognitions: profileData.recognitions ? profileData.recognitions.length : 0
-    });
-    // Add this after parsing the JSON fields
-console.log('Raw achievements data:', req.body.achievements);
-console.log('Parsed achievements data:', profileData.achievements);
-console.log('Raw awards data:', req.body.awards);
-console.log('Parsed awards data:', profileData.awards);
-console.log('Raw recognitions data:', req.body.recognitions);
-console.log('Parsed recognitions data:', profileData.recognitions);
+    if (req.files) {
+      if (req.files.profileImage) {
+        profileData.profileImage = req.files.profileImage[0].filename;
+        profileData.profileImageUrl = `/uploads/${req.files.profileImage[0].filename}`;
+      }
+      if (req.files.resume) {
+        profileData.resumeFileName = req.files.resume[0].originalname;
+        profileData.resumeFile = req.files.resume[0].filename;
+        profileData.resumeUrl = `/uploads/${req.files.resume[0].filename}`;
+      }
+    }
     
     // Validation
     if (!profileData.personalInfo || !profileData.academicInfo || !profileData.careerStatus) {
@@ -160,9 +144,9 @@ console.log('Parsed recognitions data:', profileData.recognitions);
       await alumniProfile.save();
     }
     
-    // Update User model
+    // FIXED: Update User model properly
     const updateData = {
-      profileCompleted: true,
+      profileCompleted: true, // Set to true when profile is saved
       alumniProfile: alumniProfile._id
     };
     
@@ -173,20 +157,30 @@ console.log('Parsed recognitions data:', profileData.recognitions);
     
     // Update graduation year if provided
     if (profileData.academicInfo && profileData.academicInfo.graduationYear) {
-      updateData.graduationYear = profileData.academicInfo.graduationYear;
-    }
+  updateData.graduationYear = profileData.academicInfo.graduationYear;
+}
+
+console.log('Updating user with data:', updateData);
+
+const updatedUser = await User.findByIdAndUpdate(
+  userId,
+  updateData,
+  { new: true }
+).select('-password');
     
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      updateData,
-      { new: true }
-    ).select('-password');
+    console.log('User updated successfully:', {
+      id: updatedUser._id,
+      profileCompleted: updatedUser.profileCompleted
+    });
     
     console.log('Alumni profile saved successfully');
     
     res.status(200).json({
       message: 'Alumni profile saved successfully',
-      user: updatedUser,
+      user: {
+        ...updatedUser.toObject(),
+        registrationComplete: true // Add this for frontend
+      },
       alumni: alumniProfile
     });
     
@@ -312,49 +306,160 @@ export const updateAlumniProfile = async (req, res) => {
 };
 
 // Get all alumni (for networking/search)
+// Enhanced getAllAlumni function
 export const getAllAlumni = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = '', graduationYear = '', branch = '' } = req.query;
+    const { page = 1, limit = 20, search = '', graduationYear = '', branch = '' } = req.query;
     
-    // Build search query
+    console.log('Fetching alumni with filters:', {
+      page, limit, search, graduationYear, branch
+    });
+    
+    // Build search query - only fetch complete profiles
     let searchQuery = { status: 'complete' };
     
-    if (search) {
+    if (search && search.trim() !== '') {
       searchQuery.$or = [
-        { 'personalInfo.fullName': { $regex: search, $options: 'i' } },
-        { 'academicInfo.branch': { $regex: search, $options: 'i' } },
-        { 'careerDetails.companyName': { $regex: search, $options: 'i' } }
+        { 'personalInfo.fullName': { $regex: search.trim(), $options: 'i' } },
+        { 'academicInfo.branch': { $regex: search.trim(), $options: 'i' } },
+        { 'careerDetails.companyName': { $regex: search.trim(), $options: 'i' } },
+        { 'academicInfo.degree': { $regex: search.trim(), $options: 'i' } }
       ];
     }
     
-    if (graduationYear) {
+    if (graduationYear && graduationYear !== '') {
       searchQuery['academicInfo.graduationYear'] = parseInt(graduationYear);
     }
     
-    if (branch) {
-      searchQuery['academicInfo.branch'] = { $regex: branch, $options: 'i' };
+    if (branch && branch !== '') {
+      searchQuery['academicInfo.branch'] = { $regex: branch.trim(), $options: 'i' };
     }
     
-    // Execute query with pagination
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Execute query with proper population
     const alumni = await Alumni.find(searchQuery)
-      .select('-userId -__v') // Don't expose user IDs
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
-      .sort({ createdAt: -1 });
+      .populate('userId', 'name email role') // Populate user data
+      .select('-__v -createdAt -updatedAt') // Exclude unnecessary fields
+      .limit(parseInt(limit))
+      .skip(skip)
+      .sort({ 'personalInfo.fullName': 1 }); // Sort by name
     
     const total = await Alumni.countDocuments(searchQuery);
     
+    console.log(`Found ${alumni.length} alumni profiles out of ${total} total`);
+    
+    // Transform data for frontend
+    const transformedAlumni = alumni.map(alumni => ({
+      id: alumni._id,
+      userId: alumni.userId?._id,
+      name: alumni.personalInfo?.fullName || alumni.userId?.name || 'Unknown',
+      email: alumni.personalInfo?.personalEmail || alumni.userId?.email,
+      graduationYear: alumni.academicInfo?.graduationYear,
+      branch: alumni.academicInfo?.branch,
+      degree: alumni.academicInfo?.degree,
+      location: alumni.personalInfo?.location,
+      careerStatus: alumni.careerStatus,
+      company: alumni.careerDetails?.companyName,
+      jobTitle: alumni.careerDetails?.jobTitle,
+      skills: alumni.skills?.slice(0, 5) || [],
+      interests: alumni.interests || [], // Add this line
+      profileImageUrl: alumni.profileImage ? 
+        `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${alumni.profileImage}` : 
+        null,
+      bio: alumni.otherInfo?.bio ? 
+        alumni.otherInfo.bio.substring(0, 150) + (alumni.otherInfo.bio.length > 150 ? '...' : '') : 
+        null
+    }));
+    
     res.status(200).json({
-      alumni,
-      totalPages: Math.ceil(total / limit),
-      currentPage: page,
-      total
+      alumni: transformedAlumni,
+      totalPages: Math.ceil(total / parseInt(limit)),
+      currentPage: parseInt(page),
+      total,
+      hasMore: skip + alumni.length < total
     });
     
   } catch (error) {
     console.error('Get all alumni error:', error);
     res.status(500).json({ 
       message: 'Server error during alumni fetch',
+      error: error.message,
+      details: 'Check server logs for more information'
+    });
+  }
+};
+// Get alumni profile by user ID (for public viewing)
+// controllers/alumniController.js - Updated getAlumniProfileById
+export const getAlumniProfileById = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log('Fetching alumni profile for user ID:', userId);
+    
+    // Find alumni profile by userId with user details
+    const alumniProfile = await Alumni.findOne({ userId })
+      .populate('userId', 'name email graduationYear role')
+      .lean();
+
+    if (!alumniProfile) {
+      console.log('Alumni profile not found for user:', userId);
+      return res.status(404).json({ 
+        message: 'Alumni profile not found'
+      });
+    }
+    
+    // Return complete alumni profile data
+    const publicProfile = {
+      id: alumniProfile.userId._id,
+      name: alumniProfile.personalInfo.fullName || alumniProfile.userId.name,
+      email: alumniProfile.personalInfo.personalEmail || alumniProfile.userId.email,
+      graduationYear: alumniProfile.academicInfo.graduationYear,
+      role: alumniProfile.userId.role,
+      
+      // Personal Information
+      personalInfo: alumniProfile.personalInfo,
+      
+      // Academic Information
+      academicInfo: alumniProfile.academicInfo,
+      
+      // Career Information
+      careerStatus: alumniProfile.careerStatus,
+      careerDetails: alumniProfile.careerDetails,
+      
+      // Professional Details
+      experiences: alumniProfile.experiences,
+      skills: alumniProfile.skills,
+      interests: alumniProfile.interests,
+      
+      // Achievements
+      achievements: alumniProfile.achievements,
+      awards: alumniProfile.awards,
+      recognitions: alumniProfile.recognitions,
+      
+      // Other Information
+      otherInfo: alumniProfile.otherInfo,
+      
+      // File URLs
+      profileImage: alumniProfile.profileImage,
+      profileImageUrl: alumniProfile.profileImage ? 
+        `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${alumniProfile.profileImage}` : 
+        null,
+      
+      resumeUrl: alumniProfile.resumeFile ? 
+        `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${alumniProfile.resumeFile}` : 
+        null
+    };
+    
+    console.log('Alumni profile found and returned');
+    
+    res.status(200).json(publicProfile);
+    
+  } catch (error) {
+    console.error('Get alumni profile by ID error:', error);
+    res.status(500).json({ 
+      message: 'Server error during profile fetch',
       error: error.message 
     });
   }

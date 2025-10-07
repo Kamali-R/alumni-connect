@@ -580,6 +580,8 @@ const AlumniConnectProfile = () => {
   
   // Form submission
   // Form submission
+// Add this debug logging to your handleSubmit function in AlumniConnectProfile.jsx
+
 const handleSubmit = async (e) => {
   e.preventDefault();
   
@@ -615,17 +617,39 @@ const handleSubmit = async (e) => {
     resumeFileName: resumeFile ? resumeFile.name : null
   };
   
+  // DEBUG: Log the form data being sent
+  console.log('=== FORM SUBMISSION DEBUG ===');
+  console.log('Form Data:', JSON.stringify(formData, null, 2));
+  console.log('Personal Info:', personalInfo);
+  console.log('Academic Info:', academicInfo);
+  console.log('Career Status:', careerStatus);
+  console.log('Career Details:', careerDetails);
+  console.log('============================');
+  
   setLoading(true);
   
   try {
     // Save profile to backend
     const result = await saveProfileToBackend(formData);
     
-    console.log('Profile saved successfully:', result);
+    console.log('=== PROFILE SAVE SUCCESS ===');
+    console.log('Backend Response:', result);
+    console.log('============================');
+    
     setShowSuccess(true);
     
     // Update local storage
     localStorage.setItem('profileCompleted', 'true');
+    localStorage.setItem('registrationComplete', 'true');
+    
+    // Update user data in localStorage
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      const userData = JSON.parse(storedUser);
+      userData.profileCompleted = true;
+      userData.registrationComplete = true;
+      localStorage.setItem('user', JSON.stringify(userData));
+    }
     
     // Redirect to dashboard after 3 seconds
     setTimeout(() => {
@@ -633,7 +657,11 @@ const handleSubmit = async (e) => {
     }, 3000);
     
   } catch (error) {
-    console.error('Error submitting form:', error);
+    console.error('=== PROFILE SAVE ERROR ===');
+    console.error('Error details:', error);
+    console.error('Error message:', error.message);
+    console.error('==========================');
+    
     setMessage({
       text: error.message || 'Failed to save profile. Please try again.',
       type: 'error'

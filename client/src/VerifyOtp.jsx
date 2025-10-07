@@ -24,6 +24,7 @@ const VerifyOtp = () => {
   };
   
   // In VerifyOtp component, update the handleVerify function
+// In VerifyOtp component, update the navigation logic
 const handleVerify = async (e) => {
   e.preventDefault();
   const fullOtp = otp.join('');
@@ -58,23 +59,35 @@ const handleVerify = async (e) => {
     localStorage.setItem('userEmail', userData.email);
     
     setTimeout(() => {
+      const userRole = userData?.role || response.data.user?.role;
+      
       // Check if profile needs to be completed
       if (response.data.user && response.data.user.profileCompleted) {
         // Profile already completed, go to dashboard
-        if (response.data.user.role === 'student') {
+        if (userRole === 'student') {
           navigate('/student-dashboard');
         } else {
           navigate('/dashboard');
         }
       } else {
-        // Navigate to profile completion page
-        navigate('/alumni-profile', { 
-          state: { 
-            userData: userData || response.data.user, 
-            verified: true,
-            role: userData?.role || response.data.user?.role 
-          } 
-        });
+        // Navigate to appropriate profile completion page based on role
+        if (userRole === 'student') {
+          navigate('/student-profile', { 
+            state: { 
+              userData: userData || response.data.user, 
+              verified: true,
+              role: userRole 
+            } 
+          });
+        } else {
+          navigate('/alumni-profile', { 
+            state: { 
+              userData: userData || response.data.user, 
+              verified: true,
+              role: userRole 
+            } 
+          });
+        }
       }
     }, 2000);
     
