@@ -108,7 +108,7 @@ export const getOrCreateConversation = async (req, res) => {
             : profile?.careerStatus === 'studies'
             ? `Student - ${profile.careerDetails?.courseArea}`
             : 'Alumni',
-          isOnline: Math.random() > 0.3 // Replace with real online status logic
+          isOnline: Math.random() > 0.3
         };
       }),
       lastMessage: conversation.lastMessage,
@@ -153,6 +153,7 @@ export const sendMessage = async (req, res) => {
         message: 'Receiver ID and message or file are required'
       });
     }
+
     // Security: Prevent self-messaging
     if (currentUserId === receiverId) {
       return res.status(400).json({
@@ -249,7 +250,7 @@ export const sendMessage = async (req, res) => {
       messageType: req.file ? (req.file.mimetype.startsWith('image/') ? 'image' : 'file') : messageType,
       ...fileData,
       ...replyData,
-      securityFlags: ['verified'] // Basic security flag
+      securityFlags: ['verified']
     });
 
     await newMessage.save();
@@ -302,7 +303,6 @@ export const sendMessage = async (req, res) => {
         messageType: populatedMessage.replyTo.messageId.messageType
       };
     }
-    
 
     const responseMessage = {
       ...populatedMessage,
@@ -332,7 +332,7 @@ export const sendMessage = async (req, res) => {
   }
 };
 
-// Get connected alumni for messaging - FIXED VERSION
+// Get connected alumni for messaging
 export const getConnectedAlumni = async (req, res) => {
   try {
     const currentUserId = req.user.id;
@@ -380,7 +380,7 @@ export const getConnectedAlumni = async (req, res) => {
             participants: { $all: [currentUserId, otherUser._id] }
           });
 
-          // Get last message details - FIXED: Get actual last message from messages collection
+          // Get last message details
           let lastMessage = 'Start a conversation...';
           let lastMessageAt = connection.updatedAt;
           let unreadCount = 0;
@@ -440,7 +440,7 @@ export const getConnectedAlumni = async (req, res) => {
               graduationYear: alumniProfile?.academicInfo?.graduationYear || otherUser.graduationYear,
               profileImageUrl,
               currentPosition,
-              isOnline: Math.random() > 0.3 // Simulate online status
+              isOnline: Math.random() > 0.3
             },
             lastMessage: lastMessage,
             lastMessageAt: lastMessageAt,
@@ -521,7 +521,7 @@ export const getConversationMessages = async (req, res) => {
     // Get messages with pagination and populate replies
     const messages = await Message.find({ 
       conversationId: conversation._id,
-      isDeleted: false // Only get non-deleted messages
+      isDeleted: false
     })
     .populate('senderId', 'name email')
     .populate({
@@ -576,7 +576,7 @@ export const getConversationMessages = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      messages: processedMessages.reverse(), // Return in chronological order
+      messages: processedMessages.reverse(),
       conversation,
       hasMore: messages.length === parseInt(limit)
     });
@@ -586,180 +586,6 @@ export const getConversationMessages = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error getting messages',
-      error: error.message
-    });
-  }
-};
-
-// Get user's conversations list
-export const getUserConversations = async (req, res) => {
-  try {
-    const currentUserId = req.user.id;
-
-    console.log('💬 Getting user conversations:', currentUserId);
-
-    const conversations = await Conversation.find({
-      participants: currentUserId
-    })
-    .populate({
-      path: 'participants',
-      select: 'name email role',
-      match: { _id: { $ne: currentUserId } }
-    })
-    .sort({ lastMessageAt: -1 })
-    .lean();
-
-    // Enhanced conversation data with user profile info
-    const enhancedConversations = await Promise.all(
-      conversations.map(async (conversation) => {
-        const otherUser = conversation.participants.find(
-          participant => participant._id.toString() !== currentUserId.toString()
-        );
-
-        if (!otherUser) return null;
-
-        // Get alumni profile for better data
-        const alumniProfile = await Alumni.findOne({ userId: otherUser._id })
-          .select('profileImage personalInfo academicInfo careerStatus careerDetails')
-          .lean();
-
-        // Get profile image URL
-        const profileImageUrl = alumniProfile?.profileImage 
-          ? `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${alumniProfile.profileImage}`
-          : null;
-
-        // Get graduation year
-        const graduationYear = alumniProfile?.academicInfo?.graduationYear || null;
-
-        // Get current position
-        const currentPosition = alumniProfile?.careerStatus === 'working' 
-          ? alumniProfile.careerDetails?.jobTitle
-          : alumniProfile?.careerStatus === 'entrepreneur'
-          ? `Entrepreneur - ${alumniProfile.careerDetails?.startupName}`
-          : alumniProfile?.careerStatus === 'studies'
-          ? `Student - ${alumniProfile.careerDetails?.courseArea}`
-          : 'Alumni';
-
-        return {
-          id: conversation._id,
-          otherUser: {
-            id: otherUser._id,
-            name: otherUser.name,
-            email: otherUser.email,
-            role: otherUser.role,
-            profileImageUrl,
-            graduationYear,
-            currentPosition,
-            isOnline: Math.random() > 0.3 // Simulate online status - replace with real logic
-          },
-          lastMessage: conversation.lastMessage,
-          lastMessageAt: conversation.lastMessageAt,
-          unreadCount: conversation.unreadCount?.get(currentUserId.toString()) || 0,
-          updatedAt: conversation.updatedAt
-        };
-      })
-    );
-
-    // Filter out any null conversations
-    const validConversations = enhancedConversations.filter(conv => conv !== null);
-
-    res.status(200).json({
-      success: true,
-      conversations: validConversations
-    });
-
-  } catch (error) {
-    console.error('❌ Get conversations error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error getting conversations',
-      error: error.message
-    });
-  }
-};
-
-// Mark messages as read
-export const markMessagesAsRead = async (req, res) => {
-  try {
-    const currentUserId = req.user.id;
-    const { conversationId } = req.params;
-
-    console.log('👀 Marking messages as read:', { currentUserId, conversationId });
-
-    const conversation = await Conversation.findById(conversationId);
-    
-    if (!conversation || !conversation.participants.includes(currentUserId)) {
-      return res.status(404).json({
-        success: false,
-        message: 'Conversation not found'
-      });
-    }
-
-    // Mark messages as read
-    await Message.updateMany(
-      {
-        conversationId: conversationId,
-        receiverId: currentUserId,
-        isRead: false
-      },
-      {
-        isRead: true,
-        readAt: new Date()
-      }
-    );
-
-    // Reset unread count
-    conversation.unreadCount.set(currentUserId.toString(), 0);
-    await conversation.save();
-
-    res.status(200).json({
-      success: true,
-      message: 'Messages marked as read'
-    });
-
-  } catch (error) {
-    console.error('❌ Mark messages as read error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error marking messages as read',
-      error: error.message
-    });
-  }
-};
-
-// Get call history for a conversation
-export const getCallHistory = async (req, res) => {
-  try {
-    const { conversationId } = req.params;
-    const currentUserId = req.user.id;
-
-    // Verify user is part of conversation
-    const conversation = await Conversation.findById(conversationId);
-    if (!conversation || !conversation.participants.includes(currentUserId)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied'
-      });
-    }
-
-    const callMessages = await Message.find({
-      conversationId,
-      messageType: 'call',
-      isDeleted: false
-    })
-    .populate('senderId', 'name')
-    .sort({ createdAt: -1 });
-
-    res.status(200).json({
-      success: true,
-      calls: callMessages
-    });
-
-  } catch (error) {
-    console.error('❌ Get call history error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching call history',
       error: error.message
     });
   }
@@ -887,5 +713,126 @@ export const createCallMessage = async (callData) => {
   } catch (error) {
     console.error('❌ Create call message error:', error);
     throw error;
+  }
+};
+
+// Get call history for a conversation
+export const getCallHistory = async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const { conversationId } = req.params;
+    const { page = 1, limit = 50 } = req.query;
+
+    console.log('📞 Getting call history:', { currentUserId, conversationId });
+
+    // Validate conversation
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    // Check that user is part of the conversation
+    const isParticipant = conversation.participants.some(p => p.toString() === currentUserId.toString());
+    if (!isParticipant) {
+      return res.status(403).json({ success: false, message: 'Not authorized to view this conversation' });
+    }
+
+    // Fetch call-type messages
+    const calls = await Message.find({ conversationId: conversation._id, messageType: 'call', isDeleted: false })
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      calls: calls.reverse(),
+      hasMore: calls.length === parseInt(limit)
+    });
+
+  } catch (error) {
+    console.error('❌ Get call history error:', error);
+    res.status(500).json({ success: false, message: 'Server error getting call history', error: error.message });
+  }
+};
+
+// Get list of conversations for the current user
+export const getUserConversations = async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+
+    console.log('📚 Getting user conversations for:', currentUserId);
+
+    const conversations = await Conversation.find({ participants: currentUserId })
+      .sort({ lastMessageAt: -1 })
+      .populate('participants', 'name email graduationYear')
+      .lean();
+
+    const formatted = await Promise.all(conversations.map(async (conv) => {
+      const other = conv.participants.find(p => p._id.toString() !== currentUserId.toString());
+
+      // Find last message for better accuracy
+      const lastMessageDoc = await Message.findOne({ conversationId: conv._id, isDeleted: false })
+        .sort({ createdAt: -1 })
+        .populate('senderId', 'name')
+        .lean();
+
+      let lastMessage = conv.lastMessage || 'Start a conversation...';
+      let lastMessageAt = conv.lastMessageAt || conv.updatedAt;
+      if (lastMessageDoc) {
+        if (lastMessageDoc.messageType === 'image') lastMessage = '🖼️ Image';
+        else if (lastMessageDoc.messageType === 'file') lastMessage = '📄 File';
+        else if (lastMessageDoc.messageType === 'call') lastMessage = '📞 Call';
+        else lastMessage = lastMessageDoc.message || lastMessage;
+        lastMessageAt = lastMessageDoc.createdAt || lastMessageAt;
+      }
+
+      const unreadCount = conv.unreadCount?.get(currentUserId.toString()) || 0;
+
+      return {
+        conversationId: conv._id,
+        otherUser: other ? { id: other._id, name: other.name, email: other.email, graduationYear: other.graduationYear } : null,
+        lastMessage,
+        lastMessageAt,
+        unreadCount
+      };
+    }));
+
+    res.status(200).json({ success: true, conversations: formatted });
+
+  } catch (error) {
+    console.error('❌ Get user conversations error:', error);
+    res.status(500).json({ success: false, message: 'Server error getting conversations', error: error.message });
+  }
+};
+
+// Mark messages as read for a conversation for the current user
+export const markMessagesAsRead = async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const { conversationId } = req.params;
+
+    console.log('✅ Marking messages as read:', { currentUserId, conversationId });
+
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) return res.status(404).json({ success: false, message: 'Conversation not found' });
+
+    // Ensure user participates
+    const isParticipant = conversation.participants.some(p => p.toString() === currentUserId.toString());
+    if (!isParticipant) return res.status(403).json({ success: false, message: 'Not authorized' });
+
+    await Message.updateMany({ conversationId: conversation._id, receiverId: currentUserId, isRead: false }, { isRead: true, readAt: new Date() });
+
+    // Reset unread count in conversation map
+    if (conversation.unreadCount && conversation.unreadCount.has && conversation.unreadCount.set) {
+      conversation.unreadCount.set(currentUserId.toString(), 0);
+      await conversation.save();
+    }
+
+    res.status(200).json({ success: true, message: 'Messages marked as read' });
+
+  } catch (error) {
+    console.error('❌ Mark messages as read error:', error);
+    res.status(500).json({ success: false, message: 'Server error marking messages as read', error: error.message });
   }
 };

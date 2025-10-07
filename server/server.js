@@ -87,7 +87,7 @@ app.get('/api/test', (req, res) => {
 app.use(passport.initialize());
 app.use(passport.session());
 
-// ✅ API Routes - CORRECTED ORDER
+// ✅ API Routes
 app.use('/', authRoutes);
 app.use('/api', protectedRoutes);
 app.use('/api', contactRoutes);
@@ -100,93 +100,6 @@ app.use('/api/events', eventRoutes);
 app.use('/api', newsAndAchievementsRoutes);
 app.use('/api/messages', messageRoutes);
 
-// ========== DEBUG ROUTES ==========
-
-// Debug route to check all messages in database
-app.get('/api/debug/all-messages', auth, async (req, res) => {
-  try {
-    const Message = mongoose.model('Message');
-    const messages = await Message.find({})
-      .populate('senderId', 'name email')
-      .populate('receiverId', 'name email')
-      .sort({ createdAt: -1 })
-      .limit(100)
-      .lean();
-    
-    res.json({
-      totalMessages: messages.length,
-      messages: messages.map(msg => ({
-        _id: msg._id,
-        message: msg.message,
-        messageType: msg.messageType,
-        callType: msg.callType,
-        callStatus: msg.callStatus,
-        callDuration: msg.callDuration,
-        sender: msg.senderId?.name,
-        receiver: msg.receiverId?.name,
-        createdAt: msg.createdAt,
-        conversationId: msg.conversationId
-      }))
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Debug route to check database collections
-app.get('/api/debug/database-status', auth, async (req, res) => {
-  try {
-    const db = mongoose.connection.db;
-    const collections = await db.listCollections().toArray();
-    
-    const collectionStats = {};
-    
-    for (const collection of collections) {
-      const collectionName = collection.name;
-      const count = await db.collection(collectionName).countDocuments();
-      collectionStats[collectionName] = {
-        count: count,
-        size: collection.size
-      };
-    }
-    
-    res.json({
-      database: mongoose.connection.name,
-      collections: collectionStats
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Reset conversations collection (development only)
-app.delete('/api/debug/reset-conversations', async (req, res) => {
-  try {
-    const Conversation = mongoose.model('Conversation');
-    const Message = mongoose.model('Message');
-    
-    console.log('🔄 Resetting conversations and messages...');
-    
-    const convResult = await Conversation.deleteMany({});
-    const msgResult = await Message.deleteMany({});
-    
-    console.log('✅ Deleted conversations:', convResult.deletedCount);
-    console.log('✅ Deleted messages:', msgResult.deletedCount);
-    
-    res.json({
-      message: 'Database reset successfully',
-      conversationsDeleted: convResult.deletedCount,
-      messagesDeleted: msgResult.deletedCount
-    });
-    
-  } catch (error) {
-    console.error('❌ Reset error:', error);
-    res.status(500).json({ 
-      error: error.message
-    });
-  }
-});
-
 // ✅ Root Route
 app.get('/', (req, res) => {
   res.json({
@@ -197,8 +110,7 @@ app.get('/', (req, res) => {
       alumni: '/api/alumni/*',
       networking: '/api/connection-request, /api/alumni-directory',
       messages: '/api/messages/*',
-      health: '/api/test',
-      debug: '/api/debug/*'
+      health: '/api/test'
     }
   });
 });
@@ -243,22 +155,6 @@ mongoose
 // After MongoDB connection
 mongoose.connection.on('connected', () => {
   console.log('✅ MongoDB Connected');
-  
-  // Verify models are registered
-  const models = mongoose.modelNames();
-  console.log('📊 Registered models:', models);
-});
-
-// Enable MongoDB debug for messages collection
-mongoose.set('debug', function(collectionName, method, query, doc) {
-  if (collectionName === 'messages' || collectionName === 'conversations') {
-    console.log('🗂️ MongoDB Operation:', {
-      collection: collectionName,
-      method: method,
-      query: query,
-      doc: doc
-    });
-  }
 });
 
 // Create HTTP server
@@ -303,25 +199,6 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('userOnline', { userId: socket.userId });
   }
 
-  // DEBUG: Log all socket events
-  const originalEmit = socket.emit;
-  socket.emit = function(event, data) {
-    console.log(`📤 [SOCKET EMIT] ${event}:`, typeof data === 'object' ? JSON.stringify(data).substring(0, 200) + '...' : data);
-    return originalEmit.apply(this, arguments);
-  };
-
-  const originalOn = socket.on;
-  socket.on = function(event, callback) {
-    return originalOn.call(this, event, function(data) {
-      console.log(`📥 [SOCKET RECEIVED] ${event}:`, typeof data === 'object' ? JSON.stringify(data).substring(0, 200) + '...' : data);
-      try {
-        return callback.apply(this, arguments);
-      } catch (error) {
-        console.error(`❌ Socket handler error for ${event}:`, error);
-      }
-    });
-  };
-
   // Join user's personal room
   socket.on('joinUserRoom', () => {
     if (socket.userId) {
@@ -345,11 +222,6 @@ io.on('connection', (socket) => {
       // Broadcast to other users in the conversation
       socket.to(`conversation_${conversationId}`).emit('newMessage', message);
       
-      // Send delivery confirmation
-      socket.to(`conversation_${conversationId}`).emit('messageDelivered', {
-        messageId: message._id,
-        conversationId
-      });
     } catch (error) {
       console.error('❌ Socket send message error:', error);
     }
@@ -382,7 +254,7 @@ io.on('connection', (socket) => {
 
   // ========== WEBRTC CALL HANDLERS ==========
 
-  // Voice call initiation - FIXED VERSION
+  // Voice call initiation
   socket.on('initiateVoiceCall', async (data) => {
     console.log('📞 Voice call initiated:', data);
     
@@ -437,7 +309,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Video call initiation - FIXED VERSION
+  // Video call initiation
   socket.on('initiateVideoCall', async (data) => {
     console.log('📹 Video call initiated:', data);
     
@@ -492,7 +364,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Call acceptance - FIXED VERSION
+  // Call acceptance
   socket.on('callAccepted', async (data) => {
     console.log('✅ Call accepted:', data);
     
@@ -534,7 +406,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Call rejection - FIXED VERSION
+  // Call rejection
   socket.on('callRejected', async (data) => {
     console.log('❌ Call rejected:', data);
     
@@ -572,7 +444,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Call end - FIXED VERSION
+  // Call end
   socket.on('endCall', async (data) => {
     console.log('📞 Call ended:', data);
     
@@ -644,15 +516,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Call ringing notification
-  socket.on('callRinging', (data) => {
-    console.log('🔔 Call ringing:', data);
-    socket.to(`user_${data.toUserId}`).emit('callRinging', {
-      callRoomId: data.callRoomId,
-      fromUserId: socket.userId
-    });
-  });
-
   // Handle disconnect - clean up active calls
   socket.on('disconnect', (reason) => {
     console.log('🔌 User disconnected:', socket.id, 'Reason:', reason);
@@ -692,7 +555,5 @@ server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
   console.log(`📡 API Test: http://localhost:${PORT}/api/test`);
-  console.log(`🐛 Debug Routes: http://localhost:${PORT}/api/debug/all-messages`);
   console.log(`📞 WebRTC Support: Enabled`);
-  console.log(`🔧 Active Call Tracking: Enabled`);
 });
