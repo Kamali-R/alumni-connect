@@ -11,7 +11,8 @@ const EventsAndReunions = () => {
     eventType: '',
     startDate: '',
     endDate: '',
-    location: ''
+    location: '',
+    mode: '' // 'online' | 'offline' | '' for all
   });
   const [formData, setFormData] = useState({
     title: '',
@@ -20,6 +21,9 @@ const EventsAndReunions = () => {
     time: '',
     location: '',
     rsvpInfo: '',
+    // new fields for online/offline events
+    mode: 'offline',
+    eventLink: '',
     description: ''
   });
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -112,7 +116,8 @@ const EventsAndReunions = () => {
       eventType: '',
       startDate: '',
       endDate: '',
-      location: ''
+      location: '',
+      mode: ''
     });
   };
 
@@ -226,6 +231,11 @@ const EventsAndReunions = () => {
     e.preventDefault();
     
     try {
+      // client-side validation: online events must include an event link
+      if (formData.mode === 'online' && (!formData.eventLink || formData.eventLink.trim() === '')) {
+        alert('Please provide the online event link for online events');
+        return;
+      }
       const response = await eventsAPI.create(formData);
       const newEvent = response.data?.data || response.data;
       
@@ -253,6 +263,8 @@ const EventsAndReunions = () => {
         time: '',
         location: '',
         rsvpInfo: '',
+        mode: 'offline',
+        eventLink: '',
         description: ''
       });
       
@@ -445,6 +457,9 @@ const EventsAndReunions = () => {
               <span className={`${eventTypeDisplay.color} px-2 py-1 rounded-full text-xs font-medium`}>
                 {eventTypeDisplay.text}
               </span>
+              <span className={`${event.mode === 'online' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-800'} px-2 py-1 rounded-full text-xs font-medium`}>
+                {event.mode === 'online' ? 'Online' : 'Offline'}
+              </span>
               <span>{formatDate(event.date)}</span>
               <span>{formatTime(event.time)}</span>
               {isPastEvent && (
@@ -459,6 +474,9 @@ const EventsAndReunions = () => {
             <p className="text-gray-700 text-sm leading-relaxed mb-4">{event.description}</p>
             {event.rsvpInfo && (
               <p className="text-sm text-gray-600"><strong>RSVP:</strong> {event.rsvpInfo}</p>
+            )}
+            {event.mode === 'online' && event.eventLink && (
+              <p className="text-sm text-blue-600 mt-2"><strong>Join:</strong> <a href={event.eventLink} target="_blank" rel="noreferrer" className="underline">{event.eventLink}</a></p>
             )}
           </div>
         </div>
@@ -625,6 +643,20 @@ const EventsAndReunions = () => {
                       placeholder="Search location..."
                       className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
                   </div>
+                  
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">Event Mode</label>
+                    <select
+                      name="mode"
+                      value={filters.mode}
+                      onChange={handleFilterChange}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
+                    >
+                      <option value="">All Modes</option>
+                      <option value="online">Online</option>
+                      <option value="offline">Offline</option>
+                    </select>
+                  </div>
                 </div>
                 
                 <div className="flex justify-between items-center mt-4">
@@ -760,6 +792,19 @@ const EventsAndReunions = () => {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Event Mode <span className="text-gray-400 text-sm">(Online or Offline)</span>
+                  </label>
+                  <select
+                    name="mode"
+                    value={formData.mode}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white mb-3"
+                  >
+                    <option value="offline">Offline (In-person)</option>
+                    <option value="online">Online</option>
+                  </select>
+
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     RSVP Link or Contact Info <span className="text-gray-400 text-sm">(Optional)</span>
                   </label>
                   <input
@@ -772,6 +817,24 @@ const EventsAndReunions = () => {
                   />
                 </div>
               </div>
+              {formData.mode === 'online' && (
+                <div className="grid grid-cols-1 md:grid-cols-1 gap-6 mt-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Online Event Link <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="url"
+                      name="eventLink"
+                      value={formData.eventLink}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      placeholder="https://example.com/meeting-link"
+                    />
+                  </div>
+                </div>
+              )}
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">

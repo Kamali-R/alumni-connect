@@ -23,19 +23,39 @@ api.interceptors.request.use(
   }
 );
 
-// In your api.js file, make sure the interceptor is working
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
+// Response interceptor for error handling
+api.interceptors.response.use(
+  (response) => response,
   (error) => {
+    if (error.response?.status === 401) {
+      // Token expired or invalid
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
     return Promise.reject(error);
   }
 );
+
+// News API
+export const newsAPI = {
+  getAll: () => api.get('/news'),
+  create: (newsData) => api.post('/news', newsData),
+  delete: (id) => api.delete(`/news/${id}`),
+};
+
+// Add this to your achievementsAPI object
+// In your api.js file, update the achievementsAPI object:
+// In your api.js file, update the achievementsAPI object:
+// In your api.js file, update the achievementsAPI object:
+export const achievementsAPI = {
+  getAll: () => api.get('/achievements'),
+  create: (achievementData) => api.post('/achievements', achievementData),
+  update: (id, achievementData) => api.put(`/achievements/${id}`, achievementData),
+  delete: (id) => api.delete(`/achievements/${id}`),
+  congratulate: (id) => api.post(`/achievements/${id}/congratulate`),
+  getCongratulations: (id) => api.get(`/achievements/${id}/congratulations`),
+  getUserProfile: () => api.get('/user/profile'),
+};
 
 // Events API
 export const eventsAPI = {
@@ -57,11 +77,17 @@ export const eventsAPI = {
   
   toggleAttendance: (id) => api.put(`/events/${id}/attendance`),
   
-  // Updated: Get events for currently authenticated user
-getUserEvents: () => api.get('/events/my-events'),
+  getUserEvents: () => api.get('/events/my-events'),
   
-  // Alternative: Get events by user ID (if needed)
   getUserEventsById: (userId) => api.get(`/events/user/${userId}`),
 };
+
+// Test connection
+export const testAPI = {
+  test: () => api.get('/test'),
+  health: () => api.get('/health'),
+};
+
+
 
 export default api;

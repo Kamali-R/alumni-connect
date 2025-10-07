@@ -25,6 +25,7 @@ import eventRoutes from './routes/eventRoutes.js';
 import newsAndAchievementsRoutes from './routes/NewsAndAchievementsRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 import studentRoutes from './routes/studentRoutes.js';
+import NewsAndAchievementsRoutes from './routes/NewsAndAchievementsRoutes.js';
 
 // Load Google OAuth config
 import './config/googleAuth.js';
@@ -92,6 +93,8 @@ app.use('/', authRoutes);
 app.use('/api', protectedRoutes);
 app.use('/api', contactRoutes);
 app.use('/api', alumniRoutes);
+app.use('/api/events', eventRoutes);
+app.use('/api', NewsAndAchievementsRoutes); // ✅ Add this line
 app.use('/api', jobRoutes);
 app.use('/api', networkingRoutes);
 app.use('/api', successStoryRoutes);
