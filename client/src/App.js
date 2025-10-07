@@ -11,6 +11,7 @@ import EventsAndReunions from "./EventsAndReunions";
 import GoogleAuthHandler from './GoogleAuthHandler';
 import './index.css';
 import Messages from './Messages';
+import AlumniJobDashboard from './AlumniJobDashboard';
 
 function App() {
   const [userData, setUserData] = useState(null);
@@ -19,6 +20,7 @@ function App() {
     <Router>
       <div className="App">
         <Routes>
+          <Route path="/job-dashboard" element={<AlumniJobDashboard />} />
           <Route path="/" element={<HomePage />} />
           <Route path="/Login" element={<Login />} />
           <Route
