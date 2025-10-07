@@ -1,24 +1,44 @@
-import logo from './logo.svg';
-import './App.css';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { useState } from 'react';
+import HomePage from './homepage';
+import Register from './Register';
+import VerifyOtp from './VerifyOtp';
+import PasswordResetFlow from './password';
+import Login from './Login';
+import AlumniDashboard from './Dashboard';
+import AlumniConnectProfile from './AlumniProfile';
+import EventsAndReunions from "./EventsAndReunions";
+import GoogleAuthHandler from './GoogleAuthHandler';
+import './index.css';
 
 function App() {
+  const [userData, setUserData] = useState(null);
+  
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Router>
+      <div className="App">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/Login" element={<Login />} />
+          <Route
+            path="/Register"
+            element={
+              <Register
+                onOtpSent={() => window.location.replace('/VerifyOtp')}
+                setUserData={setUserData}
+              />
+            }
+          />
+          <Route path="/VerifyOtp" element={<VerifyOtp userData={userData} />} />
+          <Route path="/forgot-password" element={<PasswordResetFlow />} />
+          <Route path="/alumni-profile" element={<AlumniConnectProfile />} />
+          <Route path="/dashboard" element={<AlumniDashboard />} />
+          {/* Add this route for Events */}
+          <Route path="/events" element={<EventsAndReunions />} />
+          <Route path="/auth/google/callback" element={<GoogleAuthHandler />} />
+        </Routes>
+      </div>
+    </Router>
   );
 }
 
