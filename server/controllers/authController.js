@@ -68,6 +68,7 @@ export const sendOtp = async (req, res) => {
 };
 
 // STEP 2: Verify OTP and Create User (but not Alumni profile yet)
+// In your authController.js, update the verifyOtp function to ensure student registration works
 export const verifyOtp = async (req, res) => {
   try {
     const { name, email, password, role, otp, purpose } = req.body;

@@ -1,9 +1,17 @@
+import express from 'express';
 import session from 'express-session';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import passport from 'passport';
-import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+
+// Load environment variables first
+dotenv.config();
+
 // Load routes
 import alumniRoutes from './routes/alumniRoutes.js';
 import authRoutes from './routes/authRoutes.js';
@@ -16,18 +24,10 @@ import discussionRoutes from './routes/discussionRoutes.js';
 import eventRoutes from './routes/eventRoutes.js';
 import newsAndAchievementsRoutes from './routes/NewsAndAchievementsRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
-import Message from './models/Message.js';
-import Conversation from './models/Conversation.js';
-import User from './models/User.js';
-import auth from './middleware/authMiddleware.js';
+import studentRoutes from './routes/studentRoutes.js';
 
 // Load Google OAuth config
 import './config/googleAuth.js';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { createServer } from 'http';
-import { Server } from 'socket.io';
-dotenv.config();
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -87,7 +87,7 @@ app.get('/api/test', (req, res) => {
 app.use(passport.initialize());
 app.use(passport.session());
 
-// ✅ API Routes
+// ✅ API Routes - MOVE THIS AFTER app DECLARATION
 app.use('/', authRoutes);
 app.use('/api', protectedRoutes);
 app.use('/api', contactRoutes);
@@ -99,6 +99,7 @@ app.use('/api', discussionRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api', newsAndAchievementsRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/student', studentRoutes);
 
 // ✅ Root Route
 app.get('/', (req, res) => {
