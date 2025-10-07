@@ -183,22 +183,4 @@ router.get('/jobs/:id', async (req, res) => {
   }
 });
 
-// Delete job (optional)
-router.delete('/jobs/:id', auth, async (req, res) => {
-  try {
-    const job = await Job.findOne({ _id: req.params.id, postedBy: req.user.id });
-    
-    if (!job) {
-      return res.status(404).json({ message: 'Job not found or unauthorized' });
-    }
-    
-    await Job.findByIdAndDelete(req.params.id);
-    
-    res.status(200).json({ message: 'Job deleted successfully' });
-  } catch (error) {
-    console.error('Delete job error:', error);
-    res.status(500).json({ message: 'Server error during job deletion' });
-  }
-});
-
 export default router;

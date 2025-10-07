@@ -13,6 +13,7 @@ import EventsAndReunions from "./EventsAndReunions";
 import GoogleAuthHandler from './GoogleAuthHandler';
 import './index.css';
 import Messages from './Messages';
+import AlumniJobDashboard from './AlumniJobDashboard';
 
 // In App.js, ensure the student-profile route is properly defined
 function App() {
@@ -22,6 +23,7 @@ function App() {
     <Router>
       <div className="App">
         <Routes>
+          <Route path="/job-dashboard" element={<AlumniJobDashboard />} />
           <Route path="/" element={<HomePage />} />
           <Route path="/Login" element={<Login />} />
           <Route
