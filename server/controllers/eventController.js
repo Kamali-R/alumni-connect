@@ -5,7 +5,7 @@ import Event from '../models/Events.js';
 // @access  Public
 export const getEvents = async (req, res) => {
   try {
-    const { eventType, startDate, endDate, location } = req.query;
+  const { eventType, startDate, endDate, location, mode } = req.query;
     
     // Build filter object
     let filter = {};
@@ -22,6 +22,21 @@ export const getEvents = async (req, res) => {
     
     if (location) {
       filter.location = { $regex: location, $options: 'i' };
+    }
+
+    // Filter by event mode if provided (online/offline)
+    if (mode && (mode === 'online' || mode === 'offline')) {
+      if (mode === 'online') {
+        // only events explicitly marked online
+        filter.mode = 'online';
+      } else {
+        // Treat missing mode as offline for backward compatibility
+        filter.$or = [
+          { mode: 'offline' },
+          { mode: { $exists: false } },
+          { mode: null }
+        ];
+      }
     }
     
     const events = await Event.find(filter)
@@ -44,6 +59,9 @@ export const getEvents = async (req, res) => {
       
       // Ensure attendance count is accurate
       eventObj.attendance = event.attendees.length;
+      // Ensure mode and eventLink defaults
+      eventObj.mode = event.mode || 'offline';
+      eventObj.eventLink = event.eventLink || '';
       
       return eventObj;
     });
@@ -97,6 +115,8 @@ export const getEvent = async (req, res) => {
     
     // Ensure attendance count is accurate
     eventObj.attendance = event.attendees.length;
+    eventObj.mode = event.mode || 'offline';
+    eventObj.eventLink = event.eventLink || '';
     
     res.status(200).json({
       success: true,
@@ -121,6 +141,16 @@ export const createEvent = async (req, res) => {
     
     // Use req.user.id (from your auth middleware)
     req.body.postedBy = req.user.id;
+    // Ensure mode and eventLink consistency
+    if (req.body.mode === 'online') {
+      if (!req.body.eventLink || typeof req.body.eventLink !== 'string' || req.body.eventLink.trim() === '') {
+        return res.status(400).json({ success: false, message: 'Online events must include an eventLink' });
+      }
+    } else {
+      // For offline events, clear eventLink to avoid stale data
+      req.body.eventLink = req.body.eventLink || '';
+      req.body.mode = 'offline';
+    }
     
     const event = await Event.create(req.body);
     
@@ -168,6 +198,15 @@ export const updateEvent = async (req, res) => {
         message: 'Not authorized to update this event'
       });
     }
+    // Validate mode and eventLink on update
+    if (req.body.mode === 'online') {
+      if (!req.body.eventLink || typeof req.body.eventLink !== 'string' || req.body.eventLink.trim() === '') {
+        return res.status(400).json({ success: false, message: 'Online events must include an eventLink' });
+      }
+    } else if (req.body.mode === 'offline') {
+      // clear link if switching to offline
+      req.body.eventLink = req.body.eventLink || '';
+    }
     
     event = await Event.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
@@ -180,6 +219,9 @@ export const updateEvent = async (req, res) => {
       attendee => attendee._id.toString() === req.user.id.toString()
     );
     eventObj.attendance = event.attendees.length;
+    // Ensure mode and eventLink are present in response
+    eventObj.mode = event.mode || 'offline';
+    eventObj.eventLink = event.eventLink || '';
     
     res.status(200).json({
       success: true,
@@ -289,6 +331,8 @@ export const toggleAttendance = async (req, res) => {
     // Set the correct attendance status
     eventObj.isUserAttending = !isCurrentlyAttending;
     eventObj.attendance = updatedEvent.attendees.length;
+  eventObj.mode = updatedEvent.mode || 'offline';
+  eventObj.eventLink = updatedEvent.eventLink || '';
     
     console.log('Toggle attendance - New state:', {
       eventId: req.params.id,
@@ -336,6 +380,8 @@ export const getUserEvents = async (req, res) => {
         attendee => attendee._id.toString() === userId.toString()
       );
       eventObj.attendance = event.attendees.length;
+      eventObj.mode = event.mode || 'offline';
+      eventObj.eventLink = event.eventLink || '';
       return eventObj;
     });
     

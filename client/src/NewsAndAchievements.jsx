@@ -978,11 +978,6 @@ const handleOpenAchievementModal = () => {
                 }`}
               >
                 📋 My Achievements
-                <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
-                  activeTab === 'my-achievements' ? 'bg-purple-500 text-white' : 'bg-gray-200 text-gray-600'
-                }`}>
-                  {myAchievements.length}
-                </span>
               </button>
             </div>
             <div className="flex items-center space-x-3">
@@ -1194,10 +1189,6 @@ const handleOpenAchievementModal = () => {
           <p className="text-gray-600 mt-1">
             Manage and track all your shared achievements
           </p>
-        </div>
-        <div className="text-right">
-          <div className="text-3xl font-bold text-purple-600">{myAchievements.length}</div>
-          <div className="text-sm text-gray-500">Total Achievements</div>
         </div>
       </div>
     </div>

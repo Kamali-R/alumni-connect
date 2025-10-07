@@ -23,6 +23,16 @@ const eventSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Event location is required']
   },
+  // Mode of event: online or offline. If online, eventLink can be provided.
+  mode: {
+    type: String,
+    enum: ['online', 'offline'],
+    default: 'offline'
+  },
+  eventLink: {
+    type: String,
+    default: ''
+  },
   description: {
     type: String,
     required: [true, 'Event description is required']
