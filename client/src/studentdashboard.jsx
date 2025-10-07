@@ -1,95 +1,45 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import AlumniProfilePage from './profile';
-import AlumniJobDashboard from './AlumniJobDashboard';
-import NetworkingHub from './NetworkingHub';
-import NewsAndAchievements from './NewsAndAchievements';
-import EventsAndReunions from './EventsAndReunions';
-import Messages from './Messages';
-const AlumniConnectDashboard = () => {
+import StudentProfileDisplay from './studentprofiledisplay';
+import AlumniDirectory from './alumnidirectory';
+import InternHub from './studentinternship';
+import StudentMessages from './studentmessage';
+import EventHub from './studentevents';
+
+const StudentDashboard = () => {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('dashboard');
   const [fadeAnimation, setFadeAnimation] = useState(false);
   const [userRole, setUserRole] = useState('');
-  const [userName, setUserName] = useState('');
-  const [userGraduation, setUserGraduation] = useState('');
+  const [userName, setUserName] = useState('Student User');
+  const [userMajor, setUserMajor] = useState('');
+  const [expectedGraduation, setExpectedGraduation] = useState('');
+  const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [profileCompleted, setProfileCompleted] = useState(false);
-  
-  // Function to fetch fresh user data
-  const fetchUserData = async () => {
-    try {
-      const storedToken = localStorage.getItem('token');
-      
-      if (!storedToken) {
-        console.log('No token found, redirecting to login');
-        navigate('/login');
-        return;
-      }
 
-      // Fetch current user data from backend
-      const response = await fetch('http://localhost:5000/user', {
-        headers: {
-          'Authorization': `Bearer ${storedToken}`
-        }
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          console.log('Token expired, redirecting to login');
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          navigate('/login');
-          return;
-        }
-        throw new Error('Failed to fetch user data');
-      }
-
-      const userData = await response.json();
-      console.log('Fresh user data fetched:', {
-        name: userData.name,
-        graduationYear: userData.graduationYear,
-        profileCompleted: userData.profileCompleted
-      });
-
-      // Check registration completion based on role
-      let registrationComplete = false;
+  // Check authentication and fetch profile data
+  useEffect(() => {
+  const checkAuthenticationAndFetchProfile = async () => {
+    const storedToken = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('user');
+    const profileCompleted = localStorage.getItem('profileCompleted') === 'true';
+    
+    if (!storedToken) {
+      console.log('No token found, redirecting to login');
+      navigate('/login');
+      return;
+    }
+    
+    // Get user data from localStorage
+    if (storedUser) {
+      const userData = JSON.parse(storedUser);
+      console.log('User data:', userData);
+      setUserRole(userData.role);
+      setUserName(userData.name || 'Student User');
       
-      if (userData.role === 'alumni') {
-        registrationComplete = userData.profileCompleted && userData.alumniProfile;
-        
-        // Double-check alumni profile exists
-        if (userData.profileCompleted) {
-          try {
-            const alumniResponse = await fetch('http://localhost:5000/api/alumni/profile', {
-              headers: {
-                'Authorization': `Bearer ${storedToken}`
-              }
-            });
-            
-            if (alumniResponse.status === 404) {
-              registrationComplete = false;
-              console.log('Alumni profile not found, registration incomplete');
-            } else if (alumniResponse.ok) {
-              const alumniData = await alumniResponse.json();
-              registrationComplete = alumniData.status === 'complete';
-              console.log('Alumni profile status:', alumniData.status);
-            }
-          } catch (error) {
-            console.error('Error checking alumni profile:', error);
-            registrationComplete = false;
-          }
-        }
-      } else {
-        registrationComplete = userData.profileCompleted;
-      }
-      
-      console.log('Registration complete status:', registrationComplete);
-      
-      // If alumni hasn't completed registration, redirect to profile setup
-      if (!registrationComplete && userData.role === 'alumni') {
-        console.log('Registration not complete, redirecting to profile setup');
-        navigate('/alumni-profile', {
+      // If profile is not completed, redirect to profile completion
+      if (!profileCompleted && userData.role === 'student') {
+        navigate('/student-profile', {
           state: {
             userData: userData,
             verified: true,
@@ -98,66 +48,45 @@ const AlumniConnectDashboard = () => {
         });
         return;
       }
-
-      // Update state with fresh data
-      setUserRole(userData.role);
-      setUserName(userData.name || 'User');
-      setProfileCompleted(registrationComplete);
-      
-      
-
-      // Update localStorage with fresh data
-      const updatedUserData = {
-        ...userData,
-        profileCompleted: registrationComplete,
-        registrationComplete: registrationComplete
-      };
-      localStorage.setItem('user', JSON.stringify(updatedUserData));
-      localStorage.setItem('registrationComplete', registrationComplete ? 'true' : 'false');
-
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-      navigate('/login');
     }
-  };
+      
+      // Only redirect if user is an alumni (not student)
+      if (storedUser && JSON.parse(storedUser).role === 'alumni') {
+        navigate('/dashboard');
+        return;
+      }
 
-  // Check authentication and fetch user data on component mount
-  useEffect(() => {
-    const initializeUser = async () => {
-      setLoading(true);
-      await fetchUserData();
-      setLoading(false);
+      // Fetch student profile data
+      try {
+        const response = await fetch('http://localhost:5000/api/student/profile', {
+          headers: {
+            'Authorization': `Bearer ${storedToken}`
+          }
+        });
+
+        if (response.ok) {
+          const profileData = await response.json();
+          setProfileData(profileData);
+          
+          // Set major and graduation from profile data
+          if (profileData.academicInfo) {
+            setUserMajor(profileData.academicInfo.branch || '');
+            setExpectedGraduation(`Class of ${profileData.academicInfo.graduationYear || ''}`);
+          }
+        } else if (response.status === 404) {
+          // Profile not found, redirect to complete profile
+          navigate('/student-profile');
+          return;
+        }
+      } catch (error) {
+        console.error('Error fetching student profile:', error);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    initializeUser();
+    checkAuthenticationAndFetchProfile();
   }, [navigate]);
-
-  // NEW: Refresh user data when activeSection changes (especially when returning from profile)
-  useEffect(() => {
-    if (activeSection === 'dashboard') {
-      // Refresh data when returning to dashboard
-      fetchUserData();
-    }
-  }, [activeSection]);
-
-  // NEW: Listen for profile update events
-  useEffect(() => {
-    const handleProfileUpdate = () => {
-      console.log('Profile update detected, refreshing user data...');
-      fetchUserData();
-    };
-
-    // Listen for custom event that can be triggered from profile page
-    window.addEventListener('profileUpdated', handleProfileUpdate);
-    
-    // Also listen for storage events (if profile updates localStorage)
-    window.addEventListener('storage', handleProfileUpdate);
-
-    return () => {
-      window.removeEventListener('profileUpdated', handleProfileUpdate);
-      window.removeEventListener('storage', handleProfileUpdate);
-    };
-  }, []);
 
   // Navigation items
   const navItems = [
@@ -171,40 +100,25 @@ const AlumniConnectDashboard = () => {
           <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"></path>
         </svg>
       ) },
-    { id: 'networking', label: 'Networking Hub', icon: (
+    { id: 'alumni-directory', label: 'Alumni Directory', icon: (
         <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
           <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"></path>
         </svg>
       ) },
-    { id: 'jobs', label: 'Job Opportunities', icon: (
+    { id: 'internships', label: 'Internships', icon: (
         <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
           <path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/>
         </svg>
       ) },
-    { id: 'events', label: 'Events & Reunions', icon: (
+    { id: 'events', label: 'Events', icon: (
         <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"></path>
-        </svg>
-      ) },
-    { id: 'mentorship', label: 'Mentorship Program', icon: (
-        <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3z"></path>
         </svg>
       ) },
     { id: 'messages', label: 'Messages', icon: (
         <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
           <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"></path>
           <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"></path>
-        </svg>
-      ) },
-    { id: 'news', label: 'News & Achievements', icon: (
-        <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M2 5a2 2 0 012-2h8a2 2 0 012 2v10a2 2 0 002 2H4a2 2 0 01-2-2V5zm3 1h6v4H5V6zm6 6H5v2h6v-2z" clipRule="evenodd"></path>
-        </svg>
-      ) },
-    { id: 'donations', label: 'Donations', icon: (
-        <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"></path>
         </svg>
       ) },
     { id: 'logout', label: 'Logout', icon: (
@@ -214,7 +128,6 @@ const AlumniConnectDashboard = () => {
       ), action: () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        localStorage.removeItem('profileCompleted');
         navigate('/login');
       } },
   ];
@@ -230,7 +143,7 @@ const AlumniConnectDashboard = () => {
       )
     },
     { 
-      label: 'Browse Jobs', 
+      label: 'Browse Internships', 
       icon: (
         <svg className="w-6 h-6 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
           <path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/>
@@ -238,19 +151,18 @@ const AlumniConnectDashboard = () => {
       )
     },
     { 
-      label: 'View Events', 
+      label: 'Career Advice', 
       icon: (
         <svg className="w-6 h-6 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"></path>
+          <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3z"></path>
         </svg>
       )
     },
     { 
-      label: 'Send Message', 
+      label: 'Campus Events', 
       icon: (
         <svg className="w-6 h-6 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"></path>
-          <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"></path>
+          <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"></path>
         </svg>
       )
     },
@@ -265,9 +177,9 @@ const AlumniConnectDashboard = () => {
         </svg>
       ),
       bgColor: 'bg-green-100',
-      title: 'New Alumni Joined',
+      title: 'New Alumni Connection',
       time: '2 hours ago',
-      description: '5 new alumni from the Computer Science department joined the network.'
+      description: 'You connected with Sarah Johnson (Class of 2018, Software Engineer at Google).'
     },
     {
       icon: (
@@ -276,9 +188,9 @@ const AlumniConnectDashboard = () => {
         </svg>
       ),
       bgColor: 'bg-blue-100',
-      title: 'Event Reminder',
+      title: 'Internship Opportunity',
       time: '5 hours ago',
-      description: 'Annual Alumni Gala is scheduled for next Saturday. Don\'t forget to RSVP!'
+      description: 'Microsoft is hiring summer interns. Application deadline is next Friday.'
     },
     {
       icon: (
@@ -287,9 +199,9 @@ const AlumniConnectDashboard = () => {
         </svg>
       ),
       bgColor: 'bg-indigo-100',
-      title: 'Mentorship Opportunity',
+      title: 'Career Workshop',
       time: '1 day ago',
-      description: 'Sarah Johnson (Class of 2015) is offering mentorship for recent graduates.'
+      description: 'Resume building workshop scheduled for this Wednesday at 3 PM in the Student Center.'
     },
     {
       icon: (
@@ -298,9 +210,9 @@ const AlumniConnectDashboard = () => {
         </svg>
       ),
       bgColor: 'bg-yellow-100',
-      title: 'Alumni Achievement',
+      title: 'Alumni Response',
       time: '2 days ago',
-      description: 'Michael Chen (Class of 2010) received the Industry Leadership Award.'
+      description: 'Michael Chen responded to your career advice request. Check your messages.'
     },
   ];
   
@@ -319,30 +231,23 @@ const AlumniConnectDashboard = () => {
   // Handle quick action click
   const handleQuickActionClick = (label) => {
     console.log('Quick action clicked:', label);
-    // Add specific navigation logic for each quick action
-    switch (label) {
-      case 'Find Alumni':
-        setActiveSection('networking');
-        break;
-      case 'Browse Jobs':
-        setActiveSection('jobs');
-        break;
-      case 'View Events':
-        setActiveSection('events');
-        break;
-      case 'Send Message':
-        setActiveSection('messages');
-        break;
-      default:
-        break;
+    // Add navigation logic based on the action
+    if (label === 'Find Alumni') {
+      setActiveSection('alumni-directory');
+    } else if (label === 'Browse Internships') {
+      setActiveSection('internships');
+    } else if (label === 'Career Advice') {
+      setActiveSection('career-advice');
+    } else if (label === 'Campus Events') {
+      setActiveSection('events');
     }
   };
   
   // Stat cards data
   const statCards = [
     { 
-      title: 'Network Connections', 
-      value: '0', 
+      title: 'Alumni Connections', 
+      value: '8', 
       icon: (
         <svg className="w-8 h-8 text-blue-700" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
@@ -350,8 +255,8 @@ const AlumniConnectDashboard = () => {
       )
     },
     { 
-      title: 'Job Opportunities', 
-      value: '12', 
+      title: 'Internship Opportunities', 
+      value: '15', 
       icon: (
         <svg className="w-8 h-8 text-blue-700" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/>
@@ -360,7 +265,7 @@ const AlumniConnectDashboard = () => {
     },
     { 
       title: 'Upcoming Events', 
-      value: '5', 
+      value: '3', 
       icon: (
         <svg className="w-8 h-8 text-blue-700" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"></path>
@@ -368,8 +273,8 @@ const AlumniConnectDashboard = () => {
       )
     },
     { 
-      title: 'Messages', 
-      value: '0', 
+      title: 'Unread Messages', 
+      value: '2', 
       icon: (
         <svg className="w-8 h-8 text-blue-700" fill="currentColor" viewBox="0 0 20 20">
           <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"></path>
@@ -379,7 +284,6 @@ const AlumniConnectDashboard = () => {
     },
   ];
 
-  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -406,22 +310,17 @@ const AlumniConnectDashboard = () => {
             <span className="ml-3 text-xl font-bold text-gray-900">Alumni Connect</span>
           </div>
           
-          {/* Alumni Profile Section */}
+          {/* Student Profile Section */}
           <div className="flex items-center mb-6 p-3 bg-gray-50 rounded-lg border border-gray-200">
             <div className="w-12 h-12 bg-blue-700 rounded-full flex items-center justify-center">
               <span className="text-white font-semibold">
-                {userName.split(' ').map(n => n[0]).join('').toUpperCase()}
+                {userName.split(' ').map(n => n[0]).join('')}
               </span>
             </div>
             <div className="ml-3">
               <p className="font-semibold text-gray-900">{userName}</p>
-              <p className="text-sm text-gray-600">{userGraduation}</p>
-              <p className="text-xs text-blue-600 mt-1">
-                {userRole === 'alumni' ? 'Alumni' : 'Student'}
-                {!profileCompleted && (
-                  <span className="ml-2 text-red-600">• Profile Incomplete</span>
-                )}
-              </p>
+              <p className="text-sm text-gray-600">{userMajor}</p>
+              <p className="text-xs text-blue-600 mt-1">{expectedGraduation}</p>
             </div>
           </div>
           
@@ -455,45 +354,12 @@ const AlumniConnectDashboard = () => {
               {/* Welcome Header */}
               <div className="mb-8">
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                  Welcome to Alumni Connect, {userName}!
+                  Welcome to Student Portal, {userName}! 👋
                 </h1>
                 <p className="text-gray-600">
-                  {userRole === 'alumni' 
-                    ? profileCompleted 
-                      ? "Your profile is complete! Start connecting with other alumni." 
-                      : "Please complete your profile to get the most out of Alumni Connect."
-                    : "Explore opportunities and connect with alumni from your institution."}
+                  Connect with alumni, find internships, and get career advice to jumpstart your future.
                 </p>
               </div>
-
-              {/* Profile Completion Alert */}
-              {!profileCompleted && userRole === 'alumni' && (
-                <div className="mb-8 bg-yellow-50 border border-yellow-200 rounded-xl p-6">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div className="ml-3 flex-1">
-                      <h3 className="text-sm font-medium text-yellow-800">
-                        Complete Your Alumni Profile
-                      </h3>
-                      <p className="mt-1 text-sm text-yellow-700">
-                        Add your academic and professional information to connect with other alumni and access all features.
-                      </p>
-                    </div>
-                    <div className="ml-6 flex-shrink-0">
-                      <button
-                        onClick={() => navigate('/alumni-profile')}
-                        className="bg-yellow-50 text-yellow-800 hover:bg-yellow-100 font-medium py-2 px-4 rounded-lg border border-yellow-200 transition-colors"
-                      >
-                        Complete Profile
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
               
               {/* Stat Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -549,55 +415,90 @@ const AlumniConnectDashboard = () => {
                   ))}
                 </div>
               </div>
+              
+              {/* Profile Information Display */}
+              {profileData && (
+                <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-white p-6 rounded-xl border border-gray-200">
+                    <h3 className="text-lg font-semibold mb-4">Academic Information</h3>
+                    <div className="space-y-2">
+                      <p><span className="font-medium">Roll Number:</span> {profileData.academicInfo?.rollNumber}</p>
+                      <p><span className="font-medium">College Email:</span> {profileData.academicInfo?.collegeEmail}</p>
+                      <p><span className="font-medium">Degree:</span> {profileData.academicInfo?.degree}</p>
+                      <p><span className="font-medium">Branch:</span> {profileData.academicInfo?.branch}</p>
+                      <p><span className="font-medium">Current Year:</span> {profileData.academicInfo?.currentYear}</p>
+                      <p><span className="font-medium">Graduation Year:</span> {profileData.academicInfo?.graduationYear}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white p-6 rounded-xl border border-gray-200">
+                    <h3 className="text-lg font-semibold mb-4">Skills & Interests</h3>
+                    <div className="space-y-3">
+                      <div>
+                        <p className="font-medium mb-2">Skills:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {profileData.skills?.map((skill, index) => (
+                            <span key={index} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="font-medium mb-2">Interests:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {profileData.interests?.map((interest, index) => (
+                            <span key={index} className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">
+                              {interest}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           
           {/* Profile Section */}
           {activeSection === 'profile' && (
-            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
-              <AlumniProfilePage onProfileUpdate={fetchUserData} />
+            <div className="mt-8">
+              <StudentProfileDisplay />
             </div>
           )}
-
-          {/* Jobs Section */}
-          {activeSection === 'jobs' && (
-            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
-              <AlumniJobDashboard />
+          {activeSection === 'internships' && (
+            <div className="mt-8">
+              <InternHub />
             </div>
           )}
-
-          {/* Events Section */}
-          {activeSection === 'events' && (
-            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
-              <EventsAndReunions />
-            </div>
-          )}
-
-          {/* News Section */}
-          {activeSection === 'news' && (
-            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
-              <NewsAndAchievements />
-            </div>
-          )}
-          
-          {/* Networking Section */}
-          {activeSection === 'networking' && (
-            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
-              <NetworkingHub/>
-            </div>
-          )}
-          {/* Networking Section */}
           {activeSection === 'messages' && (
-            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
-              <Messages/>
+            <div className="mt-8">
+              <StudentMessages />
             </div>
           )}
+          {activeSection === 'events' && (
+            <div className="mt-8">
+              <EventHub />
+            </div>
+          )}
+          {activeSection === 'alumni-directory' && <AlumniDirectory />}
           
-          
+          {/* Other Sections (Placeholders) */}
+          {activeSection !== 'dashboard' && activeSection !== 'profile' && activeSection !== 'internships' && activeSection !== 'messages' && activeSection !== 'events' && activeSection !== 'alumni-directory' && (
+            <div className="content-section">
+              <h1 className="text-3xl font-bold text-gray-900 mb-6">
+                {navItems.find(item => item.id === activeSection)?.label}
+              </h1>
+              <div className="bg-white p-8 rounded-xl border border-gray-200 text-center">
+                <p className="text-gray-600">This section is under development.</p>
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>
   );
 };
 
-export default AlumniConnectDashboard;
+export default StudentDashboard;

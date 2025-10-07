@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { jobAPI } from './api';
 
 const AlumniJobDashboard = () => {
   // State management
@@ -11,6 +12,7 @@ const AlumniJobDashboard = () => {
   const [selectedJob, setSelectedJob] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [jobs, setJobs] = useState([]);
   
   const [selectedTypes, setSelectedTypes] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState('');
@@ -85,6 +87,60 @@ const AlumniJobDashboard = () => {
     }
   };
 
+// Close job opportunity - FIXED VERSION
+const handleCloseJob = async (jobId) => {
+  try {
+    const confirmed = window.confirm('Are you sure you want to close this job opportunity? This will remove it from the job listings.');
+    if (!confirmed) return;
+
+    setLoading(true);
+    setError('');
+    const token = localStorage.getItem('token');
+    
+    console.log('Closing job with ID:', jobId);
+    
+    // Use the correct API endpoint - check your jobRoutes.js
+    const response = await axios.patch(
+      `${API_BASE_URL}/jobs/${jobId}/status`, 
+      { status: 'Closed' },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    console.log('Close job response:', response.data);
+    
+    // Remove the job from posted jobs immediately
+    setPostedJobs(prevJobs => prevJobs.filter(job => job._id !== jobId));
+    
+    // Also update the available jobs if we're viewing them
+    setAvailableJobs(prevJobs => prevJobs.filter(job => job._id !== jobId));
+    
+    // Show success message
+    setShowCloseSuccessMessage(true);
+    setTimeout(() => setShowCloseSuccessMessage(false), 3000);
+    
+  } catch (error) {
+    console.error('Error closing job:', error);
+    console.error('Error response:', error.response?.data);
+    
+    // More specific error message
+    if (error.response?.data?.message) {
+      setError(`Failed to close job: ${error.response.data.message}`);
+    } else if (error.code === 'NETWORK_ERROR') {
+      setError('Network error. Please check your connection and try again.');
+    } else {
+      setError('Failed to close job. Please try again.');
+    }
+  } finally {
+    setLoading(false);
+  }
+};
+
+
   // Fetch user's posted jobs
   const fetchPostedJobs = async () => {
     try {
@@ -95,7 +151,9 @@ const AlumniJobDashboard = () => {
           Authorization: `Bearer ${token}`
         }
       });
-      setPostedJobs(response.data || []);
+      // Only show open jobs in posted jobs section
+      const openJobs = response.data.filter(job => job.status === 'Open');
+      setPostedJobs(openJobs);
     } catch (error) {
       console.error('Error fetching posted jobs:', error);
       setError('Failed to fetch your posted jobs.');
@@ -177,38 +235,6 @@ const AlumniJobDashboard = () => {
       setError('Failed to post job. Please try again.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Close job opportunity
-  const closeJobOpportunity = async (jobId) => {
-    try {
-      setError('');
-      const token = localStorage.getItem('token');
-      
-      await axios.patch(`${API_BASE_URL}/jobs/${jobId}/status`, {
-        status: 'Closed'
-      }, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      // Show success message
-      setShowCloseSuccessMessage(true);
-      setTimeout(() => setShowCloseSuccessMessage(false), 3000);
-      
-      // Refresh the jobs list
-      fetchPostedJobs();
-      
-      // Also update available jobs if viewing them
-      if (currentView === 'viewJobs') {
-        fetchJobs();
-      }
-    } catch (error) {
-      console.error('Error closing job:', error);
-      setError('Failed to close job. Please try again.');
     }
   };
 
@@ -386,7 +412,7 @@ const AlumniJobDashboard = () => {
                     <p className="text-xs text-gray-500 mt-1">Required field</p>
                   </div>
                   
-                  {/* Company Name */}
+                  {/* Company Name - FIXED THIS INPUT */}
                   <div>
                     <label htmlFor="companyName" className="block text-sm font-semibold text-gray-700 mb-2">
                       Company Name <span className="text-red-500">*</span>
@@ -519,18 +545,18 @@ const AlumniJobDashboard = () => {
                   <label htmlFor="applyLink" className="block text-sm font-semibold text-gray-700 mb-2">
                     Apply Link <span className="text-red-500">*</span>
                   </label>
-                    <input 
-                      type="url" 
-                      id="applyLink" 
-                      name="applyLink" 
-                      value={formData.applyLink}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                      placeholder="https://company.com/careers/job-id"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Required field - Must be a valid URL</p>
-                  </div>
+                  <input 
+                    type="url" 
+                    id="applyLink" 
+                    name="applyLink" 
+                    value={formData.applyLink}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="https://company.com/careers/job-id"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Required field - Must be a valid URL</p>
+                </div>
                 
                 {/* Submit Button */}
                 <div className="pt-4">
@@ -596,14 +622,14 @@ const AlumniJobDashboard = () => {
                         >
                           View Details
                         </button>
-                        {job.status === 'Open' && (
-                          <button 
-                            onClick={() => closeJobOpportunity(job._id)}
-                            className="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg font-medium transition-colors"
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleCloseJob(job._id)}
+                            className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg font-medium transition-colors text-sm"
                           >
                             Close Opportunity
                           </button>
-                        )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -613,7 +639,7 @@ const AlumniJobDashboard = () => {
                   <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2-2v2m8 0V6a2 2 0 012 2v6a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2V6"></path>
                   </svg>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No jobs posted yet</h3>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No active jobs posted</h3>
                   <p className="text-gray-500 mb-4">Start by posting your first job opportunity to help fellow alumni.</p>
                   <button 
                     onClick={() => setCurrentView('postJob')}

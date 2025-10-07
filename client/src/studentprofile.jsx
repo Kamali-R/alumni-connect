@@ -1,14 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 
 const StudentProfile = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [formData, setFormData] = useState({
     fullName: '',
+    gender: '',
     dob: '',
     personalEmail: '',
     phone: '',
+    location: '',
     rollNumber: '',
     collegeEmail: '',
     degree: '',
@@ -16,8 +19,10 @@ const StudentProfile = () => {
     branch: '',
     currentYear: '',
     graduationYear: '',
+    cgpa: '',
     linkedin: '',
     github: '',
+    portfolio: '',
     skills: [],
     otherSkills: '',
     interests: [],
@@ -26,6 +31,7 @@ const StudentProfile = () => {
     terms: false
   });
   const [profileImage, setProfileImage] = useState(null);
+  const [profileImagePreview, setProfileImagePreview] = useState('');
   const [resumeFile, setResumeFile] = useState(null);
   const [showOtherDegree, setShowOtherDegree] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -35,12 +41,16 @@ const StudentProfile = () => {
   const resumeInputRef = useRef(null);
 
   useEffect(() => {
-    // Load saved profile image from localStorage
-    const savedImage = localStorage.getItem('profileImage');
-    if (savedImage) {
-      setProfileImage(savedImage);
+    // Load user data from navigation state
+    if (location.state?.userData) {
+      const userData = location.state.userData;
+      setFormData(prev => ({
+        ...prev,
+        personalEmail: userData.email || '',
+        fullName: userData.name || ''
+      }));
     }
-  }, []);
+  }, [location.state]);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -82,11 +92,10 @@ const StudentProfile = () => {
       return;
     }
 
+    setProfileImage(file);
     const reader = new FileReader();
-    reader.onload = (event) => {
-      const imageDataUrl = event.target.result;
-      setProfileImage(imageDataUrl);
-      localStorage.setItem('profileImage', imageDataUrl);
+    reader.onloadend = () => {
+      setProfileImagePreview(reader.result);
     };
     reader.readAsDataURL(file);
   };
@@ -106,6 +115,13 @@ const StudentProfile = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Validate required fields
+    if (!formData.fullName || !formData.rollNumber || !formData.collegeEmail || 
+        !formData.degree || !formData.branch || !formData.currentYear || !formData.graduationYear) {
+      alert('Please fill all required fields');
+      return;
+    }
+
     // Validate interests
     if (formData.interests.length === 0) {
       alert('Please select at least one area of interest');
@@ -115,6 +131,11 @@ const StudentProfile = () => {
     // Validate other degree
     if (formData.degree === 'Other' && !formData.otherDegree.trim()) {
       alert('Please specify your degree');
+      return;
+    }
+
+    if (!formData.terms) {
+      alert('Please agree to the Terms of Service and Privacy Policy');
       return;
     }
 
@@ -132,53 +153,96 @@ const StudentProfile = () => {
     }, 50);
 
     try {
-      // Prepare data for submission
-      const submissionData = {
-        ...formData,
-        profileImage,
-        resumeFile: resumeFile ? resumeFile.name : null
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      // Prepare FormData for submission
+      const submissionData = new FormData();
+      
+      // Prepare profile data
+      const profileData = {
+        personalInfo: {
+          fullName: formData.fullName,
+          gender: formData.gender,
+          dob: formData.dob,
+          personalEmail: formData.personalEmail,
+          phone: formData.phone,
+          location: formData.location
+        },
+        academicInfo: {
+          rollNumber: formData.rollNumber,
+          collegeEmail: formData.collegeEmail,
+          degree: formData.degree === 'Other' ? formData.otherDegree : formData.degree,
+          branch: formData.branch,
+          currentYear: formData.currentYear,
+          graduationYear: formData.graduationYear,
+          cgpa: formData.cgpa
+        },
+        professionalInfo: {
+          linkedin: formData.linkedin,
+          github: formData.github,
+          portfolio: formData.portfolio
+        },
+        skills: formData.skills,
+        interests: formData.interests,
+        careerGoals: formData.careerGoals
       };
 
-      // In a real application, you would send this data to your backend
-      const response = await axios.post('/student/profile', submissionData, {
+      // Append JSON data
+      submissionData.append('personalInfo', JSON.stringify(profileData.personalInfo));
+      submissionData.append('academicInfo', JSON.stringify(profileData.academicInfo));
+      submissionData.append('professionalInfo', JSON.stringify(profileData.professionalInfo));
+      submissionData.append('skills', JSON.stringify(profileData.skills));
+      submissionData.append('interests', JSON.stringify(profileData.interests));
+      submissionData.append('careerGoals', profileData.careerGoals);
+
+      // Add files
+      if (profileImage) {
+        submissionData.append('profileImage', profileImage);
+      }
+      if (resumeFile) {
+        submissionData.append('resume', resumeFile);
+      }
+
+      console.log('Submitting student profile...');
+
+      const response = await axios.post('http://localhost:5000/api/student/profile', submissionData, {
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
         }
       });
+
+      console.log('Profile submission response:', response.data);
 
       // Clear progress and show success
       setTimeout(() => {
         setLoading(false);
         setShowSuccessModal(true);
         clearInterval(interval);
+        
+        // Update localStorage
+        localStorage.setItem('profileCompleted', 'true');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        localStorage.setItem('user', JSON.stringify({
+          ...user,
+          profileCompleted: true,
+          registrationComplete: true
+        }));
       }, 1000);
 
     } catch (error) {
       console.error('Error submitting profile:', error);
       setLoading(false);
       clearInterval(interval);
-      alert('Error submitting profile. Please try again.');
+      alert(error.response?.data?.message || 'Error submitting profile. Please try again.');
     }
   };
 
   const handleGoToDashboard = () => {
-    navigate('/dashboard');
-  };
-
-  const handleBack = () => {
-    if (window.confirm('Are you sure you want to go back? Your changes may not be saved.')) {
-      navigate(-1);
-    }
-  };
-
-  const getOrdinalSuffix = (num) => {
-    const j = num % 10;
-    const k = num % 100;
-    if (j === 1 && k !== 11) return "st";
-    if (j === 2 && k !== 12) return "nd";
-    if (j === 3 && k !== 13) return "rd";
-    return "th";
+    navigate('/student-dashboard');
   };
 
   return (
@@ -193,24 +257,19 @@ const StudentProfile = () => {
       {showSuccessModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-8 max-w-md w-full mx-4 text-center">
-            <div className="success-checkmark">
-              <div className="check-icon">
-                <span className="icon-line line-tip"></span>
-                <span className="icon-line line-long"></span>
-                <div className="icon-circle"></div>
-                <div className="icon-fix"></div>
-              </div>
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+              </svg>
             </div>
-            <h2 className="text-2xl font-bold text-gray-800 mt-4">Account Created Successfully!</h2>
-            <p className="text-gray-600 mt-2">Your student profile has been created. You can now connect with alumni.</p>
-            <div className="mt-6">
-              <button 
-                onClick={handleGoToDashboard}
-                className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition duration-300 w-full"
-              >
-                Go to Dashboard
-              </button>
-            </div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Profile Created Successfully!</h2>
+            <p className="text-gray-600 mb-6">Your student profile has been created. You can now access the student dashboard.</p>
+            <button 
+              onClick={handleGoToDashboard}
+              className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition duration-300 w-full"
+            >
+              Go to Student Dashboard
+            </button>
           </div>
         </div>
       )}
@@ -227,11 +286,11 @@ const StudentProfile = () => {
             <h2 className="text-lg font-medium text-gray-800 mb-4">Profile Photo</h2>
             <div className="flex flex-col sm:flex-row items-center gap-6">
               <div 
-                className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center cursor-pointer relative overflow-hidden"
+                className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center cursor-pointer relative overflow-hidden border-2 border-dashed border-gray-300"
                 onClick={() => fileInputRef.current?.click()}
               >
-                {profileImage ? (
-                  <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
+                {profileImagePreview ? (
+                  <img src={profileImagePreview} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
                   <svg className="w-12 h-12 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"></path>
@@ -239,7 +298,7 @@ const StudentProfile = () => {
                 )}
               </div>
               <div>
-                <label className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 hover:bg-gray-100 transition duration-200 mb-2">
+                <label className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 transition duration-200 mb-2">
                   <svg className="w-5 h-5 mr-2 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd"></path>
                   </svg>
@@ -262,7 +321,7 @@ const StudentProfile = () => {
             <h2 className="text-lg font-medium text-gray-800 mb-4">Personal Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">Full Name*</label>
+                <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
                 <input 
                   type="text" 
                   id="fullName"
@@ -275,7 +334,24 @@ const StudentProfile = () => {
               </div>
               
               <div>
-                <label htmlFor="dob" className="block text-sm font-medium text-gray-700 mb-1">Date of Birth*</label>
+                <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                <select 
+                  id="gender"
+                  name="gender"
+                  value={formData.gender}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Select Gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                  <option value="prefer-not-to-say">Prefer not to say</option>
+                </select>
+              </div>
+              
+              <div>
+                <label htmlFor="dob" className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
                 <input 
                   type="date" 
                   id="dob"
@@ -283,12 +359,11 @@ const StudentProfile = () => {
                   value={formData.dob}
                   onChange={handleInputChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                  required 
                 />
               </div>
               
               <div>
-                <label htmlFor="personalEmail" className="block text-sm font-medium text-gray-700 mb-1">Personal Email*</label>
+                <label htmlFor="personalEmail" className="block text-sm font-medium text-gray-700 mb-1">Personal Email *</label>
                 <input 
                   type="email" 
                   id="personalEmail"
@@ -311,6 +386,19 @@ const StudentProfile = () => {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" 
                 />
               </div>
+
+              <div>
+                <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                <input 
+                  type="text" 
+                  id="location"
+                  name="location"
+                  value={formData.location}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                  placeholder="City, Country" 
+                />
+              </div>
             </div>
           </div>
 
@@ -319,7 +407,7 @@ const StudentProfile = () => {
             <h2 className="text-lg font-medium text-gray-800 mb-4">Academic Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="rollNumber" className="block text-sm font-medium text-gray-700 mb-1">Roll Number*</label>
+                <label htmlFor="rollNumber" className="block text-sm font-medium text-gray-700 mb-1">Roll Number *</label>
                 <input 
                   type="text" 
                   id="rollNumber"
@@ -333,7 +421,7 @@ const StudentProfile = () => {
               </div>
               
               <div>
-                <label htmlFor="collegeEmail" className="block text-sm font-medium text-gray-700 mb-1">College Email ID*</label>
+                <label htmlFor="collegeEmail" className="block text-sm font-medium text-gray-700 mb-1">College Email ID *</label>
                 <input 
                   type="email" 
                   id="collegeEmail"
@@ -346,7 +434,7 @@ const StudentProfile = () => {
               </div>
               
               <div>
-                <label htmlFor="degree" className="block text-sm font-medium text-gray-700 mb-1">Degree*</label>
+                <label htmlFor="degree" className="block text-sm font-medium text-gray-700 mb-1">Degree *</label>
                 <select 
                   id="degree"
                   name="degree"
@@ -383,7 +471,7 @@ const StudentProfile = () => {
               </div>
               
               <div>
-                <label htmlFor="branch" className="block text-sm font-medium text-gray-700 mb-1">Branch/Specialization*</label>
+                <label htmlFor="branch" className="block text-sm font-medium text-gray-700 mb-1">Branch/Specialization *</label>
                 <input 
                   type="text" 
                   id="branch"
@@ -397,7 +485,7 @@ const StudentProfile = () => {
               </div>
               
               <div>
-                <label htmlFor="currentYear" className="block text-sm font-medium text-gray-700 mb-1">Current Year*</label>
+                <label htmlFor="currentYear" className="block text-sm font-medium text-gray-700 mb-1">Current Year *</label>
                 <select 
                   id="currentYear"
                   name="currentYear"
@@ -416,7 +504,7 @@ const StudentProfile = () => {
               </div>
               
               <div>
-                <label htmlFor="graduationYear" className="block text-sm font-medium text-gray-700 mb-1">Expected Graduation Year*</label>
+                <label htmlFor="graduationYear" className="block text-sm font-medium text-gray-700 mb-1">Expected Graduation Year *</label>
                 <select 
                   id="graduationYear"
                   name="graduationYear"
@@ -431,7 +519,22 @@ const StudentProfile = () => {
                   <option value="2026">2026</option>
                   <option value="2027">2027</option>
                   <option value="2028">2028</option>
+                  <option value="2029">2029</option>
+                  <option value="2030">2030</option>
                 </select>
+              </div>
+
+              <div>
+                <label htmlFor="cgpa" className="block text-sm font-medium text-gray-700 mb-1">CGPA</label>
+                <input 
+                  type="text" 
+                  id="cgpa"
+                  name="cgpa"
+                  value={formData.cgpa}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                  placeholder="e.g., 8.5" 
+                />
               </div>
             </div>
           </div>
@@ -475,10 +578,23 @@ const StudentProfile = () => {
                   />
                 </div>
               </div>
+
+              <div className="md:col-span-2">
+                <label htmlFor="portfolio" className="block text-sm font-medium text-gray-700 mb-1">Portfolio Website</label>
+                <input 
+                  type="url" 
+                  id="portfolio"
+                  name="portfolio"
+                  value={formData.portfolio}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                  placeholder="https://yourportfolio.com" 
+                />
+              </div>
               
               <div className="md:col-span-2">
                 <label htmlFor="resume" className="block text-sm font-medium text-gray-700 mb-1">Resume/CV</label>
-                <label className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 hover:bg-gray-100 transition duration-200 w-full justify-center">
+                <label className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 transition duration-200 w-full justify-center">
                   <svg className="w-5 h-5 mr-2 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd"></path>
                   </svg>
@@ -502,7 +618,7 @@ const StudentProfile = () => {
             <h2 className="text-lg font-medium text-gray-800 mb-4">Technical Skills</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
               {['java', 'python', 'javascript', 'html_css', 'react', 'angular', 'node', 'sql', 'nosql', 'aws', 'docker', 'git'].map(skill => (
-                <label key={skill} className="inline-flex items-center">
+                <label key={skill} className="inline-flex items-center p-2 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
                   <input 
                     type="checkbox" 
                     name="skills"
@@ -552,7 +668,7 @@ const StudentProfile = () => {
                 {value: 'devops', label: 'DevOps'},
                 {value: 'robotics', label: 'Robotics'}
               ].map(interest => (
-                <label key={interest.value} className="inline-flex items-center">
+                <label key={interest.value} className="inline-flex items-center p-2 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
                   <input 
                     type="checkbox" 
                     name="interests"
@@ -590,14 +706,14 @@ const StudentProfile = () => {
                 onChange={handleInputChange}
                 rows="3" 
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                placeholder="Briefly describe your career aspirations..." 
+                placeholder="Briefly describe your career aspirations, what you hope to achieve after graduation, and how alumni connections can help you..." 
               ></textarea>
             </div>
           </div>
 
           {/* Terms Agreement */}
           <div className="pt-2">
-            <label className="flex items-start">
+            <label className="flex items-start p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
               <input 
                 type="checkbox" 
                 name="terms"
@@ -606,7 +722,9 @@ const StudentProfile = () => {
                 className="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 mt-1" 
                 required 
               />
-              <span className="ml-2 text-sm text-gray-700">I agree to the <a href="#" className="text-indigo-600 hover:text-indigo-800">Terms of Service</a> and <a href="#" className="text-indigo-600 hover:text-indigo-800">Privacy Policy</a></span>
+              <span className="ml-3 text-sm text-gray-700">
+                I agree to the <a href="#" className="text-indigo-600 hover:text-indigo-800">Terms of Service</a> and <a href="#" className="text-indigo-600 hover:text-indigo-800">Privacy Policy</a>. I understand that my information will be used to connect me with alumni and enhance my career opportunities.
+              </span>
             </label>
           </div>
 
@@ -614,136 +732,30 @@ const StudentProfile = () => {
           <div className="flex flex-col sm:flex-row justify-between gap-4 pt-4">
             <button 
               type="button" 
-              onClick={handleBack}
-              className="order-2 sm:order-1 px-6 py-3 border border-gray-300 text-indigo-600 font-medium rounded-lg hover:bg-gray-50 transition duration-300"
+              onClick={() => navigate(-1)}
+              className="order-2 sm:order-1 px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition duration-300"
             >
               Back
             </button>
             <button 
               type="submit" 
               disabled={loading}
-              className="order-1 sm:order-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition duration-300 disabled:opacity-50"
+              className="order-1 sm:order-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition duration-300 disabled:opacity-50 flex items-center justify-center"
             >
-              {loading ? 'Creating Account...' : 'Create Account'}
+              {loading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
+                  Creating Profile...
+                </>
+              ) : (
+                'Complete Profile'
+              )}
             </button>
           </div>
         </form>
       </div>
-
-      <style jsx>{`
-        .success-checkmark {
-          width: 80px;
-          height: 80px;
-          margin: 0 auto;
-          position: relative;
-        }
-        
-        .success-checkmark .check-icon {
-          width: 80px;
-          height: 80px;
-          position: relative;
-          border-radius: 50%;
-          box-sizing: content-box;
-          border: 4px solid #4CAF50;
-        }
-        
-        .success-checkmark .check-icon::before {
-          top: 3px;
-          left: -2px;
-          width: 30px;
-          transform-origin: 100% 50%;
-          border-radius: 100px 0 0 100px;
-        }
-        
-        .success-checkmark .check-icon::after {
-          top: 0;
-          left: 30px;
-          width: 60px;
-          transform-origin: 0 50%;
-          border-radius: 0 100px 100px 0;
-          animation: rotate-circle 4.25s ease-in;
-        }
-        
-        .success-checkmark .check-icon::before, .success-checkmark .check-icon::after {
-          content: '';
-          height: 100px;
-          position: absolute;
-          background: #FFFFFF;
-          transform: rotate(-45deg);
-        }
-        
-        .success-checkmark .check-icon .icon-line {
-          height: 5px;
-          background-color: #4CAF50;
-          display: block;
-          border-radius: 2px;
-          position: absolute;
-          z-index: 10;
-        }
-        
-        .success-checkmark .check-icon .icon-line.line-tip {
-          top: 46px;
-          left: 14px;
-          width: 25px;
-          transform: rotate(45deg);
-          animation: icon-line-tip 0.75s;
-        }
-        
-        .success-checkmark .check-icon .icon-line.line-long {
-          top: 38px;
-          right: 8px;
-          width: 47px;
-          transform: rotate(-45deg);
-          animation: icon-line-long 0.75s;
-        }
-        
-        .success-checkmark .check-icon .icon-circle {
-          top: -4px;
-          left: -4px;
-          z-index: 10;
-          width: 80px;
-          height: 80px;
-          border-radius: 50%;
-          position: absolute;
-          box-sizing: content-box;
-          border: 4px solid rgba(76, 175, 80, .5);
-        }
-        
-        .success-checkmark .check-icon .icon-fix {
-          top: 8px;
-          width: 5px;
-          left: 26px;
-          z-index: 1;
-          height: 85px;
-          position: absolute;
-          transform: rotate(-45deg);
-          background-color: #FFFFFF;
-        }
-        
-        @keyframes rotate-circle {
-          0% { transform: rotate(-45deg); }
-          5% { transform: rotate(-45deg); }
-          12% { transform: rotate(-405deg); }
-          100% { transform: rotate(-405deg); }
-        }
-        
-        @keyframes icon-line-tip {
-          0% { width: 0; left: 1px; top: 19px; }
-          54% { width: 0; left: 1px; top: 19px; }
-          70% { width: 50px; left: -8px; top: 37px; }
-          84% { width: 17px; left: 21px; top: 48px; }
-          100% { width: 25px; left: 14px; top: 46px; }
-        }
-        
-        @keyframes icon-line-long {
-          0% { width: 0; right: 46px; top: 54px; }
-          65% { width: 0; right: 46px; top: 54px; }
-          84% { width: 55px; right: 0px; top: 35px; }
-          100% { width: 47px; right: 8px; top: 38px; }
-        }
-      `}</style>
     </div>
   );
 };
 
-export default studentprofile;
+export default StudentProfile;
