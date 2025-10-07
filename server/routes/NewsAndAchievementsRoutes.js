@@ -1,34 +1,61 @@
+// ===================================
+// FILE 1: NewsAndAchievementsRoutes.js (COMPLETE WORKING VERSION)
+// ===================================
+
 import express from 'express';
-import mongoose from 'mongoose'; // ADDED: Import mongoose
-import News from '../models/News.js';
+import mongoose from 'mongoose';
 import Achievement from '../models/Achievement.js';
+import jwt from 'jsonwebtoken';
 
 const router = express.Router();
 
-// FIXED: Single GET achievements route with proper structure
-router.get('/achievements', async (req, res) => {
+// Authentication middleware
+const authenticateToken = (req, res, next) => {
   try {
-    const achievements = await Achievement.find().sort({ createdAt: -1 });
-    
-    // If user is authenticated, include whether they congratulated each achievement
-    const userId = req.user?.id || req.ip;
-    const achievementsWithUserStatus = achievements.map(achievement => {
-      const achievementObj = achievement.toObject();
-      
-      const userIdentifier = userId?.toString();
-      achievementObj.userCongratulated = achievement.congratulations?.users?.some(user => 
-        user.userId === userIdentifier
-      ) || false;
-      
-      return achievementObj;
-    });
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
 
-    res.json({
-      success: true,
-      data: achievementsWithUserStatus
+    if (!token) {
+      console.log('⚠️ No token provided, using anonymous access');
+      req.user = { id: `anonymous-${req.ip}` };
+      return next();
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+      if (err) {
+        console.log('⚠️ Invalid token, using anonymous access');
+        req.user = { id: `anonymous-${req.ip}` };
+        return next();
+      }
+      
+      console.log('✅ User authenticated:', user.id);
+      req.user = user;
+      next();
     });
   } catch (error) {
-    console.error('Error fetching achievements:', error);
+    console.error('❌ Auth error:', error);
+    req.user = { id: `anonymous-${req.ip}` };
+    next();
+  }
+};
+
+// GET all achievements
+router.get('/achievements', async (req, res) => {
+  try {
+    console.log('📋 Fetching all achievements...');
+    
+    const achievements = await Achievement.find()
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    console.log(`✅ Found ${achievements.length} achievements`);
+    
+    res.json({
+      success: true,
+      data: achievements
+    });
+  } catch (error) {
+    console.error('❌ Error fetching achievements:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching achievements',
@@ -37,122 +64,113 @@ router.get('/achievements', async (req, res) => {
   }
 });
 
-// Get all news
-router.get('/news', async (req, res) => {
+// POST new achievement (THE KEY FIX)
+router.post('/achievements', authenticateToken, async (req, res) => {
   try {
-    const news = await News.find().sort({ createdAt: -1 });
-    res.json({
-      success: true,
-      data: news
-    });
-  } catch (error) {
-    console.error('Error fetching news:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching news',
-      error: error.message
-    });
-  }
-});
-
-// FIXED: Add new achievement with proper validation
-router.post('/achievements', async (req, res) => {
-  try {
-    const {
-      title,
-      description,
-      achievementDate,
-      category,
-      userProfile
-    } = req.body;
+    console.log('\n=== NEW ACHIEVEMENT REQUEST ===');
+    console.log('📝 User:', req.user?.id);
+    console.log('📝 Body:', JSON.stringify(req.body, null, 2));
+    console.log('📝 MongoDB Status:', mongoose.connection.readyState === 1 ? 'Connected ✅' : 'Disconnected ❌');
+    
+    const { title, description, achievementDate, category, userProfile } = req.body;
 
     // Validate required fields
     if (!title || !description || !achievementDate || !userProfile) {
+      console.log('❌ Missing required fields');
       return res.status(400).json({
         success: false,
-        message: 'Title, description, achievement date, and user profile are required'
+        message: 'Missing required fields: title, description, achievementDate, userProfile'
       });
     }
 
-    // Validate userProfile has required fields
-    if (!userProfile.name || !userProfile.initials || !userProfile.department || 
-        !userProfile.graduationYear || !userProfile.currentPosition) {
+    // Validate userProfile structure
+    const requiredProfileFields = ['name', 'initials', 'department', 'graduationYear', 'currentPosition'];
+    const missingFields = requiredProfileFields.filter(field => !userProfile[field]);
+    
+    if (missingFields.length > 0) {
+      console.log('❌ Missing profile fields:', missingFields);
       return res.status(400).json({
         success: false,
-        message: 'Complete user profile information is required'
+        message: `Missing profile fields: ${missingFields.join(', ')}`
       });
     }
 
-    // Avatar color options
+    // Random avatar color
     const avatarColors = [
       "from-blue-500 to-purple-500",
       "from-green-500 to-teal-500",
       "from-purple-500 to-pink-500",
       "from-orange-500 to-red-500",
-      "from-indigo-500 to-blue-500",
-      "from-teal-500 to-green-500",
-      "from-pink-500 to-rose-500",
-      "from-cyan-500 to-blue-500"
+      "from-indigo-500 to-blue-500"
     ];
 
-    const randomColor = avatarColors[Math.floor(Math.random() * avatarColors.length)];
-
-    // Calculate time ago
-    const getTimeAgo = (date) => {
-      const now = new Date();
-      const diff = now - new Date(date);
-      const minutes = Math.floor(diff / 60000);
-      const hours = Math.floor(diff / 3600000);
-      const days = Math.floor(diff / 86400000);
-      
-      if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
-      if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
-      return `${days} day${days !== 1 ? 's' : ''} ago`;
-    };
-
-    const newAchievement = new Achievement({
+    // Create achievement object
+    const achievementData = {
       userId: req.user?.id || new mongoose.Types.ObjectId(),
       userProfile: {
         name: userProfile.name.trim(),
         initials: userProfile.initials.trim(),
         department: userProfile.department.trim(),
-        graduationYear: userProfile.graduationYear.toString(),
+        graduationYear: userProfile.graduationYear.toString().trim(),
         currentPosition: userProfile.currentPosition.trim()
       },
       title: title.trim(),
       description: description.trim(),
       achievementDate: new Date(achievementDate),
       category: category || 'academic',
-      time: getTimeAgo(new Date()),
-      avatarColor: randomColor,
+      avatarColor: avatarColors[Math.floor(Math.random() * avatarColors.length)],
       congratulations: {
         count: 0,
         users: []
       }
-    });
+    };
 
+    console.log('💾 Creating achievement document...');
+    const newAchievement = new Achievement(achievementData);
+    
+    console.log('💾 Saving to MongoDB...');
     const savedAchievement = await newAchievement.save();
+    
+    console.log('✅ Achievement saved successfully!');
+    console.log('✅ Achievement ID:', savedAchievement._id);
+    
+    // Verify it was actually saved
+    const verifyAchievement = await Achievement.findById(savedAchievement._id);
+    console.log('✅ Verified in database:', !!verifyAchievement);
+    console.log('=== END ACHIEVEMENT REQUEST ===\n');
 
     res.status(201).json({
       success: true,
-      message: 'Achievement added successfully!',
+      message: 'Achievement created successfully!',
       data: savedAchievement
     });
   } catch (error) {
-    console.error('Error adding achievement:', error);
-    res.status(400).json({
+    console.error('❌ Error creating achievement:', error);
+    console.error('❌ Error stack:', error.stack);
+    
+    res.status(500).json({
       success: false,
-      message: 'Error adding achievement',
-      error: error.message
+      message: 'Error creating achievement',
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
 
-// Congratulate achievement
-router.post('/achievements/:id/congratulate', async (req, res) => {
+// POST congratulate achievement
+router.post('/achievements/:id/congratulate', authenticateToken, async (req, res) => {
   try {
     const achievementId = req.params.id;
-    const userId = req.user?.id || req.ip;
+    const userId = req.user?.id || `anonymous-${req.ip}`;
+
+    console.log(`👏 Congratulating achievement ${achievementId} by user ${userId}`);
+
+    if (!mongoose.Types.ObjectId.isValid(achievementId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid achievement ID'
+      });
+    }
 
     const achievement = await Achievement.findById(achievementId);
     
@@ -163,18 +181,14 @@ router.post('/achievements/:id/congratulate', async (req, res) => {
       });
     }
 
-    // Initialize congratulations object if it doesn't exist
+    // Initialize if needed
     if (!achievement.congratulations) {
-      achievement.congratulations = {
-        count: 0,
-        users: []
-      };
+      achievement.congratulations = { count: 0, users: [] };
     }
 
-    // Check if user already congratulated
-    const userIdentifier = userId.toString();
-    const alreadyCongratulated = achievement.congratulations.users.some(user => 
-      user.userId === userIdentifier
+    // Check if already congratulated
+    const alreadyCongratulated = achievement.congratulations.users.some(
+      user => user.userId.toString() === userId.toString()
     );
     
     if (alreadyCongratulated) {
@@ -184,14 +198,15 @@ router.post('/achievements/:id/congratulate', async (req, res) => {
       });
     }
 
-    // Add user to congratulations list and increment count
+    // Add congratulation
     achievement.congratulations.users.push({
-      userId: userIdentifier,
+      userId: userId,
       timestamp: new Date()
     });
     achievement.congratulations.count += 1;
 
     await achievement.save();
+    console.log('✅ Congratulation added successfully');
 
     res.json({
       success: true,
@@ -202,7 +217,7 @@ router.post('/achievements/:id/congratulate', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error adding congratulations:', error);
+    console.error('❌ Error adding congratulations:', error);
     res.status(500).json({
       success: false,
       message: 'Error adding congratulations',
@@ -211,12 +226,18 @@ router.post('/achievements/:id/congratulate', async (req, res) => {
   }
 });
 
-// Get congratulations status for a specific achievement
-router.get('/achievements/:id/congratulations', async (req, res) => {
-  try {
-    const achievementId = req.params.id;
-    const userId = req.user?.id || req.ip;
+// PUT update achievement
+// In your existing NewsAndAchievementsRoutes.js, ensure you have:
 
+// PUT update achievement
+router.put('/achievements/:id', authenticateToken, async (req, res) => {
+  try {
+    const { title, description, achievementDate, category } = req.body;
+    const achievementId = req.params.id;
+
+    console.log(`🔄 Updating achievement ${achievementId}`);
+
+    // Find the achievement first to check ownership
     const achievement = await Achievement.findById(achievementId);
     
     if (!achievement) {
@@ -226,75 +247,51 @@ router.get('/achievements/:id/congratulations', async (req, res) => {
       });
     }
 
-    const userIdentifier = userId.toString();
-    const userCongratulated = achievement.congratulations?.users?.some(user => 
-      user.userId === userIdentifier
-    ) || false;
-
-    res.json({
-      success: true,
-      data: {
-        congratulationsCount: achievement.congratulations?.count || 0,
-        userCongratulated
-      }
-    });
-  } catch (error) {
-    console.error('Error fetching congratulations:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching congratulations',
-      error: error.message
-    });
-  }
-});
-
-// Add new news item
-router.post('/news', async (req, res) => {
-  try {
-    const {
-      title,
-      description,
-      category,
-      time,
-      details
-    } = req.body;
-
-    if (!title || !description) {
-      return res.status(400).json({
+    // Check if user owns this achievement
+    if (achievement.userId.toString() !== req.user?.id && 
+        !achievement.userId.toString().includes('anonymous')) {
+      return res.status(403).json({
         success: false,
-        message: 'Title and description are required'
+        message: 'You can only edit your own achievements'
       });
     }
 
-    const newNews = new News({
-      title: title.trim(),
-      description: description.trim(),
-      category: category || 'general',
-      time: time || 'Just now',
-      details: details || {}
-    });
+    // Update fields
+    if (title) achievement.title = title.trim();
+    if (description) achievement.description = description.trim();
+    if (achievementDate) achievement.achievementDate = new Date(achievementDate);
+    if (category) achievement.category = category;
 
-    const savedNews = await newNews.save();
+    achievement.updatedAt = new Date();
 
-    res.status(201).json({
+    const updated = await achievement.save();
+    console.log('✅ Achievement updated:', updated._id);
+
+    res.json({
       success: true,
-      message: 'News added successfully!',
-      data: savedNews
+      message: 'Achievement updated successfully!',
+      data: updated
     });
   } catch (error) {
-    console.error('Error adding news:', error);
+    console.error('❌ Error updating achievement:', error);
     res.status(400).json({
       success: false,
-      message: 'Error adding news',
+      message: 'Error updating achievement',
       error: error.message
     });
   }
 });
 
-// Delete achievement
-router.delete('/achievements/:id', async (req, res) => {
+// DELETE achievement
+router.delete('/achievements/:id', authenticateToken, async (req, res) => {
   try {
-    const achievement = await Achievement.findByIdAndDelete(req.params.id);
+    const achievementId = req.params.id;
+    
+    console.log(`🗑️ Deleting achievement ${achievementId}`);
+
+    // Find the achievement first to check ownership
+    const achievement = await Achievement.findById(achievementId);
+    
     if (!achievement) {
       return res.status(404).json({
         success: false,
@@ -302,12 +299,24 @@ router.delete('/achievements/:id', async (req, res) => {
       });
     }
 
+    // Check if user owns this achievement
+    if (achievement.userId.toString() !== req.user?.id && 
+        !achievement.userId.toString().includes('anonymous')) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only delete your own achievements'
+      });
+    }
+
+    await Achievement.findByIdAndDelete(achievementId);
+    console.log('✅ Achievement deleted:', achievementId);
+
     res.json({
       success: true,
       message: 'Achievement deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting achievement:', error);
+    console.error('❌ Error deleting achievement:', error);
     res.status(500).json({
       success: false,
       message: 'Error deleting achievement',
@@ -316,29 +325,191 @@ router.delete('/achievements/:id', async (req, res) => {
   }
 });
 
-// Delete news
-router.delete('/news/:id', async (req, res) => {
+export default router;
+
+
+// ===================================
+// FILE 2: Key Frontend Fixes for NewsAndAchievements.jsx
+// ===================================
+
+// REPLACE your loadUserProfile function with this:
+const loadUserProfile = async () => {
   try {
-    const news = await News.findByIdAndDelete(req.params.id);
-    if (!news) {
-      return res.status(404).json({
-        success: false,
-        message: 'News not found'
-      });
+    const token = localStorage.getItem('token');
+    
+    // Try cached profile first
+    const cachedProfile = localStorage.getItem('userProfile');
+    if (cachedProfile) {
+      try {
+        const parsed = JSON.parse(cachedProfile);
+        setUserProfile(parsed);
+        console.log('📦 Using cached profile:', parsed);
+      } catch (e) {
+        console.error('Error parsing cached profile:', e);
+      }
+    }
+    
+    if (!token) {
+      console.warn('⚠️ No authentication token found');
+      setUserProfile(getFallbackProfile());
+      return;
     }
 
-    res.json({
-      success: true,
-      message: 'News deleted successfully'
+    console.log('🔍 Fetching fresh profile from API...');
+    
+    const response = await fetch('http://localhost:5000/api/alumni/profile', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
     });
-  } catch (error) {
-    console.error('Error deleting news:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error deleting news',
-      error: error.message
-    });
-  }
-});
 
-export default router;
+    if (!response.ok) {
+      console.warn(`⚠️ Profile API returned ${response.status}`);
+      setUserProfile(getFallbackProfile());
+      return;
+    }
+
+    const data = await response.json();
+    console.log('✅ Raw profile response:', data);
+    
+    // Extract profile from response
+    let profileData = data.success && data.data ? data.data : 
+                     data.alumni ? data.alumni :
+                     data.user ? data.user :
+                     data;
+    
+    if (!profileData || typeof profileData !== 'object') {
+      console.warn('⚠️ Invalid profile data structure');
+      setUserProfile(getFallbackProfile());
+      return;
+    }
+    
+    // Map all possible field locations
+    const userProfileData = {
+      name: profileData.personalInfo?.fullName || 
+            profileData.fullName ||
+            profileData.name || 
+            "Alumni Member",
+      initials: getInitials(
+        profileData.personalInfo?.fullName || 
+        profileData.fullName || 
+        profileData.name || 
+        "Alumni Member"
+      ),
+      department: profileData.academicInfo?.branch || 
+                 profileData.department || 
+                 profileData.branch ||
+                 profileData.academicInfo?.degree ||
+                 profileData.degree ||
+                 "General",
+      graduationYear: String(
+        profileData.academicInfo?.graduationYear || 
+        profileData.graduationYear || 
+        profileData.yearOfPassing ||
+        profileData.academicInfo?.yearOfPassing ||
+        "2024"
+      ),
+      currentPosition: getCurrentPosition(
+        profileData.careerStatus, 
+        profileData.careerDetails,
+        profileData.currentPosition
+      )
+    };
+    
+    console.log('✅ Processed profile:', userProfileData);
+    setUserProfile(userProfileData);
+    localStorage.setItem('userProfile', JSON.stringify(userProfileData));
+    
+    if (profileData._id) {
+      setCurrentUserId(profileData._id);
+    }
+    
+  } catch (error) {
+    console.error('❌ Error loading user profile:', error);
+    setUserProfile(getFallbackProfile());
+  }
+};
+
+// REPLACE your handleSubmitAchievement function with this:
+const handleSubmitAchievement = async (e) => {
+  e.preventDefault();
+  
+  console.log('\n=== SUBMITTING ACHIEVEMENT ===');
+  console.log('1. User Profile:', userProfile);
+  console.log('2. Form Data:', newAchievement);
+  
+  if (!userProfile) {
+    setError('❌ Please complete your profile first');
+    setTimeout(() => setError(null), 3000);
+    return;
+  }
+
+  // Validate all fields
+  if (!newAchievement.title.trim()) {
+    setError('❌ Please enter a title');
+    setTimeout(() => setError(null), 3000);
+    return;
+  }
+
+  if (!newAchievement.description.trim()) {
+    setError('❌ Please enter a description');
+    setTimeout(() => setError(null), 3000);
+    return;
+  }
+
+  if (!newAchievement.achievementDate) {
+    setError('❌ Please select an achievement date');
+    setTimeout(() => setError(null), 3000);
+    return;
+  }
+
+  try {
+    const achievementData = {
+      title: newAchievement.title,
+      description: newAchievement.description,
+      achievementDate: newAchievement.achievementDate,
+      category: newAchievement.category,
+      userProfile: {
+        name: userProfile.name,
+        initials: userProfile.initials,
+        department: userProfile.department,
+        graduationYear: userProfile.graduationYear,
+        currentPosition: userProfile.currentPosition
+      }
+    };
+
+    console.log('3. Sending to API:', achievementData);
+
+    const response = await achievementsAPI.create(achievementData);
+    
+    console.log('4. API Response:', response.data);
+    
+    if (response.data.success) {
+      console.log('✅ SUCCESS! Achievement ID:', response.data.data._id);
+      
+      // Add to list
+      const newAchievementData = {
+        ...response.data.data,
+        congratulations: { count: 0, users: [] },
+        userCongratulated: false
+      };
+      
+      setAchievements([newAchievementData, ...achievements]);
+      handleCloseAchievementModal();
+      setSuccessMessage("🎉 Achievement shared successfully! 🏆");
+      setShowSuccessMessage(true);
+      setTimeout(() => setShowSuccessMessage(false), 3000);
+    }
+  } catch (error) {
+    console.error('❌ Error:', error);
+    console.error('❌ Response:', error.response?.data);
+    
+    const errorMsg = error.response?.data?.message || 'Failed to add achievement';
+    setError(`❌ ${errorMsg}`);
+    setTimeout(() => setError(null), 5000);
+  }
+  
+  console.log('=== END SUBMISSION ===\n');
+};

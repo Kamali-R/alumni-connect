@@ -12,13 +12,19 @@ const NewsAndAchievements = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
+  // NEW: State for My Achievements
+  const [myAchievements, setMyAchievements] = useState([]);
+  const [editingAchievement, setEditingAchievement] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  
   // Data states
   const [newsItems, setNewsItems] = useState([]);
   const [achievements, setAchievements] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
   
-  // Sample news data (since only admins can post news)
-  const sampleNews = [
+  // Sample news data
+    const sampleNews = [
     {
       _id: 1,
       title: "🚀 Annual Tech Fest 2024 Registration Now Open!",
@@ -200,7 +206,15 @@ Current students can register through the student portal. Limited spots availabl
     achievementDate: "",
     category: "academic"
   });
-  
+
+  // NEW: Form state for editing achievement
+  const [editAchievement, setEditAchievement] = useState({
+    title: "",
+    description: "",
+    achievementDate: "",
+    category: "academic"
+  });
+
   // Avatar color options
   const avatarColors = [
     "from-blue-500 to-purple-500",
@@ -235,6 +249,8 @@ Current students can register through the student portal. Limited spots availabl
     innovation: "💡"
   };
 
+  // ✅ ALL FUNCTION DECLARATIONS
+
   // Get congratulated achievements from localStorage
   const getCongratulatedAchievements = () => {
     if (typeof window !== 'undefined') {
@@ -250,62 +266,9 @@ Current students can register through the student portal. Limited spots availabl
     }
   };
 
-  // Add this function to fetch user profile from backend
-  const loadUserProfile = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        console.warn('No authentication token found');
-        setUserProfile(getFallbackProfile());
-        return;
-      }
-
-      const response = await fetch('http://localhost:5000/api/alumni/profile', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        
-        if (data.success && data.data) {
-          const profile = data.data;
-          
-          // Extract user profile data from the backend response
-          const userProfileData = {
-            name: profile.personalInfo?.fullName || "Alumni User",
-            initials: getInitials(profile.personalInfo?.fullName),
-            department: profile.academicInfo?.branch || "Not Specified",
-            graduationYear: profile.academicInfo?.graduationYear || "Not Specified",
-            currentPosition: getCurrentPosition(profile.careerStatus, profile.careerDetails)
-          };
-          
-          setUserProfile(userProfileData);
-          
-          // Also save to localStorage for quick access
-          localStorage.setItem('userProfile', JSON.stringify(userProfileData));
-          
-        } else {
-          console.warn('No profile data found in response');
-          setUserProfile(getFallbackProfile());
-        }
-      } else {
-        console.warn('Failed to fetch profile from backend');
-        setUserProfile(getFallbackProfile());
-      }
-    } catch (error) {
-      console.error('Error loading user profile:', error);
-      setUserProfile(getFallbackProfile());
-    }
-  };
-
   // Helper function to get initials from full name
   const getInitials = (fullName) => {
-    if (!fullName) return 'AU';
+    if (!fullName) return 'PR';
     return fullName
       .split(' ')
       .map(name => name[0])
@@ -314,15 +277,16 @@ Current students can register through the student portal. Limited spots availabl
       .slice(0, 2);
   };
 
-  // Helper function to get current position based on career status
-  const getCurrentPosition = (careerStatus, careerDetails) => {
+  // Enhanced getCurrentPosition function
+  const getCurrentPosition = (careerStatus, careerDetails, currentPosition) => {
+    if (currentPosition) return currentPosition;
     if (!careerStatus) return 'Alumni';
     
     switch (careerStatus) {
       case 'working':
-        return careerDetails?.jobTitle || 'Professional';
+        return careerDetails?.jobTitle || careerDetails?.position || 'Professional';
       case 'entrepreneur':
-        const role = careerDetails?.roleInStartup || 'Entrepreneur';
+        const role = careerDetails?.roleInStartup || careerDetails?.role || 'Entrepreneur';
         const startup = careerDetails?.startupName ? ` at ${careerDetails.startupName}` : '';
         return `${role}${startup}`;
       case 'studies':
@@ -335,76 +299,263 @@ Current students can register through the student portal. Limited spots availabl
     }
   };
 
-  // Fallback profile data
+  // Get fallback profile
   const getFallbackProfile = () => {
-    // Check if we have any cached data in localStorage
-    const cachedProfile = localStorage.getItem('userProfile');
-    if (cachedProfile) {
-      return JSON.parse(cachedProfile);
+    return {
+      name: "Prithika",
+      initials: "PR",
+      department: "Information Technology",
+      graduationYear: "2018",
+      currentPosition: "Alumni"
+    };
+  };
+
+  // Format date for display
+  const formatDate = (dateString) => {
+    const options = { year: 'numeric', month: 'long', day: 'numeric' };
+    return new Date(dateString).toLocaleDateString(undefined, options);
+  };
+
+  // Enhanced time display function
+  const getTimeDisplay = (createdAt, achievementDate) => {
+    if (!createdAt) return 'Recently';
+    
+    const now = new Date();
+    const created = new Date(createdAt);
+    const diff = now - created;
+    
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    
+    return formatDate(achievementDate);
+  };
+
+  // Get category badge color
+  const getNewsCategoryColor = (category) => {
+    const colors = {
+      general: 'bg-blue-100 text-blue-800',
+      academic: 'bg-green-100 text-green-800',
+      announcements: 'bg-purple-100 text-purple-800',
+      events: 'bg-orange-100 text-orange-800',
+      research: 'bg-red-100 text-red-800'
+    };
+    return colors[category] || 'bg-gray-100 text-gray-800';
+  };
+
+  // Sample achievements fallback
+  const getSampleAchievements = () => [
+    {
+      _id: 1,
+      userId: "user123",
+      userProfile: {
+        name: "Sanjay Kumar",
+        initials: "SK",
+        department: "Computer Science",
+        graduationYear: "2018",
+        currentPosition: "Senior Tech Lead at Google"
+      },
+      title: "Promoted to Senior Tech Lead",
+      description: "Congratulations to Sanjay for his promotion to Senior Tech Lead at Google Cloud division.",
+      category: "career",
+      achievementDate: "2024-01-15",
+      createdAt: new Date(),
+      company: "Google",
+      avatarColor: "from-blue-500 to-purple-500",
+      congratulations: { count: 5, users: [] },
+      userCongratulated: false
+    },
+    {
+      _id: 2,
+      userId: "user456",
+      userProfile: {
+        name: "Priya Reddy",
+        initials: "PR",
+        department: "Computer Science",
+        graduationYear: "2024",
+        currentPosition: "Final Year Student"
+      },
+      title: "Won National Coding Championship",
+      description: "Priya secured 1st place in the National Coding Championship 2024.",
+      category: "competition",
+      achievementDate: "2024-01-10",
+      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      level: "National Level",
+      avatarColor: "from-green-500 to-teal-500",
+      congratulations: { count: 12, users: [] },
+      userCongratulated: false
+    }
+  ];
+
+  // Load user profile from profile data
+  const loadUserProfile = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        console.warn('No authentication token found');
+        setUserProfile(getFallbackProfile());
+        return;
+      }
+
+      // Try multiple endpoints to find user profile
+      const endpoints = [
+        'http://localhost:5000/api/alumni/profile',
+        'http://localhost:5000/api/user/profile',
+        'http://localhost:5000/api/profile',
+        'http://localhost:5000/api/auth/profile'
+      ];
+
+      let profileData = null;
+      
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            console.log('Profile response from', endpoint, ':', data);
+            
+            if (data.success && data.data) {
+              profileData = data.data;
+            } else if (data.user) {
+              profileData = data.user;
+            } else if (data.profile) {
+              profileData = data.profile;
+            } else if (data) {
+              profileData = data;
+            }
+            
+            if (profileData) {
+              console.log('Profile loaded from:', endpoint, profileData);
+              break;
+            }
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch from ${endpoint}:`, error);
+        }
+      }
+
+      if (profileData) {
+        const userProfileData = {
+          name: profileData.personalInfo?.fullName || 
+                profileData.fullName ||
+                profileData.name || 
+                "Prithika",
+          initials: getInitials(profileData.personalInfo?.fullName || profileData.fullName || profileData.name || "Prithika"),
+          department: profileData.academicInfo?.branch || 
+                     profileData.department || 
+                     profileData.branch ||
+                     profileData.degree ||
+                     "Information Technology",
+          graduationYear: profileData.academicInfo?.graduationYear || 
+                         profileData.graduationYear || 
+                         profileData.yearOfPassing ||
+                         "2018",
+          currentPosition: getCurrentPosition(
+            profileData.careerStatus, 
+            profileData.careerDetails,
+            profileData.currentPosition
+          ) || "Alumni"
+        };
+        
+        console.log('Processed user profile:', userProfileData);
+        setUserProfile(userProfileData);
+        localStorage.setItem('userProfile', JSON.stringify(userProfileData));
+        
+        if (profileData._id) {
+          setCurrentUserId(profileData._id);
+        }
+      } else {
+        console.warn('No profile data found from any endpoint');
+        setUserProfile(getFallbackProfile());
+      }
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+      setUserProfile(getFallbackProfile());
+    }
+  };
+
+  // Load achievements from API
+  // Load achievements from API - UPDATED
+const loadAchievements = async () => {
+  try {
+    console.log('🔄 Loading achievements from API...');
+    
+    const response = await achievementsAPI.getAll();
+    console.log('✅ Achievements API response status:', response.status);
+    
+    let achievementsData = [];
+    
+    if (response.data && response.data.success !== false) {
+      achievementsData = response.data.data || response.data || [];
+      console.log(`✅ Loaded ${achievementsData.length} achievements from API`);
+    } else {
+      console.log('ℹ️ API returned error or no data, using sample data');
+      achievementsData = getSampleAchievements();
     }
     
-    return {
-      name: "Alumni User",
-      initials: "AU",
-      department: "Please complete your profile",
-      graduationYear: "YYYY",
-      currentPosition: "Update your career status"
-    };
-  };
-
-  // Test backend connection on component mount
-  useEffect(() => {
-    const initializeData = async () => {
-      setLoading(true);
-      try {
-        await testBackendConnection();
-        await loadUserProfile(); // Load user profile first
-        await loadData();
-      } catch (error) {
-        console.error('Error initializing data:', error);
-        setError('Failed to load data. Using sample data instead.');
-        setNewsItems(sampleNews);
-        setAchievements(getSampleAchievements());
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initializeData();
-  }, []);
-
-  // Load data based on active tab
-  useEffect(() => {
-    if (activeTab === 'news') {
-      loadNews();
-    } else {
-      loadAchievements();
+    if (achievementsData.length === 0) {
+      console.log('ℹ️ No achievements found, using sample data');
+      achievementsData = getSampleAchievements();
     }
-  }, [activeTab]);
+    
+    const congratulated = getCongratulatedAchievements();
+    
+    const enhancedAchievements = achievementsData.map(achievement => ({
+      ...achievement,
+      congratulations: achievement.congratulations || { count: 0, users: [] },
+      userCongratulated: congratulated.includes(achievement._id)
+    }));
+    
+    setAchievements(enhancedAchievements);
+    return enhancedAchievements;
+    
+  } catch (error) {
+    console.error('❌ Error loading achievements:', error);
+    console.log('🔄 Using sample achievements as fallback');
+    const sampleData = getSampleAchievements();
+    setAchievements(sampleData);
+    return sampleData;
+  }
+};
 
-  const testBackendConnection = async () => {
+  // NEW: Load only current user's achievements
+  const loadMyAchievements = async () => {
     try {
-      const response = await testAPI.test();
-      console.log('✅ Backend connection successful:', response.data);
+      if (!currentUserId && !userProfile) return;
+      
+      console.log('🔄 Loading my achievements for user:', currentUserId);
+      const response = await achievementsAPI.getAll();
+      const allAchievements = response.data.data || response.data || [];
+      
+      // Filter achievements created by current user
+      const myAchievementsData = allAchievements.filter(achievement => 
+        achievement.userId === currentUserId || 
+        achievement.userProfile?.name === userProfile?.name
+      );
+      
+      console.log(`✅ Found ${myAchievementsData.length} achievements by current user`);
+      setMyAchievements(myAchievementsData);
+      
     } catch (error) {
-      console.error('❌ Backend connection failed:', error);
-      setError('Unable to connect to server. Using sample data instead.');
-    }
-  };
-
-  const loadData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      await loadAchievements();
-      setNewsItems(sampleNews);
-    } catch (error) {
-      console.error('Error loading data:', error);
-      setError('Failed to load achievements. Using sample data instead.');
-      setNewsItems(sampleNews);
-      setAchievements(getSampleAchievements());
-    } finally {
-      setLoading(false);
+      console.error('❌ Error loading my achievements:', error);
+      // Use sample data as fallback
+      const sampleMyAchievements = getSampleAchievements().filter(achievement => 
+        achievement.userProfile?.name === userProfile?.name
+      );
+      setMyAchievements(sampleMyAchievements);
     }
   };
 
@@ -417,73 +568,235 @@ Current students can register through the student portal. Limited spots availabl
     }
   };
 
-  const loadAchievements = async () => {
+  // ✅ SINGLE loadData FUNCTION
+ // ✅ UPDATED: Better error handling for data loading
+const loadData = async () => {
+  setLoading(true);
+  setError(null);
+  try {
+    console.log('🔄 Starting data load...');
+    
+    // Load all achievements
+    let loadedAchievements = [];
     try {
-      const response = await achievementsAPI.getAll();
-      const congratulated = getCongratulatedAchievements();
+      console.log('📥 Loading all achievements...');
+      loadedAchievements = await loadAchievements();
+      console.log('✅ All achievements loaded:', loadedAchievements.length);
+    } catch (achievementError) {
+      console.warn('❌ Using sample achievements due to server error');
+      loadedAchievements = getSampleAchievements();
+      setAchievements(loadedAchievements);
+    }
+
+    // Load my achievements if user profile exists
+    if (userProfile) {
+      console.log('👤 User profile exists, loading my achievements...');
+      await loadMyAchievements();
+    } else {
+      console.log('⏳ No user profile yet, will load my achievements later');
+    }
+    
+    // Always use sample news for now
+    setNewsItems(sampleNews);
+    
+    console.log('🎉 Data load completed successfully');
+    
+  } catch (error) {
+    console.error('❌ Error loading data:', error);
+    setError('Failed to load data. Using sample data instead.');
+    setNewsItems(sampleNews);
+    setAchievements(getSampleAchievements());
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // Check backend health
+  const checkBackendHealth = async () => {
+    try {
+      console.log('🏥 Checking backend health...');
+      const healthResponse = await testAPI.health();
+      console.log('✅ Backend health check:', healthResponse.data);
       
-      // Enhance achievements with congratulation data
-      const enhancedAchievements = (response.data.data || []).map(achievement => ({
-        ...achievement,
-        // Ensure congratulations object exists
-        congratulations: achievement.congratulations || { count: 0, users: [] },
-        // Check if current user has congratulated
-        userCongratulated: congratulated.includes(achievement._id)
-      }));
+      const testResponse = await testAPI.test();
+      console.log('✅ Backend test endpoint:', testResponse.data);
       
-      setAchievements(enhancedAchievements);
+      return true;
     } catch (error) {
-      console.error('Error loading achievements:', error);
-      throw error;
+      console.error('❌ Backend health check failed:', error);
+      return false;
     }
   };
-  
-  // Sample achievements fallback
-  const getSampleAchievements = () => [
-    {
-      _id: 1,
-      userProfile: {
-        name: "Sanjay Kumar",
-        initials: "SK",
-        department: "Computer Science",
-        graduationYear: "2018",
-        currentPosition: "Senior Tech Lead at Google"
-      },
-      title: "Promoted to Senior Tech Lead",
-      description: "Congratulations to Sanjay for his promotion to Senior Tech Lead at Google Cloud division, leading a team of 15 engineers on AI infrastructure projects.",
-      category: "career",
-      achievementDate: "2024-01-15",
-      time: "Today",
-      company: "Google",
-      avatarColor: "from-blue-500 to-purple-500",
-      congratulations: { count: 5, users: [] },
-      userCongratulated: false
-    },
-    {
-      _id: 2,
-      userProfile: {
-        name: "Priya Reddy",
-        initials: "PR",
-        department: "Computer Science",
-        graduationYear: "2024",
-        currentPosition: "Final Year Student"
-      },
-      title: "Won National Coding Championship",
-      description: "Priya secured 1st place in the National Coding Championship 2024, competing against 5000+ participants from across the country.",
-      category: "competition",
-      achievementDate: "2024-01-10",
-      time: "2 days ago",
-      level: "National Level",
-      avatarColor: "from-green-500 to-teal-500",
-      congratulations: { count: 12, users: [] },
-      userCongratulated: false
+
+  const testBackendConnection = async () => {
+    try {
+      const isHealthy = await checkBackendHealth();
+      if (!isHealthy) {
+        setError('Backend server is not responding. Using sample data.');
+      }
+    } catch (error) {
+      console.error('❌ Backend connection failed:', error);
+      setError('Unable to connect to server. Using sample data instead.');
     }
-  ];
+  };
+
+  // Enhanced handleCongratulate function
+  const handleCongratulate = async (achievementId) => {
+    try {
+      const userIdentifier = userProfile?.name || 'anonymous-user';
+      const congratulatedKey = `congratulated-${userIdentifier}`;
+      
+      const congratulated = JSON.parse(localStorage.getItem(congratulatedKey) || '[]');
+      
+      if (congratulated.includes(achievementId)) {
+        setError('You have already congratulated this achievement! 👏');
+        setTimeout(() => setError(null), 3000);
+        return;
+      }
+
+      const response = await achievementsAPI.congratulate(achievementId);
+      
+      if (response.data.success) {
+        const updatedCongratulated = [...congratulated, achievementId];
+        localStorage.setItem(congratulatedKey, JSON.stringify(updatedCongratulated));
+        
+        setAchievements(prevAchievements => 
+          prevAchievements.map(achievement => 
+            achievement._id === achievementId 
+              ? {
+                  ...achievement,
+                  congratulations: {
+                    count: (achievement.congratulations?.count || 0) + 1,
+                    users: [...(achievement.congratulations?.users || []), { userId: userIdentifier }]
+                  },
+                  userCongratulated: true
+                }
+              : achievement
+          )
+        );
+        
+        setSuccessMessage('Congratulations sent! 👏');
+        setShowSuccessMessage(true);
+        setTimeout(() => setShowSuccessMessage(false), 2000);
+      }
+    } catch (error) {
+      console.error('Error congratulating achievement:', error);
+      
+      if (error.response?.status === 400) {
+        setError('You have already congratulated this achievement!');
+        setTimeout(() => setError(null), 3000);
+      } else {
+        setError('Failed to send congratulations. Please try again.');
+        setTimeout(() => setError(null), 3000);
+      }
+    }
+  };
+
+  // NEW: Handle edit achievement
+  const handleEditAchievement = (achievement) => {
+    setEditingAchievement(achievement);
+    setEditAchievement({
+      title: achievement.title,
+      description: achievement.description,
+      achievementDate: achievement.achievementDate.split('T')[0],
+      category: achievement.category
+    });
+    setShowEditModal(true);
+  };
+
+  // NEW: Handle update achievement
+  const handleUpdateAchievement = async (e) => {
+    e.preventDefault();
+    
+    try {
+      console.log('🔄 Updating achievement:', editingAchievement._id);
+      
+      const response = await achievementsAPI.update(editingAchievement._id, editAchievement);
+      
+      if (response.data.success) {
+        // Update in all achievements
+        setAchievements(prev => 
+          prev.map(achievement => 
+            achievement._id === editingAchievement._id 
+              ? { ...achievement, ...editAchievement }
+              : achievement
+          )
+        );
+        
+        // Update in my achievements
+        setMyAchievements(prev => 
+          prev.map(achievement => 
+            achievement._id === editingAchievement._id 
+              ? { ...achievement, ...editAchievement }
+              : achievement
+          )
+        );
+        
+        setShowEditModal(false);
+        setEditingAchievement(null);
+        setSuccessMessage("✅ Achievement updated successfully!");
+        setShowSuccessMessage(true);
+        setTimeout(() => setShowSuccessMessage(false), 3000);
+      }
+    } catch (error) {
+      console.error('❌ Error updating achievement:', error);
+      setError('Failed to update achievement. Please try again.');
+    }
+  };
+
+  // NEW: Handle delete achievement
+  const handleDeleteAchievement = async (achievementId) => {
+    if (!window.confirm('Are you sure you want to delete this achievement? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      console.log('🗑️ Deleting achievement:', achievementId);
+      
+      const response = await achievementsAPI.delete(achievementId);
+      
+      if (response.data.success) {
+        // Remove from all achievements
+        setAchievements(prev => 
+          prev.filter(achievement => achievement._id !== achievementId)
+        );
+        
+        // Remove from my achievements
+        setMyAchievements(prev => 
+          prev.filter(achievement => achievement._id !== achievementId)
+        );
+        
+        setSuccessMessage("🗑️ Achievement deleted successfully!");
+        setShowSuccessMessage(true);
+        setTimeout(() => setShowSuccessMessage(false), 3000);
+      }
+    } catch (error) {
+      console.error('❌ Error deleting achievement:', error);
+      setError('Failed to delete achievement. Please try again.');
+    }
+  };
+
+  // NEW: Close edit modal
+  const handleCloseEditModal = () => {
+    setShowEditModal(false);
+    setEditingAchievement(null);
+    setEditAchievement({
+      title: "",
+      description: "",
+      achievementDate: "",
+      category: "academic"
+    });
+  };
 
   // Handle tab change
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     setError(null);
+    
+    // Load my achievements when switching to that tab
+    if (tab === 'my-achievements' && userProfile) {
+      loadMyAchievements();
+    }
   };
   
   // Handle read full story button click
@@ -498,88 +811,20 @@ Current students can register through the student portal. Limited spots availabl
     setSelectedNews(null);
   };
   
-  // Handle congratulate button click - UPDATED with persistence
-  const handleCongratulate = async (achievementId) => {
-    try {
-      const congratulated = getCongratulatedAchievements();
-      
-      // Check if already congratulated
-      if (congratulated.includes(achievementId)) {
-        setError('You have already congratulated this achievement!');
-        return;
-      }
-
-      // Update backend first
-      const response = await achievementsAPI.congratulate(achievementId);
-      
-      if (response.data.success) {
-        // Update localStorage
-        const updatedCongratulated = [...congratulated, achievementId];
-        saveCongratulatedAchievements(updatedCongratulated);
-        
-        // Update UI state
-        setAchievements(prevAchievements => 
-          prevAchievements.map(achievement => 
-            achievement._id === achievementId 
-              ? {
-                  ...achievement,
-                  congratulations: {
-                    count: (achievement.congratulations?.count || 0) + 1,
-                    users: [...(achievement.congratulations?.users || []), 'current-user']
-                  },
-                  userCongratulated: true
-                }
-              : achievement
-          )
-        );
-        
-        setSuccessMessage('Congratulations sent! 👏');
-        setShowSuccessMessage(true);
-        setTimeout(() => setShowSuccessMessage(false), 2000);
-      }
-    } catch (error) {
-      console.error('Error congratulating achievement:', error);
-      if (error.response?.status === 400) {
-        setError('You have already congratulated this achievement!');
-      } else {
-        // Fallback: Update UI even if API fails (for demo purposes)
-        const congratulated = getCongratulatedAchievements();
-        if (!congratulated.includes(achievementId)) {
-          const updatedCongratulated = [...congratulated, achievementId];
-          saveCongratulatedAchievements(updatedCongratulated);
-          
-          setAchievements(prevAchievements => 
-            prevAchievements.map(achievement => 
-              achievement._id === achievementId 
-                ? {
-                    ...achievement,
-                    congratulations: {
-                      count: (achievement.congratulations?.count || 0) + 1,
-                      users: [...(achievement.congratulations?.users || []), 'current-user']
-                    },
-                    userCongratulated: true
-                  }
-                : achievement
-            )
-          );
-          
-          setSuccessMessage('Congratulations sent! 👏');
-          setShowSuccessMessage(true);
-          setTimeout(() => setShowSuccessMessage(false), 2000);
-        }
-      }
-    }
-  };
-  
   // Handle opening achievement modal
-  const handleOpenAchievementModal = () => {
-    if (!userProfile) {
-      setError('Please complete your profile first to share achievements.');
-      return;
-    }
-    setShowAchievementModal(true);
-  };
+const handleOpenAchievementModal = () => {
+  console.log('🎯 Share Achievement button clicked');
+  console.log('📊 User Profile:', userProfile);
   
+  if (!userProfile) {
+    setError('Please complete your profile first to share achievements.');
+    setTimeout(() => setError(null), 3000);
+    return;
+  }
+  
+  console.log('✅ Opening achievement modal');
+  setShowAchievementModal(true);
+};
   // Handle closing achievement modal
   const handleCloseAchievementModal = () => {
     setShowAchievementModal(false);
@@ -599,34 +844,41 @@ Current students can register through the student portal. Limited spots availabl
       [name]: value
     });
   };
+
+  // NEW: Handle edit form input changes
+  const handleEditInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditAchievement({
+      ...editAchievement,
+      [name]: value
+    });
+  };
   
   // Handle form submission
   const handleSubmitAchievement = async (e) => {
     e.preventDefault();
     
-    if (!userProfile) {
-      setError('Please complete your profile first to share achievements.');
-      return;
-    }
-    
     try {
-      // Include user profile data with the achievement
       const achievementData = {
         ...newAchievement,
-        userProfile: userProfile // This now comes from the backend
+        userProfile: userProfile
       };
 
       const response = await achievementsAPI.create(achievementData);
       
       if (response.data.success) {
-        // Add congratulations data to new achievement
         const newAchievementWithCongrats = {
           ...response.data.data,
           congratulations: { count: 0, users: [] },
           userCongratulated: false
         };
         
+        // Add to all achievements
         setAchievements([newAchievementWithCongrats, ...achievements]);
+        
+        // Add to my achievements
+        setMyAchievements([newAchievementWithCongrats, ...myAchievements]);
+        
         handleCloseAchievementModal();
         setSuccessMessage("🎉 Achievement added successfully! 🏆");
         setShowSuccessMessage(true);
@@ -638,34 +890,26 @@ Current students can register through the student portal. Limited spots availabl
     }
   };
 
-  // Format date for display
-  const formatDate = (dateString) => {
-    const options = { year: 'numeric', month: 'long', day: 'numeric' };
-    return new Date(dateString).toLocaleDateString(undefined, options);
-  };
+  // ✅ USE EFFECT HOOKS
+  useEffect(() => {
+    testBackendConnection();
+    loadUserProfile();
+    loadData();
+  }, []);
 
-  // Get category badge color
-  const getNewsCategoryColor = (category) => {
-    const colors = {
-      general: 'bg-blue-100 text-blue-800',
-      academic: 'bg-green-100 text-green-800',
-      announcements: 'bg-purple-100 text-purple-800',
-      events: 'bg-orange-100 text-orange-800',
-      research: 'bg-red-100 text-red-800'
-    };
-    return colors[category] || 'bg-gray-100 text-gray-800';
-  };
+  // Load data based on active tab
+  useEffect(() => {
+    if (activeTab === 'news') {
+      loadNews();
+    } else if (activeTab === 'achievements') {
+      loadAchievements();
+    } else if (activeTab === 'my-achievements' && userProfile) {
+      loadMyAchievements();
+    }
+  }, [activeTab, userProfile]);
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <div className="text-lg text-gray-600">Loading news and achievements...</div>
-        </div>
-      </div>
-    );
-  }
+  // ... (keep the rest of your JSX return statement exactly as you had it with the My Achievements tab)
+  // The JSX part remains the same as in the previous response
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -689,7 +933,7 @@ Current students can register through the student portal. Limited spots availabl
         </div>
       )}
       
-      {/* Navigation Tabs */}
+      {/* Navigation Tabs - UPDATED */}
       <nav className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between py-3">
@@ -717,16 +961,32 @@ Current students can register through the student portal. Limited spots availabl
                     : 'text-gray-600 hover:bg-gray-100'
                 }`}
               >
-                🏆 Achievements
+                🏆 All Achievements
                 <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
                   activeTab === 'achievements' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'
                 }`}>
                   {achievements.length}
                 </span>
               </button>
+              {/* NEW: My Achievements Tab */}
+              <button 
+                onClick={() => handleTabChange('my-achievements')}
+                className={`px-6 py-2 rounded-lg text-sm font-medium flex items-center transition-colors ${
+                  activeTab === 'my-achievements' 
+                    ? 'bg-blue-600 text-white shadow-lg' 
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                📋 My Achievements
+                <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
+                  activeTab === 'my-achievements' ? 'bg-purple-500 text-white' : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {myAchievements.length}
+                </span>
+              </button>
             </div>
             <div className="flex items-center space-x-3">
-              {activeTab === 'achievements' && (
+              {(activeTab === 'achievements' || activeTab === 'my-achievements') && (
                 <button 
                   onClick={handleOpenAchievementModal}
                   className="bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 text-white px-4 py-2 rounded-lg font-medium transition-all transform hover:scale-105 flex items-center text-sm shadow-lg"
@@ -734,17 +994,11 @@ Current students can register through the student portal. Limited spots availabl
                   🏆 Share Achievement
                 </button>
               )}
-              <button 
-                onClick={loadData}
-                className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center text-sm"
-              >
-                🔄 Refresh
-              </button>
             </div>
           </div>
         </div>
       </nav>
-      
+
       {/* Admin Notice for News */}
       {activeTab === 'news' && (
         <div className="max-w-7xl mx-auto px-4 pt-4">
@@ -762,7 +1016,7 @@ Current students can register through the student portal. Limited spots availabl
       
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-6">
-        {/* News Section - EXACTLY AS BEFORE */}
+        {/* News Section */}
         {activeTab === 'news' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
             {newsItems.map((news) => (
@@ -818,229 +1072,274 @@ Current students can register through the student portal. Limited spots availabl
           </div>
         )}
         
-        {/* Achievements Section - UPDATED with user profile data and achievement date */}
-        {activeTab === 'achievements' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {achievements.length === 0 ? (
-              <div className="col-span-3 text-center py-12">
-                <div className="text-6xl mb-4">🏆</div>
-                <h3 className="text-xl font-bold text-gray-600 mb-2">No Achievements Yet</h3>
-                <p className="text-gray-500 mb-4">Be the first to share your achievement!</p>
-                <button 
-                  onClick={handleOpenAchievementModal}
-                  className="bg-gradient-to-r from-green-500 to-teal-600 text-white px-6 py-2 rounded-lg font-medium"
-                >
-                  Share Your Achievement
-                </button>
-              </div>
-            ) : (
-              achievements.map((achievement) => (
-                <div key={achievement._id} className="achievement-card bg-white rounded-xl shadow-md overflow-hidden border border-gray-100 hover:shadow-lg transition-all duration-300">
-                  <div className="p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white px-3 py-1 rounded-full text-xs font-medium">
-                        👨‍🎓 Alumni
-                      </div>
-                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{achievement.time}</span>
-                    </div>
-                    
-                    {/* UPDATED: User profile display */}
-                    <div className="flex items-center mb-4">
-                      <div className={`w-12 h-12 bg-gradient-to-r ${achievement.avatarColor} rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg`}>
-                        {achievement.userProfile?.initials || "AU"}
-                      </div>
-                      <div className="ml-3">
-                        <h4 className="font-bold text-gray-900 text-sm">{achievement.userProfile?.name || "Alumni User"}</h4>
-                        <p className="text-xs text-gray-500">
-                          Class of {achievement.userProfile?.graduationYear} • {achievement.userProfile?.currentPosition}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <h3 className="text-md font-bold text-gray-900 mb-2 leading-tight">
-                      {achievementCategoryEmojis[achievement.category] || '🏆'} {achievement.title}
-                    </h3>
-                    
-                    <p className="text-gray-600 text-sm leading-relaxed line-clamp-3 mb-3">
-                      {achievement.description}
-                    </p>
-
-                    {/* NEW: Achievement Date Display */}
-                    <div className="mb-4">
-                      <div className="flex items-center text-xs text-gray-500">
-                        <span className="mr-2">📅</span>
-                        <span className="font-medium">Achieved on: {formatDate(achievement.achievementDate)}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="mt-4 flex items-center justify-between">
-                      <div className="flex items-center text-xs text-gray-500 space-x-2">
-                        {achievement.company && <span className="bg-blue-50 px-2 py-1 rounded">💼 {achievement.company}</span>}
-                        {achievement.level && <span className="bg-green-50 px-2 py-1 rounded">🏆 {achievement.level}</span>}
-                        {achievement.deal && <span className="bg-purple-50 px-2 py-1 rounded">💰 {achievement.deal}</span>}
-                        
-                        {/* Congratulations Count */}
-                        <span className="bg-yellow-50 text-yellow-700 px-2 py-1 rounded flex items-center">
-                          👏 {achievement.congratulations?.count || 0}
-                        </span>
-                      </div>
-                      
-                      <button 
-                        onClick={() => handleCongratulate(achievement._id)}
-                        disabled={achievement.userCongratulated}
-                        className={`text-xs font-medium px-3 py-1 rounded-full transition-all ${
-                          achievement.userCongratulated
-                            ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                            : 'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:shadow-md'
-                        }`}
-                      >
-                        {achievement.userCongratulated 
-                          ? 'Congratulated 👏' 
-                          : 'Congratulate 👏'
-                        }
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </main>
-
-      {/* News Detail Modal - EXACTLY AS BEFORE */}
-      {showNewsModal && selectedNews && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div 
-            className="modal-backdrop fixed inset-0 bg-black bg-opacity-50 backdrop-filter backdrop-blur-sm" 
-            onClick={handleCloseNewsModal}
-          ></div>
-          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative z-10">
+ {/* NEW: My Achievements Section */}
+{/* All Achievements Section - UPDATED */}
+{/* All Achievements Section */}
+{activeTab === 'achievements' && (
+  <div>
+    {loading ? (
+      <div className="flex justify-center items-center py-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="text-lg text-gray-600">Loading achievements...</div>
+        </div>
+      </div>
+    ) : achievements.length === 0 ? (
+      <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="text-6xl mb-4">🏆</div>
+        <h3 className="text-xl font-bold text-gray-600 mb-2">No Achievements Found</h3>
+        <p className="text-gray-500 mb-4">Be the first to share your achievement!</p>
+        <button 
+          onClick={handleOpenAchievementModal}
+          className="bg-gradient-to-r from-green-500 to-teal-600 text-white px-6 py-3 rounded-lg font-medium hover:from-green-600 hover:to-teal-700 transition-colors"
+        >
+          Share Your Achievement
+        </button>
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {achievements.map((achievement) => (
+          <div key={achievement._id} className="achievement-card bg-white rounded-xl shadow-md overflow-hidden border border-gray-100 hover:shadow-lg transition-all duration-300">
             <div className="p-6">
-              <div className="flex items-center justify-between mb-6 border-b pb-4">
-                <div>
-                  <span className={`text-sm font-medium px-3 py-1 rounded-full ${getNewsCategoryColor(selectedNews.category)}`}>
-                    {newsCategoryEmojis[selectedNews.category]} {selectedNews.category.toUpperCase()}
+              <div className="flex items-start justify-between mb-4">
+                <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white px-3 py-1 rounded-full text-xs font-medium">
+                  👨‍🎓 Alumni
+                </div>
+                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                  {getTimeDisplay(achievement.createdAt, achievement.achievementDate)}
+                </span>
+              </div>
+              
+              {/* User profile display */}
+              <div className="flex items-center mb-4">
+                <div className={`w-12 h-12 bg-gradient-to-r ${achievement.avatarColor || 'from-blue-500 to-purple-500'} rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg`}>
+                  {achievement.userProfile?.initials || "UN"}
+                </div>
+                <div className="ml-3">
+                  <h4 className="font-bold text-gray-900 text-sm">
+                    {achievement.userProfile?.name || "Alumni Member"}
+                  </h4>
+                  <p className="text-xs text-gray-500">
+                    Class of {achievement.userProfile?.graduationYear || '2020'} • {achievement.userProfile?.currentPosition || 'Alumni'}
+                  </p>
+                </div>
+              </div>
+              
+              <h3 className="text-md font-bold text-gray-900 mb-2 leading-tight">
+                {achievementCategoryEmojis[achievement.category] || '🏆'} {achievement.title}
+              </h3>
+              
+              <p className="text-gray-600 text-sm leading-relaxed line-clamp-3 mb-3">
+                {achievement.description}
+              </p>
+
+              {/* Achievement Date Display */}
+              <div className="mb-4">
+                <div className="flex items-center text-xs text-gray-500">
+                  <span className="mr-2">📅</span>
+                  <span className="font-medium">
+                    Achieved on: {formatDate(achievement.achievementDate)}
                   </span>
-                  <span className="ml-3 text-sm text-gray-500">{selectedNews.time}</span>
-                </div>
-                <button 
-                  onClick={handleCloseNewsModal} 
-                  className="text-gray-400 hover:text-gray-600 text-2xl transition-colors"
-                >
-                  ×
-                </button>
-              </div>
-              
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">{selectedNews.title}</h2>
-              
-              <div className="prose prose-lg max-w-none mb-6">
-                {selectedNews.fullStory.split('\n').map((paragraph, index) => (
-                  paragraph.trim() ? (
-                    <p key={index} className="mb-4 text-gray-700 leading-relaxed">
-                      {paragraph}
-                    </p>
-                  ) : (
-                    <br key={index} />
-                  )
-                ))}
-              </div>
-              
-              <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                <h3 className="font-semibold text-gray-900 mb-3">📋 Key Details:</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {selectedNews.details && Object.entries(selectedNews.details).map(([key, value]) => (
-                    <div key={key} className="flex items-center">
-                      <span className="text-lg mr-3">
-                        {key === 'attendees' && '👥'}
-                        {key === 'date' && '📅'}
-                        {key === 'venue' && '🏛️'}
-                        {key === 'books' && '📚'}
-                        {key === 'feature' && '💡'}
-                        {key === 'capacity' && '👥'}
-                        {key === 'companies' && '🏢'}
-                        {key === 'opportunities' && '💼'}
-                        {key === 'deadline' && '⏰'}
-                        {key === 'initiative' && '🌱'}
-                        {key === 'goal' && '🎯'}
-                        {key === 'projects' && '📋'}
-                        {key === 'network' && '🌍'}
-                        {key === 'mentors' && '👨‍🏫'}
-                        {key === 'domains' && '📊'}
-                      </span>
-                      <div>
-                        <div className="font-medium text-gray-900 capitalize">
-                          {key.replace(/([A-Z])/g, ' $1').trim()}
-                        </div>
-                        <div className="text-gray-600">{value}</div>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </div>
               
-              <div className="flex justify-end">
+              <div className="mt-4 flex items-center justify-between">
+                <div className="flex items-center text-xs text-gray-500 space-x-2">
+                  {achievement.company && (
+                    <span className="bg-blue-50 px-2 py-1 rounded">💼 {achievement.company}</span>
+                  )}
+                  {achievement.level && (
+                    <span className="bg-green-50 px-2 py-1 rounded">🏆 {achievement.level}</span>
+                  )}
+                  {achievement.publication && (
+                    <span className="bg-purple-50 px-2 py-1 rounded">📚 {achievement.publication}</span>
+                  )}
+                  
+                  {/* Congratulations Count */}
+                  <span className="bg-yellow-50 text-yellow-700 px-2 py-1 rounded flex items-center">
+                    👏 {achievement.congratulations?.count || 0}
+                  </span>
+                </div>
+                
                 <button 
-                  onClick={handleCloseNewsModal}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                  onClick={() => handleCongratulate(achievement._id)}
+                  disabled={achievement.userCongratulated}
+                  className={`text-xs font-medium px-3 py-1 rounded-full transition-all ${
+                    achievement.userCongratulated
+                      ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                      : 'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:shadow-md'
+                  }`}
                 >
-                  Close
+                  {achievement.userCongratulated 
+                    ? 'Congratulated 👏' 
+                    : 'Congratulate 👏'
+                  }
                 </button>
               </div>
             </div>
           </div>
+        ))}
+      </div>
+    )}
+  </div>
+)}
+{/* NEW: My Achievements Section */}
+{activeTab === 'my-achievements' && (
+  <div>
+    {/* Header Section */}
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">My Achievements</h1>
+          <p className="text-gray-600 mt-1">
+            Manage and track all your shared achievements
+          </p>
         </div>
-      )}
-      
-      {/* Achievement Modal - UPDATED with user profile info and achievement date */}
-      {showAchievementModal && (
+        <div className="text-right">
+          <div className="text-3xl font-bold text-purple-600">{myAchievements.length}</div>
+          <div className="text-sm text-gray-500">Total Achievements</div>
+        </div>
+      </div>
+    </div>
+
+    {/* Rest of your My Achievements JSX remains the same */}
+    {myAchievements.length === 0 ? (
+      <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="text-6xl mb-4">📋</div>
+        <h3 className="text-xl font-bold text-gray-600 mb-2">No Achievements Yet</h3>
+        <p className="text-gray-500 mb-4">We couldn't find any achievements linked to your account.</p>
+        <div className="space-y-3">
+          <button 
+            onClick={handleOpenAchievementModal}
+            className="bg-gradient-to-r from-green-500 to-teal-600 text-white px-6 py-3 rounded-lg font-medium hover:from-green-600 hover:to-teal-700 transition-colors block mx-auto"
+          >
+            🏆 Share Your First Achievement
+          </button>
+          <button 
+            onClick={() => {
+              // Create a test achievement for the user
+              const testAchievement = {
+                _id: 'test-' + Date.now(),
+                userId: currentUserId,
+                userProfile: userProfile,
+                title: "Test Achievement",
+                description: "This is a test achievement to verify the functionality.",
+                category: "academic",
+                achievementDate: new Date().toISOString().split('T')[0],
+                createdAt: new Date().toISOString(),
+                avatarColor: "from-blue-500 to-purple-500",
+                congratulations: { count: 0, users: [] },
+                userCongratulated: false
+              };
+              setMyAchievements([testAchievement]);
+            }}
+            className="text-sm text-blue-600 hover:text-blue-800 underline"
+          >
+            Create Test Achievement
+          </button>
+        </div>
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {myAchievements.map((achievement) => (
+          <div key={achievement._id} className="achievement-card bg-white rounded-xl shadow-md overflow-hidden border border-gray-100 hover:shadow-lg transition-all duration-300">
+            {/* Edit/Delete Actions */}
+            <div className="flex justify-between items-start mb-4 p-6 pb-0">
+              <div className="bg-gradient-to-r from-purple-600 to-purple-800 text-white px-3 py-1 rounded-full text-xs font-medium">
+                👑 My Achievement
+              </div>
+              <div className="flex space-x-2">
+                <button 
+                  onClick={() => handleEditAchievement(achievement)}
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors shadow-md flex items-center"
+                >
+                  <span className="mr-1">✏️</span>
+                  Edit
+                </button>
+                <button 
+                  onClick={() => handleDeleteAchievement(achievement._id)}
+                  className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors shadow-md flex items-center"
+                >
+                  <span className="mr-1">🗑️</span>
+                  Delete
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 pt-4">
+              {/* User profile display */}
+              <div className="flex items-center mb-4">
+                <div className={`w-12 h-12 bg-gradient-to-r ${achievement.avatarColor} rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg`}>
+                  {achievement.userProfile?.initials || "UN"}
+                </div>
+                <div className="ml-3">
+                  <h4 className="font-bold text-gray-900 text-sm">{achievement.userProfile?.name || "User Name"}</h4>
+                  <p className="text-xs text-gray-500">
+                    Class of {achievement.userProfile?.graduationYear} • {achievement.userProfile?.currentPosition}
+                  </p>
+                </div>
+              </div>
+              
+              <h3 className="text-md font-bold text-gray-900 mb-2 leading-tight">
+                {achievementCategoryEmojis[achievement.category] || '🏆'} {achievement.title}
+              </h3>
+              
+              <p className="text-gray-600 text-sm leading-relaxed line-clamp-3 mb-3">
+                {achievement.description}
+              </p>
+
+              {/* Achievement Date Display */}
+              <div className="mb-4">
+                <div className="flex items-center text-xs text-gray-500">
+                  <span className="mr-2">📅</span>
+                  <span className="font-medium">Achieved on: {formatDate(achievement.achievementDate)}</span>
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center text-xs text-gray-500 space-x-2">
+                  {achievement.company && <span className="bg-blue-50 px-2 py-1 rounded">💼 {achievement.company}</span>}
+                  {achievement.level && <span className="bg-green-50 px-2 py-1 rounded">🏆 {achievement.level}</span>}
+                  
+                  {/* Congratulations Count */}
+                  <span className="bg-yellow-50 text-yellow-700 px-2 py-1 rounded flex items-center">
+                    👏 {achievement.congratulations?.count || 0}
+                  </span>
+                </div>
+                
+                <div className="text-xs text-gray-500">
+                  {achievement.updatedAt && achievement.updatedAt !== achievement.createdAt ? 'Edited' : 'Created'}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+)}
+      </main>
+
+      {/* Edit Achievement Modal */}
+      {showEditModal && editingAchievement && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="modal-backdrop fixed inset-0 bg-black bg-opacity-50 backdrop-filter backdrop-blur-sm" onClick={handleCloseAchievementModal}></div>
+          <div className="modal-backdrop fixed inset-0 bg-black bg-opacity-50 backdrop-filter backdrop-blur-sm" onClick={handleCloseEditModal}></div>
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto relative z-10">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold text-gray-900">🏆 Share Your Achievement</h3>
-                <button onClick={handleCloseAchievementModal} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
+                <h3 className="text-xl font-bold text-gray-900">✏️ Edit Achievement</h3>
+                <button onClick={handleCloseEditModal} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
               </div>
               
-              {/* NEW: User Profile Info Display */}
-              {userProfile && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                  <h4 className="font-semibold text-blue-900 mb-2">Your Profile Information</h4>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="text-blue-600 font-medium">Name:</span>
-                      <p className="text-blue-800">{userProfile.name}</p>
-                    </div>
-                    <div>
-                      <span className="text-blue-600 font-medium">Initials:</span>
-                      <p className="text-blue-800">{userProfile.initials}</p>
-                    </div>
-                    <div>
-                      <span className="text-blue-600 font-medium">Department:</span>
-                      <p className="text-blue-800">{userProfile.department}</p>
-                    </div>
-                    <div>
-                      <span className="text-blue-600 font-medium">Graduation Year:</span>
-                      <p className="text-blue-800">{userProfile.graduationYear}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="text-blue-600 font-medium">Current Position:</span>
-                      <p className="text-blue-800">{userProfile.currentPosition}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              <form onSubmit={handleSubmitAchievement}>
+              <form onSubmit={handleUpdateAchievement}>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Achievement Title *</label>
                     <input 
                       type="text" 
                       name="title"
-                      value={newAchievement.title}
-                      onChange={handleInputChange}
+                      value={editAchievement.title}
+                      onChange={handleEditInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="e.g., Won National Coding Championship"
                       required
@@ -1051,8 +1350,8 @@ Current students can register through the student portal. Limited spots availabl
                     <label className="block text-sm font-medium text-gray-700 mb-2">Achievement Description *</label>
                     <textarea 
                       name="description"
-                      value={newAchievement.description}
-                      onChange={handleInputChange}
+                      value={editAchievement.description}
+                      onChange={handleEditInputChange}
                       rows="3"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                       placeholder="Describe your achievement in detail..."
@@ -1065,8 +1364,8 @@ Current students can register through the student portal. Limited spots availabl
                     <input 
                       type="date" 
                       name="achievementDate"
-                      value={newAchievement.achievementDate}
-                      onChange={handleInputChange}
+                      value={editAchievement.achievementDate}
+                      onChange={handleEditInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       required
                     />
@@ -1076,8 +1375,8 @@ Current students can register through the student portal. Limited spots availabl
                     <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
                     <select 
                       name="category"
-                      value={newAchievement.category}
-                      onChange={handleInputChange}
+                      value={editAchievement.category}
+                      onChange={handleEditInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="academic">🎓 Academic Excellence</option>
@@ -1096,7 +1395,7 @@ Current students can register through the student portal. Limited spots availabl
                 <div className="flex space-x-3 pt-6">
                   <button 
                     type="button" 
-                    onClick={handleCloseAchievementModal}
+                    onClick={handleCloseEditModal}
                     className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     Cancel
@@ -1105,7 +1404,7 @@ Current students can register through the student portal. Limited spots availabl
                     type="submit"
                     className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-colors font-medium"
                   >
-                    Share Achievement
+                    Update Achievement
                   </button>
                 </div>
               </form>
@@ -1113,7 +1412,145 @@ Current students can register through the student portal. Limited spots availabl
           </div>
         </div>
       )}
-      
+
+      {/* Add Achievement Modal */}
+{showAchievementModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div 
+      className="modal-backdrop fixed inset-0 bg-black bg-opacity-50 backdrop-filter backdrop-blur-sm" 
+      onClick={handleCloseAchievementModal}
+    ></div>
+    <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto relative z-10">
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-bold text-gray-900">🏆 Share Your Achievement</h3>
+          <button 
+            onClick={handleCloseAchievementModal} 
+            className="text-gray-400 hover:text-gray-600 text-2xl transition-colors"
+          >
+            ×
+          </button>
+        </div>
+        
+        {/* User Profile Info Display */}
+        {userProfile && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <h4 className="font-semibold text-blue-900 mb-2">Your Profile Information</h4>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <span className="text-blue-600 font-medium">Name:</span>
+                <p className="text-blue-800">{userProfile.name}</p>
+              </div>
+              <div>
+                <span className="text-blue-600 font-medium">Initials:</span>
+                <p className="text-blue-800">{userProfile.initials}</p>
+              </div>
+              <div>
+                <span className="text-blue-600 font-medium">Department:</span>
+                <p className="text-blue-800">{userProfile.department}</p>
+              </div>
+              <div>
+                <span className="text-blue-600 font-medium">Graduation Year:</span>
+                <p className="text-blue-800">{userProfile.graduationYear}</p>
+              </div>
+              <div className="col-span-2">
+                <span className="text-blue-600 font-medium">Current Position:</span>
+                <p className="text-blue-800">{userProfile.currentPosition}</p>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <form onSubmit={handleSubmitAchievement}>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Achievement Title *
+              </label>
+              <input 
+                type="text" 
+                name="title"
+                value={newAchievement.title}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                placeholder="e.g., Won National Coding Championship"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Achievement Description *
+              </label>
+              <textarea 
+                name="description"
+                value={newAchievement.description}
+                onChange={handleInputChange}
+                rows="3"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none transition-all"
+                placeholder="Describe your achievement in detail..."
+                required
+              ></textarea>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                When did you achieve this? *
+              </label>
+              <input 
+                type="date" 
+                name="achievementDate"
+                value={newAchievement.achievementDate}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Category *
+              </label>
+              <select 
+                name="category"
+                value={newAchievement.category}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              >
+                <option value="academic">🎓 Academic Excellence</option>
+                <option value="research">🔬 Research & Innovation</option>
+                <option value="competition">🏆 Competition Winner</option>
+                <option value="career">💼 Career Milestone</option>
+                <option value="entrepreneurship">🚀 Entrepreneurship</option>
+                <option value="social">🤝 Social Impact</option>
+                <option value="sports">🏅 Sports & Athletics</option>
+                <option value="arts">🎨 Arts & Culture</option>
+                <option value="innovation">💡 Innovation</option>
+              </select>
+            </div>
+          </div>
+          
+          <div className="flex space-x-3 pt-6">
+            <button 
+              type="button" 
+              onClick={handleCloseAchievementModal}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit"
+              className="flex-1 px-4 py-2 bg-gradient-to-r from-green-500 to-teal-600 text-white rounded-lg hover:from-green-600 hover:to-teal-700 transition-colors font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
+            >
+              Share Achievement
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+)}
+
       <style jsx>{`
         .news-card, .achievement-card { 
           transition: all 0.3s ease; 

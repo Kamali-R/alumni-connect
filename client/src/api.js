@@ -44,13 +44,17 @@ export const newsAPI = {
 };
 
 // Add this to your achievementsAPI object
+// In your api.js file, update the achievementsAPI object:
+// In your api.js file, update the achievementsAPI object:
+// In your api.js file, update the achievementsAPI object:
 export const achievementsAPI = {
   getAll: () => api.get('/achievements'),
   create: (achievementData) => api.post('/achievements', achievementData),
+  update: (id, achievementData) => api.put(`/achievements/${id}`, achievementData),
   delete: (id) => api.delete(`/achievements/${id}`),
   congratulate: (id) => api.post(`/achievements/${id}/congratulate`),
   getCongratulations: (id) => api.get(`/achievements/${id}/congratulations`),
-  getUserProfile: () => api.get('/user/profile'), // Add this to get user profile
+  getUserProfile: () => api.get('/user/profile'),
 };
 
 // Events API
