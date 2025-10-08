@@ -614,23 +614,30 @@ const AlumniDirectory = () => {
 
   const getConnectionStatus = (user, pendingRequests, myConnections) => {
     const currentUserId = getCurrentUserId();
-    
+    if (!currentUserId || !user) return 'not_connected';
+    const userId = user.id || user._id;
+    if (!userId) return 'not_connected';
+
     // Check if already connected
-    const isConnected = myConnections.some(conn => 
-      conn.person.id === user.id || conn.person._id === user.id
-    );
+    const isConnected = myConnections.some(conn => {
+      const connectionUserId = conn.person?.id || conn.person?._id;
+      return connectionUserId && connectionUserId.toString() === userId.toString();
+    });
     if (isConnected) return 'connected';
 
-    // Check if request sent by current user
-    const isRequestSent = pendingRequests.some(req => 
-      req.requesterId === currentUserId && req.recipientId === user.id
-    );
+    // Check if request sent by current user (should NOT show in sender's pendingRequests)
+    const isRequestSent = pendingRequests.some(req => {
+      // Only show requests where current user is requester and user is recipient
+      const recipientId = req.person?.id || req.person?._id;
+      return recipientId && recipientId.toString() === userId.toString();
+    });
     if (isRequestSent) return 'pending_sent';
 
-    // Check if request received from this user
-    const isRequestReceived = pendingRequests.some(req => 
-      req.recipientId === currentUserId && req.requesterId === user.id
-    );
+    // Check if request received from this user (current user is recipient)
+    const isRequestReceived = pendingRequests.some(req => {
+      const requesterId = req.person?.id || req.person?._id;
+      return requesterId && requesterId.toString() === userId.toString();
+    });
     if (isRequestReceived) return 'pending_received';
 
     return 'not_connected';
@@ -1407,6 +1414,7 @@ const AlumniDirectory = () => {
     const displayName = getDisplayName(profile);
     const roleDisplay = profile.userType === 'alumni' ? 'Alumni' : 'Student';
     const graduationYear = getGraduationYear(profile);
+    const isCurrentUser = profile._id === getCurrentUserId();
 
     const formatDate = (dateString) => {
       if (!dateString) return 'Not specified';
@@ -1499,17 +1507,17 @@ const AlumniDirectory = () => {
                   </div>
                 </div>
                 <div className="flex-1">
-                  <h1 className="text-3xl font-bold text-gray-900">{displayName}</h1>
-                  <p className="text-gray-600 text-lg">{profile.email}</p>
-                  <div className="flex flex-wrap gap-2 mt-2">
+                  <h1 className="text-3xl font-bold text-gray-900 mb-2">{displayName}</h1>
+                  <div className="flex items-center text-gray-600">
+                    <span className="font-medium">{isCurrentUser ? 'You' : displayName}</span>
+                    <span className="mx-2">•</span>
+                    <span>{roleDisplay}</span>
                     {graduationYear && (
-                      <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
-                        Class of {graduationYear}
-                      </span>
+                      <>
+                        <span className="mx-2">•</span>
+                        <span>Class of {graduationYear}</span>
+                      </>
                     )}
-                    <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">
-                      {roleDisplay}
-                    </span>
                   </div>
                 </div>
               </div>
@@ -1914,6 +1922,7 @@ const AlumniDirectory = () => {
                   <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                 </svg>
               ) : (
+
                 <svg 
                   className="w-5 h-5" 
                   fill="none" 
@@ -2117,7 +2126,7 @@ const AlumniDirectory = () => {
               </button>
               <button 
                 onClick={() => {
-                  toast.info('Message feature will be implemented soon');
+                  toast.info('Messaging feature will be implemented soon');
                 }}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
@@ -2643,7 +2652,8 @@ const AlumniDirectory = () => {
                     onDecline={declineConnection}
                   />
                 ))
-              )}
+              )
+              }
             </div>
           </div>
           

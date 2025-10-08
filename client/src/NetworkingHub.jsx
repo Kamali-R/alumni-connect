@@ -613,49 +613,47 @@ const NetworkingHub = () => {
     };
   };
 
+  // Enhanced getConnectionStatus function with better user ID matching
   // Enhanced getConnectionStatus function
 const getConnectionStatus = (user, pendingRequests, myConnections) => {
   const currentUserId = getCurrentUserId();
-  if (!currentUserId || !user || !user.id) return 'not_connected';
+  if (!currentUserId || !user) return 'not_connected';
   
+  const userId = user.id || user._id;
+  if (!userId) return 'not_connected';
+
   // Check if already connected
   const isConnected = myConnections.some(conn => {
     const connectionUserId = conn.person?.id || conn.person?._id;
-    return connectionUserId === user.id || connectionUserId === user._id;
+    return connectionUserId && connectionUserId.toString() === userId.toString();
   });
+  
   if (isConnected) return 'connected';
 
   // Check if request sent by current user
   const isRequestSent = pendingRequests.some(req => {
-    const requesterId = req.person?.id || req.person?._id;
-    return requesterId === currentUserId && req.recipientId === user.id;
+    const recipientId = req.person?.id || req.person?._id;
+    return recipientId && recipientId.toString() === userId.toString();
   });
   if (isRequestSent) return 'pending_sent';
 
   // Check if request received from this user
   const isRequestReceived = pendingRequests.some(req => {
-    const recipientId = req.person?.id || req.person?._id;
-    return recipientId === currentUserId && req.requesterId === user.id;
+    const requesterId = req.person?.id || req.person?._id;
+    return requesterId && requesterId.toString() === userId.toString();
   });
   if (isRequestReceived) return 'pending_received';
 
   return 'not_connected';
 };
-
-  // Enhanced data processing
+  // Enhanced data processing with better connection status handling
   const processUserData = (userArray, pendingRequests = [], myConnections = []) => {
     return userArray.map(user => {
       const graduationYear = getGraduationYear(user);
       const role = getRoleDisplay(user);
-      const connectionStatus = getConnectionStatus(user, pendingRequests, myConnections);
       
-      console.log('Processing user:', user.name, {
-        originalRole: user.role,
-        processedRole: role,
-        originalGradYear: user.graduationYear,
-        processedGradYear: graduationYear,
-        connectionStatus: connectionStatus
-      });
+      // Enhanced connection status with proper ID comparison
+      const connectionStatus = getConnectionStatus(user, pendingRequests, myConnections);
       
       return {
         ...user,
@@ -667,100 +665,162 @@ const getConnectionStatus = (user, pendingRequests, myConnections) => {
     });
   };
 
-  // Fetch alumni directory from backend
+  // Fetch connection requests
+  const fetchConnectionRequests = async () => {
+    try {
+      console.log('📥 Fetching connection requests...');
+      const response = await fetch('http://localhost:5000/api/connection-requests', {
+        method: 'GET',
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch connection requests: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        const processedRequests = (data.pendingRequests || []).map(request => ({
+          ...request,
+          id: request._id || request.id,
+          person: {
+            ...request.person,
+            id: request.person._id || request.person.id,
+            role: getRoleDisplay(request.person),
+            graduationYear: getGraduationYear(request.person)
+          }
+        }));
+        
+        setPendingRequests(processedRequests);
+      } else {
+        throw new Error(data.message || 'Failed to load connection requests');
+      }
+    } catch (error) {
+      console.error('❌ Error fetching connection requests:', error);
+      toast.error('Failed to load connection requests');
+    }
+  };
+
+  // Fetch my connections
+  const fetchMyConnections = async () => {
+    try {
+      console.log('🔗 Fetching my connections...');
+      const response = await fetch('http://localhost:5000/api/my-connections', {
+        method: 'GET',
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch connections: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        const processedConnections = (data.connections || []).map(connection => ({
+          ...connection,
+          id: connection._id || connection.id,
+          person: {
+            ...connection.person,
+            id: connection.person._id || connection.person.id,
+            profileImageUrl: getProfileImageUrl(connection.person),
+            role: getRoleDisplay(connection.person),
+            graduationYear: getGraduationYear(connection.person)
+          }
+        }));
+        
+        setMyConnections(processedConnections);
+      } else {
+        throw new Error(data.message || 'Failed to load connections');
+      }
+    } catch (error) {
+      console.error('❌ Error fetching connections:', error);
+      toast.error('Failed to load connections');
+    }
+  };
+
   // Enhanced fetchAlumniDirectory
-const fetchAlumniDirectory = async () => {
-  setLoading(true);
-  try {
-    const queryParams = new URLSearchParams({
-      page: filters.page.toString(),
-      limit: filters.limit.toString(),
-      ...(filters.search && { search: filters.search }),
-      ...(filters.year && { graduationYear: filters.year }),
-      ...(filters.branch && { branch: filters.branch })
-    });
-
-    const response = await fetch(`http://localhost:5000/api/alumni-directory?${queryParams}`, {
-      method: 'GET',
-      headers: getAuthHeaders()
-    });
-
-    if (!response.ok) {
-      throw new Error(`Server error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    if (data.success) {
-      // Process with current connection data
-      const processedAlumni = processUserData(data.alumni, pendingRequests, myConnections);
-      setAlumniData(processedAlumni);
-      if (directoryType === 'alumni') {
-        setFilteredData(processedAlumni);
-      }
-      
-      console.log('✅ Alumni directory loaded with connections:', {
-        total: processedAlumni.length,
-        connected: processedAlumni.filter(a => a.connectionStatus === 'connected').length,
-        pending: processedAlumni.filter(a => a.connectionStatus.includes('pending')).length
+  const fetchAlumniDirectory = async () => {
+    setLoading(true);
+    try {
+      const queryParams = new URLSearchParams({
+        page: filters.page.toString(),
+        limit: filters.limit.toString(),
+        ...(filters.search && { search: filters.search }),
+        ...(filters.year && { graduationYear: filters.year }),
+        ...(filters.branch && { branch: filters.branch })
       });
-    } else {
-      throw new Error(data.message || 'Failed to load alumni directory');
-    }
-  } catch (error) {
-    console.error('Error fetching alumni directory:', error);
-    toast.error('Failed to load alumni directory.');
-  } finally {
-    setLoading(false);
-  }
-};
 
-// Enhanced fetchStudentDirectory
-const fetchStudentDirectory = async () => {
-  setLoading(true);
-  try {
-    const queryParams = new URLSearchParams({
-      page: filters.page.toString(),
-      limit: filters.limit.toString(),
-      ...(filters.search && { search: filters.search }),
-      ...(filters.year && { graduationYear: filters.year }),
-      ...(filters.branch && { branch: filters.branch })
-    });
-
-    const response = await fetch(`http://localhost:5000/api/student-directory?${queryParams}`, {
-      method: 'GET',
-      headers: getAuthHeaders()
-    });
-
-    if (!response.ok) {
-      throw new Error(`Server error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    if (data.success) {
-      // Process with current connection data
-      const processedStudents = processUserData(data.students, pendingRequests, myConnections);
-      setStudentData(processedStudents);
-      if (directoryType === 'students') {
-        setFilteredData(processedStudents);
-      }
-      
-      console.log('✅ Student directory loaded with connections:', {
-        total: processedStudents.length,
-        connected: processedStudents.filter(s => s.connectionStatus === 'connected').length,
-        pending: processedStudents.filter(s => s.connectionStatus.includes('pending')).length
+      const response = await fetch(`http://localhost:5000/api/alumni-directory?${queryParams}`, {
+        method: 'GET',
+        headers: getAuthHeaders()
       });
-    } else {
-      throw new Error(data.message || 'Failed to load student directory');
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Process with current connection data
+        const processedAlumni = processUserData(data.alumni, pendingRequests, myConnections);
+        setAlumniData(processedAlumni);
+        if (directoryType === 'alumni') {
+          setFilteredData(processedAlumni);
+        }
+      } else {
+        throw new Error(data.message || 'Failed to load alumni directory');
+      }
+    } catch (error) {
+      console.error('Error fetching alumni directory:', error);
+      toast.error('Failed to load alumni directory.');
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error('Error fetching student directory:', error);
-    toast.error('Failed to load student directory.');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
+  // Enhanced fetchStudentDirectory
+  const fetchStudentDirectory = async () => {
+    setLoading(true);
+    try {
+      const queryParams = new URLSearchParams({
+        page: filters.page.toString(),
+        limit: filters.limit.toString(),
+        ...(filters.search && { search: filters.search }),
+        ...(filters.year && { graduationYear: filters.year }),
+        ...(filters.branch && { branch: filters.branch })
+      });
+
+      const response = await fetch(`http://localhost:5000/api/student-directory?${queryParams}`, {
+        method: 'GET',
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Process with current connection data
+        const processedStudents = processUserData(data.students, pendingRequests, myConnections);
+        setStudentData(processedStudents);
+        if (directoryType === 'students') {
+          setFilteredData(processedStudents);
+        }
+      } else {
+        throw new Error(data.message || 'Failed to load student directory');
+      }
+    } catch (error) {
+      console.error('Error fetching student directory:', error);
+      toast.error('Failed to load student directory.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Fetch user profile for viewing
   const fetchUserProfile = async (userId, userType) => {
@@ -786,125 +846,6 @@ const fetchStudentDirectory = async () => {
     }
   };
 
-  // Enhanced fetchConnectionRequests function
-  // Enhanced fetchConnectionRequests
-const fetchConnectionRequests = async () => {
-  try {
-    console.log('📥 Fetching connection requests...');
-    const response = await fetch('http://localhost:5000/api/connection-requests', {
-      method: 'GET',
-      headers: getAuthHeaders()
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch connection requests: ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    console.log('📋 Connection requests response:', data);
-    
-    if (data.success) {
-      const processedRequests = (data.pendingRequests || []).map(request => ({
-        ...request,
-        id: request._id || request.id,
-        person: {
-          ...request.person,
-          id: request.person._id || request.person.id,
-          role: getRoleDisplay(request.person),
-          graduationYear: getGraduationYear(request.person)
-        }
-      }));
-      
-      console.log('✅ Processed connection requests:', processedRequests);
-      setPendingRequests(processedRequests);
-      
-      // Refresh directory data with updated connection status
-      await refreshDirectoryData(processedRequests, myConnections);
-      
-    } else {
-      throw new Error(data.message || 'Failed to load connection requests');
-    }
-  } catch (error) {
-    console.error('❌ Error fetching connection requests:', error);
-    toast.error('Failed to load connection requests');
-  }
-};
-
-const handleConnectionError = (error, context) => {
-  console.error(`❌ Connection error in ${context}:`, error);
-  
-  if (error.message.includes('Failed to fetch')) {
-    toast.error('Network error: Could not connect to server');
-  } else if (error.message.includes('401') || error.message.includes('403')) {
-    toast.error('Authentication error: Please login again');
-    localStorage.removeItem('token');
-    window.location.reload();
-  } else {
-    toast.error(`Failed to load ${context}`);
-  }
-};
-
-// Enhanced fetchMyConnections
-const fetchMyConnections = async () => {
-  try {
-    console.log('🔗 Fetching my connections...');
-    const response = await fetch('http://localhost:5000/api/my-connections', {
-      method: 'GET',
-      headers: getAuthHeaders()
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch connections: ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    console.log('🤝 My connections response:', data);
-    
-    if (data.success) {
-      const processedConnections = (data.connections || []).map(connection => ({
-        ...connection,
-        id: connection._id || connection.id,
-        person: {
-          ...connection.person,
-          id: connection.person._id || connection.person.id,
-          profileImageUrl: getProfileImageUrl(connection.person),
-          role: getRoleDisplay(connection.person),
-          graduationYear: getGraduationYear(connection.person)
-        }
-      }));
-      
-      console.log('✅ Processed connections:', processedConnections);
-      setMyConnections(processedConnections);
-      
-      // Refresh directory data with updated connection status
-      await refreshDirectoryData(pendingRequests, processedConnections);
-      
-    } else {
-      throw new Error(data.message || 'Failed to load connections');
-    }
-  } catch (error) {
-    handleConnectionError(error, 'connections');
-    console.error('❌ Error fetching connections:', error);
-    toast.error('Failed to load connections');
-  }
-};
-
-// Add this helper function to refresh directory data
-const refreshDirectoryData = async (updatedPendingRequests, updatedMyConnections) => {
-  if (activeSection === 'directory') {
-    if (directoryType === 'alumni' && alumniData.length > 0) {
-      const updatedAlumni = processUserData(alumniData, updatedPendingRequests, updatedMyConnections);
-      setAlumniData(updatedAlumni);
-      setFilteredData(updatedAlumni);
-    } else if (directoryType === 'students' && studentData.length > 0) {
-      const updatedStudents = processUserData(studentData, updatedPendingRequests, updatedMyConnections);
-      setStudentData(updatedStudents);
-      setFilteredData(updatedStudents);
-    }
-  }
-};
   // Fixed fetchSuccessStories function
   const fetchSuccessStories = async (page = 1, filters = {}) => {
     setStoryLoading(true);
@@ -1229,6 +1170,176 @@ const refreshDirectoryData = async (updatedPendingRequests, updatedMyConnections
     }
   };
 
+  // Send connection request
+  const sendConnectionRequest = async (userId) => {
+    try {
+      if (!userId) {
+        toast.error('Invalid user ID');
+        return;
+      }
+
+      const response = await fetch('http://localhost:5000/api/connection-request', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ recipientId: userId })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        // Handle various error cases
+        if (data.message.includes('already exists') || data.message.includes('already sent')) {
+          updateUserConnectionStatus(userId, 'pending_sent');
+          toast.info(data.message);
+          return;
+        }
+        if (data.message.includes('connected')) {
+          updateUserConnectionStatus(userId, 'connected');
+          toast.info(data.message);
+          return;
+        }
+        throw new Error(data.message || `Request failed with status ${response.status}`);
+      }
+
+      if (data.success) {
+        // Update UI immediately
+        updateUserConnectionStatus(userId, 'pending_sent');
+        toast.success('Connection request sent successfully!');
+        
+        // Refresh connection requests
+        await fetchConnectionRequests();
+      }
+      
+    } catch (error) {
+      console.error('Connection request failed:', error);
+      toast.error(error.message || 'Failed to send connection request');
+    }
+  };
+
+  // Helper function to update user connection status
+  const updateUserConnectionStatus = (userId, status) => {
+    const updateStatus = (user) => 
+      user.id === userId 
+        ? { ...user, connectionStatus: status }
+        : user;
+
+    if (directoryType === 'alumni') {
+      setAlumniData(prev => prev.map(updateStatus));
+      setFilteredData(prev => prev.map(updateStatus));
+    } else {
+      setStudentData(prev => prev.map(updateStatus));
+      setFilteredData(prev => prev.map(updateStatus));
+    }
+  };
+
+  // Accept connection request
+  const acceptConnection = async (connectionId, userId) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/accept-connection', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ connectionId })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message);
+      }
+
+      const data = await response.json();
+
+      // Update UI immediately
+      setPendingRequests(prev => prev.filter(req => req.id !== connectionId));
+      updateUserConnectionStatus(userId, 'connected');
+
+      // Refresh connections
+      await fetchMyConnections();
+      
+      toast.success('Connection request accepted!');
+    } catch (error) {
+      console.error('Error accepting connection:', error);
+      toast.error('Failed to accept connection request');
+    }
+  };
+
+  // Decline connection request
+  const declineConnection = async (connectionId, userId) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/decline-connection', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ connectionId })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message);
+      }
+
+      setPendingRequests(prev => prev.filter(req => req.id !== connectionId));
+      updateUserConnectionStatus(userId, 'not_connected');
+
+      toast.info('Connection request declined');
+    } catch (error) {
+      console.error('Error declining connection:', error);
+      toast.error('Failed to decline connection request');
+    }
+  };
+
+  // View profile handler
+  const handleViewProfile = async (userId, userType) => {
+    await fetchUserProfile(userId, userType);
+  };
+
+  // Close profile modal
+  const handleCloseProfile = () => {
+    setSelectedProfile(null);
+  };
+
+  // Filter handlers
+  const handleFilterChange = (filterName, value) => {
+    setFilters(prev => ({ 
+      ...prev, 
+      [filterName]: value,
+      page: 1
+    }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      search: '',
+      year: '',
+      branch: '',
+      careerStatus: '',
+      skills: '',
+      interests: '',
+      company: '',
+      location: '',
+      experience: '',
+      connectionStatus: '',
+      page: 1,
+      limit: 12
+    });
+  };
+
+  // Story form submission
+  const handleStorySubmit = async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const storyData = {
+      title: formData.get('title'),
+      content: formData.get('content'),
+      category: formData.get('category'),
+      tags: formData.get('tags') ? formData.get('tags').split(',').map(tag => tag.trim()) : []
+    };
+
+    const success = await createSuccessStory(storyData);
+    if (success) {
+      e.target.reset();
+    }
+  };
+
   // Discussion form submission
   const handleDiscussionSubmit = async (e) => {
     e.preventDefault();
@@ -1262,211 +1373,234 @@ const refreshDirectoryData = async (updatedPendingRequests, updatedMyConnections
     }
   };
 
+  // Enhanced filter function
+  const applyFilters = () => {
+    let filtered = directoryType === 'alumni' ? alumniData : studentData;
+    
+    if (filters.search) {
+      const searchTerm = filters.search.toLowerCase();
+      filtered = filtered.filter(user => 
+        user.name?.toLowerCase().includes(searchTerm) ||
+        user.email?.toLowerCase().includes(searchTerm) ||
+        user.alumniProfile?.careerDetails?.companyName?.toLowerCase().includes(searchTerm) ||
+        user.alumniProfile?.academicInfo?.branch?.toLowerCase().includes(searchTerm) ||
+        user.studentProfile?.academicInfo?.branch?.toLowerCase().includes(searchTerm)
+      );
+    }
+    
+    if (filters.year) {
+      filtered = filtered.filter(user => {
+        const gradYear = getGraduationYear(user);
+        return gradYear?.toString() === filters.year;
+      });
+    }
+    
+    if (filters.branch) {
+      filtered = filtered.filter(user => 
+        user.alumniProfile?.academicInfo?.branch?.toLowerCase().includes(filters.branch.toLowerCase()) ||
+        user.studentProfile?.academicInfo?.branch?.toLowerCase().includes(filters.branch.toLowerCase())
+      );
+    }
+    
+    if (filters.careerStatus) {
+      filtered = filtered.filter(user => 
+        user.alumniProfile?.careerStatus?.toLowerCase() === filters.careerStatus.toLowerCase()
+      );
+    }
+    
+    if (filters.skills) {
+      const skillsTerm = filters.skills.toLowerCase();
+      filtered = filtered.filter(user => 
+        user.alumniProfile?.skills?.some(skill => 
+          skill.toLowerCase().includes(skillsTerm)
+        ) ||
+        user.studentProfile?.skills?.some(skill => 
+          skill.toLowerCase().includes(skillsTerm)
+        )
+      );
+    }
+    
+    if (filters.interests) {
+      const interestsTerm = filters.interests.toLowerCase();
+      filtered = filtered.filter(user => {
+        const interests = user.alumniProfile?.interests || user.studentProfile?.interests || [];
+        return interests.some(interest => 
+          interest.toLowerCase().includes(interestsTerm)
+        );
+      });
+    }
+    
+    if (filters.company) {
+      const companyTerm = filters.company.toLowerCase();
+      filtered = filtered.filter(user => 
+        user.alumniProfile?.careerDetails?.companyName?.toLowerCase().includes(companyTerm)
+      );
+    }
+    
+    if (filters.location) {
+      const locationTerm = filters.location.toLowerCase();
+      filtered = filtered.filter(user => 
+        user.alumniProfile?.personalInfo?.location?.toLowerCase().includes(locationTerm) ||
+        user.alumniProfile?.careerDetails?.companyLocation?.toLowerCase().includes(locationTerm) ||
+        user.studentProfile?.personalInfo?.location?.toLowerCase().includes(locationTerm)
+      );
+    }
+    
+    if (filters.experience) {
+      filtered = filtered.filter(user => {
+        const experience = user.alumniProfile?.careerDetails?.yearsOfExperience;
+        if (!experience) return false;
+        
+        const expNum = parseInt(experience);
+        switch (filters.experience) {
+          case '0-2': return expNum <= 2;
+          case '3-5': return expNum >= 3 && expNum <= 5;
+          case '6-10': return expNum >= 6 && expNum <= 10;
+          case '10+': return expNum > 10;
+          default: return true;
+        }
+      });
+    }
+    
+    if (filters.connectionStatus) {
+      filtered = filtered.filter(user => 
+        user.connectionStatus === filters.connectionStatus
+      );
+    }
+    
+    setFilteredData(filtered);
+  };
+
   // UserCard Component (for both alumni and students)
   const UserCard = ({ user, onConnect, onViewProfile }) => {
-    const profileImageUrl = getProfileImageUrl(user, user.alumniProfile, user.studentProfile);
-    const displayName = getDisplayName(user);
-    const roleDisplay = getRoleDisplay(user);
-    const graduationYear = getGraduationYear(user);
+  const profileImageUrl = getProfileImageUrl(user, user.alumniProfile, user.studentProfile);
+  const displayName = getDisplayName(user);
+  const roleDisplay = getRoleDisplay(user);
+  const graduationYear = getGraduationYear(user);
 
-    // In UserCard component, update the connection status display:
-const getConnectionButton = () => {
-  const buttonClass = "px-4 py-2 rounded-lg font-medium text-sm flex-1 transition-colors flex items-center justify-center";
-  
-  // Debug log to see what's happening
-  console.log('User connection status:', {
-    userName: displayName,
-    status: user.connectionStatus,
-    userId: user.id
-  });
-  
-  switch (user.connectionStatus) {
-    case 'connected':
-      return (
-        <button 
-          className={`${buttonClass} bg-green-600 text-white cursor-not-allowed`}
-          disabled
-        >
-          <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-          </svg>
-          Connected
-        </button>
-      );
-    case 'pending_sent':
-      return (
-        <button 
-          className={`${buttonClass} bg-yellow-600 text-white cursor-not-allowed`}
-          disabled
-        >
-          <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-          </svg>
-          Request Sent
-        </button>
-      );
-    case 'pending_received':
-      return (
-        <button 
-          onClick={() => {
-            setActiveSection('connections');
-            toast.info('Please go to Connections tab to respond');
-          }}
-          className={`${buttonClass} bg-blue-600 hover:bg-blue-700 text-white`}
-        >
-          <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
-            <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
-          </svg>
-          Respond
-        </button>
-      );
-    default:
-      return (
-        <button 
-          onClick={() => onConnect(user.id)}
-          className={`${buttonClass} bg-blue-600 hover:bg-blue-700 text-white`}
-        >
-          <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-          </svg>
-          Connect
-        </button>
-      );
-  }
-};
+  const getConnectionButton = () => {
+    const buttonClass = "px-4 py-2 rounded-lg font-medium text-sm flex-1 transition-colors flex items-center justify-center";
+    
+    switch (user.connectionStatus) {
+      case 'connected':
+        return (
+          <button 
+            className={`${buttonClass} bg-green-600 text-white cursor-not-allowed`}
+            disabled
+          >
+            <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+            Connected
+          </button>
+        );
+      case 'pending_sent':
+        return (
+          <button 
+            className={`${buttonClass} bg-yellow-600 text-white cursor-not-allowed`}
+            disabled
+          >
+            <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+            </svg>
+            Request Sent
+          </button>
+        );
+      case 'pending_received':
+        return (
+          <button 
+            onClick={() => {
+              setActiveSection('connections');
+              toast.info('Please go to Connections tab to respond');
+            }}
+            className={`${buttonClass} bg-blue-600 hover:bg-blue-700 text-white`}
+          >
+            <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+              <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+            </svg>
+            Respond to Request
+          </button>
+        );
+      default:
+        return (
+          <button 
+            onClick={() => onConnect(user.id)}
+            className={`${buttonClass} bg-blue-600 hover:bg-blue-700 text-white`}
+          >
+            <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+            </svg>
+            Connect with {roleDisplay}
+          </button>
+        );
+    }
+  };
 
-    return (
-      <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow duration-200">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center">
-            <div className="relative">
-              {profileImageUrl ? (
-                <img 
-                  src={profileImageUrl} 
-                  alt={displayName}
-                  className="w-12 h-12 rounded-full object-cover mr-4"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    const fallback = e.target.parentNode.querySelector('.profile-fallback');
-                    if (fallback) fallback.style.display = 'flex';
-                  }}
-                />
-              ) : null}
-              <div 
-                className="profile-fallback bg-gradient-to-br from-blue-100 to-blue-200 rounded-full w-12 h-12 flex items-center justify-center mr-4"
-                style={{ display: profileImageUrl ? 'none' : 'flex' }}
-              >
+  return (
+    <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow duration-200">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center">
+          <div className="relative">
+            {profileImageUrl ? (
+              <img 
+                src={profileImageUrl} 
+                alt={displayName}
+                className="w-12 h-12 rounded-full object-cover mr-4"
+              />
+            ) : (
+              <div className="bg-gradient-to-br from-blue-100 to-blue-200 rounded-full w-12 h-12 flex items-center justify-center mr-4">
                 <span className="text-blue-600 font-semibold text-lg">
                   {displayName.charAt(0).toUpperCase()}
                 </span>
               </div>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">{displayName}</h3>
-              <p className="text-gray-600 text-sm">{user.email}</p>
-              <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs mt-1">
-                {roleDisplay}
-              </span>
-            </div>
+            )}
           </div>
-          
-          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-            user.connectionStatus === 'connected' ? 'bg-green-100 text-green-800' :
-            user.connectionStatus === 'pending_sent' ? 'bg-yellow-100 text-yellow-800' :
-            user.connectionStatus === 'pending_received' ? 'bg-blue-100 text-blue-800' :
-            'bg-gray-100 text-gray-800'
-          }`}>
-            {user.connectionStatus === 'connected' ? 'Connected' :
-             user.connectionStatus === 'pending_sent' ? 'Request Sent' :
-             user.connectionStatus === 'pending_received' ? 'Request Received' :
-             'Not Connected'}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">{displayName}</h3>
+            <p className="text-gray-600 text-sm">{user.email}</p>
+            <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs mt-1">
+              {roleDisplay}
+            </span>
           </div>
         </div>
         
-        <div className="space-y-2 mb-4">
-          {graduationYear && (
-            <div className="flex items-center text-sm text-gray-600">
-              <span className="font-medium w-20">Batch:</span>
-              <span>Class of {graduationYear}</span>
-            </div>
-          )}
-          {user.alumniProfile?.academicInfo?.branch && (
-            <div className="flex items-center text-sm text-gray-600">
-              <span className="font-medium w-20">Branch:</span>
-              <span className="capitalize">{user.alumniProfile.academicInfo.branch?.replace(/-/g, ' ')}</span>
-            </div>
-          )}
-          {user.studentProfile?.academicInfo?.branch && (
-            <div className="flex items-center text-sm text-gray-600">
-              <span className="font-medium w-20">Branch:</span>
-              <span className="capitalize">{user.studentProfile.academicInfo.branch?.replace(/-/g, ' ')}</span>
-            </div>
-          )}
-          {user.alumniProfile?.careerDetails?.companyName && (
-            <div className="flex items-center text-sm text-gray-600">
-              <span className="font-medium w-20">Company:</span>
-              <span>{user.alumniProfile.careerDetails.companyName}</span>
-            </div>
-          )}
-          {user.alumniProfile?.careerDetails?.jobTitle && (
-            <div className="flex items-center text-sm text-gray-600">
-              <span className="font-medium w-20">Role:</span>
-              <span>{user.alumniProfile.careerDetails.jobTitle}</span>
-            </div>
-          )}
-          {user.alumniProfile?.careerDetails?.yearsOfExperience && (
-            <div className="flex items-center text-sm text-gray-600">
-              <span className="font-medium w-20">Experience:</span>
-              <span>{user.alumniProfile.careerDetails.yearsOfExperience} years</span>
-            </div>
-          )}
-          {user.alumniProfile?.personalInfo?.location && (
-            <div className="flex items-center text-sm text-gray-600">
-              <span className="font-medium w-20">Location:</span>
-              <span>{user.alumniProfile.personalInfo.location}</span>
-            </div>
-          )}
-          {user.studentProfile?.personalInfo?.location && (
-            <div className="flex items-center text-sm text-gray-600">
-              <span className="font-medium w-20">Location:</span>
-              <span>{user.studentProfile.personalInfo.location}</span>
-            </div>
-          )}
-        </div>
-
-        {(user.alumniProfile?.skills || user.studentProfile?.skills) && (
-          <div className="mb-4">
-            <div className="flex flex-wrap gap-1">
-              {(user.alumniProfile?.skills || user.studentProfile?.skills || []).slice(0, 3).map((skill, index) => (
-                <span key={index} className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs">
-                  {skill}
-                </span>
-              ))}
-              {(user.alumniProfile?.skills || user.studentProfile?.skills || []).length > 3 && (
-                <span className="text-gray-500 text-xs">+{(user.alumniProfile?.skills || user.studentProfile?.skills || []).length - 3} more</span>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="flex space-x-2">
-          {getConnectionButton()}
-          <button 
-            onClick={() => onViewProfile(user.id, user.role)}
-            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center"
-          >
-            <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-              <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-            </svg>
-            View Profile
-          </button>
+        <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+          user.connectionStatus === 'connected' ? 'bg-green-100 text-green-800' :
+          user.connectionStatus === 'pending_sent' ? 'bg-yellow-100 text-yellow-800' :
+          user.connectionStatus === 'pending_received' ? 'bg-blue-100 text-blue-800' :
+          'bg-gray-100 text-gray-800'
+        }`}>
+          {user.connectionStatus === 'connected' ? 'Connected' :
+           user.connectionStatus === 'pending_sent' ? 'Request Sent' :
+           user.connectionStatus === 'pending_received' ? 'Request Received' :
+           'Not Connected'}
         </div>
       </div>
-    );
-  };
+      
+      {/* User details */}
+      <div className="space-y-2 mb-4">
+        {graduationYear && (
+          <div className="flex items-center text-sm text-gray-600">
+            <span className="font-medium w-20">Batch:</span>
+            <span>Class of {graduationYear}</span>
+          </div>
+        )}
+        {/* Add other user details */}
+      </div>
 
+      <div className="flex space-x-2">
+        {getConnectionButton()}
+        <button 
+          onClick={() => onViewProfile(user.id, user.role)}
+          className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center"
+        >
+          View Profile
+        </button>
+      </div>
+    </div>
+  );
+};
   // ProfileModal Component
   const ProfileModal = ({ profile, onClose }) => {
     if (!profile) return null;
@@ -2198,290 +2332,6 @@ const getConnectionButton = () => {
     );
   };
 
-  // Enhanced filter function
-  const applyFilters = () => {
-    let filtered = directoryType === 'alumni' ? alumniData : studentData;
-    
-    if (filters.search) {
-      const searchTerm = filters.search.toLowerCase();
-      filtered = filtered.filter(user => 
-        user.name?.toLowerCase().includes(searchTerm) ||
-        user.email?.toLowerCase().includes(searchTerm) ||
-        user.alumniProfile?.careerDetails?.companyName?.toLowerCase().includes(searchTerm) ||
-        user.alumniProfile?.academicInfo?.branch?.toLowerCase().includes(searchTerm) ||
-        user.studentProfile?.academicInfo?.branch?.toLowerCase().includes(searchTerm)
-      );
-    }
-    
-    if (filters.year) {
-      filtered = filtered.filter(user => {
-        const gradYear = getGraduationYear(user);
-        return gradYear?.toString() === filters.year;
-      });
-    }
-    
-    if (filters.branch) {
-      filtered = filtered.filter(user => 
-        user.alumniProfile?.academicInfo?.branch?.toLowerCase().includes(filters.branch.toLowerCase()) ||
-        user.studentProfile?.academicInfo?.branch?.toLowerCase().includes(filters.branch.toLowerCase())
-      );
-    }
-    
-    if (filters.careerStatus) {
-      filtered = filtered.filter(user => 
-        user.alumniProfile?.careerStatus?.toLowerCase() === filters.careerStatus.toLowerCase()
-      );
-    }
-    
-    if (filters.skills) {
-      const skillsTerm = filters.skills.toLowerCase();
-      filtered = filtered.filter(user => 
-        user.alumniProfile?.skills?.some(skill => 
-          skill.toLowerCase().includes(skillsTerm)
-        ) ||
-        user.studentProfile?.skills?.some(skill => 
-          skill.toLowerCase().includes(skillsTerm)
-        )
-      );
-    }
-    
-    if (filters.interests) {
-      const interestsTerm = filters.interests.toLowerCase();
-      filtered = filtered.filter(user => {
-        const interests = user.alumniProfile?.interests || user.studentProfile?.interests || [];
-        return interests.some(interest => 
-          interest.toLowerCase().includes(interestsTerm)
-        );
-      });
-    }
-    
-    if (filters.company) {
-      const companyTerm = filters.company.toLowerCase();
-      filtered = filtered.filter(user => 
-        user.alumniProfile?.careerDetails?.companyName?.toLowerCase().includes(companyTerm)
-      );
-    }
-    
-    if (filters.location) {
-      const locationTerm = filters.location.toLowerCase();
-      filtered = filtered.filter(user => 
-        user.alumniProfile?.personalInfo?.location?.toLowerCase().includes(locationTerm) ||
-        user.alumniProfile?.careerDetails?.companyLocation?.toLowerCase().includes(locationTerm) ||
-        user.studentProfile?.personalInfo?.location?.toLowerCase().includes(locationTerm)
-      );
-    }
-    
-    if (filters.experience) {
-      filtered = filtered.filter(user => {
-        const experience = user.alumniProfile?.careerDetails?.yearsOfExperience;
-        if (!experience) return false;
-        
-        const expNum = parseInt(experience);
-        switch (filters.experience) {
-          case '0-2': return expNum <= 2;
-          case '3-5': return expNum >= 3 && expNum <= 5;
-          case '6-10': return expNum >= 6 && expNum <= 10;
-          case '10+': return expNum > 10;
-          default: return true;
-        }
-      });
-    }
-    
-    if (filters.connectionStatus) {
-      filtered = filtered.filter(user => 
-        user.connectionStatus === filters.connectionStatus
-      );
-    }
-    
-    setFilteredData(filtered);
-  };
-
-  // Send connection request
-  const sendConnectionRequest = async (userId) => {
-    try {
-      if (!userId) {
-        toast.error('Invalid user ID');
-        return;
-      }
-
-      const response = await fetch('http://localhost:5000/api/connection-request', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ recipientId: userId })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        if (data.message.includes('already exists') || 
-            data.message.includes('already sent') ||
-            data.message.includes('pending request')) {
-          updateUserConnectionStatus(userId, 'pending_sent');
-          toast.info(data.message);
-          return;
-        }
-        if (data.message.includes('connected')) {
-          updateUserConnectionStatus(userId, 'connected');
-          toast.info(data.message);
-          return;
-        }
-        if (data.message.includes('previously declined') || 
-            data.message.includes('cancelled')) {
-          updateUserConnectionStatus(userId, 'not_connected');
-          toast.info(data.message);
-          return;
-        }
-        throw new Error(data.message || `Request failed with status ${response.status}`);
-      }
-
-      if (data.success) {
-        updateUserConnectionStatus(userId, 'pending_sent');
-        toast.success('Connection request sent successfully!');
-        
-        if (activeSection === 'connections') {
-          await fetchConnectionRequests();
-        }
-      } else {
-        throw new Error(data.message || 'Request failed');
-      }
-      
-    } catch (error) {
-      console.error('Connection request failed:', error);
-      
-      if (error.message.includes('Invalid recipient ID') || error.message.includes('not found')) {
-        toast.error('Invalid user selected');
-      } else if (error.message.includes('cannot connect to yourself')) {
-        toast.error('Cannot connect to yourself');
-      } else if (error.message.includes('duplicate key')) {
-        toast.error('Connection already exists. Please refresh the page.');
-      } else {
-        toast.error(error.message || 'Failed to send connection request');
-      }
-    }
-  };
-
-  // Helper function to update user connection status
-  const updateUserConnectionStatus = (userId, status) => {
-    const updateStatus = (user) => 
-      user.id === userId 
-        ? { ...user, connectionStatus: status }
-        : user;
-
-    if (directoryType === 'alumni') {
-      setAlumniData(prev => prev.map(updateStatus));
-      setFilteredData(prev => prev.map(updateStatus));
-    } else {
-      setStudentData(prev => prev.map(updateStatus));
-      setFilteredData(prev => prev.map(updateStatus));
-    }
-  };
-
-  // Accept connection request
-  const acceptConnection = async (connectionId, userId) => {
-    try {
-      const response = await fetch('http://localhost:5000/api/accept-connection', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ connectionId })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message);
-      }
-
-      const data = await response.json();
-
-      setPendingRequests(prev => prev.filter(req => req.id !== connectionId));
-      updateUserConnectionStatus(userId, 'connected');
-
-      await fetchMyConnections();
-      
-      toast.success('Connection request accepted!');
-    } catch (error) {
-      console.error('Error accepting connection:', error);
-      toast.error('Failed to accept connection request');
-    }
-  };
-
-  // Decline connection request
-  const declineConnection = async (connectionId, userId) => {
-    try {
-      const response = await fetch('http://localhost:5000/api/decline-connection', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ connectionId })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message);
-      }
-
-      setPendingRequests(prev => prev.filter(req => req.id !== connectionId));
-      updateUserConnectionStatus(userId, 'not_connected');
-
-      toast.info('Connection request declined');
-    } catch (error) {
-      console.error('Error declining connection:', error);
-      toast.error('Failed to decline connection request');
-    }
-  };
-
-  // View profile handler
-  const handleViewProfile = async (userId, userType) => {
-    await fetchUserProfile(userId, userType);
-  };
-
-  // Close profile modal
-  const handleCloseProfile = () => {
-    setSelectedProfile(null);
-  };
-
-  // Filter handlers
-  const handleFilterChange = (filterName, value) => {
-    setFilters(prev => ({ 
-      ...prev, 
-      [filterName]: value,
-      page: 1
-    }));
-  };
-
-  const clearFilters = () => {
-    setFilters({
-      search: '',
-      year: '',
-      branch: '',
-      careerStatus: '',
-      skills: '',
-      interests: '',
-      company: '',
-      location: '',
-      experience: '',
-      connectionStatus: '',
-      page: 1,
-      limit: 12
-    });
-  };
-
-  // Story form submission
-  const handleStorySubmit = async (e) => {
-    e.preventDefault();
-    
-    const formData = new FormData(e.target);
-    const storyData = {
-      title: formData.get('title'),
-      content: formData.get('content'),
-      category: formData.get('category'),
-      tags: formData.get('tags') ? formData.get('tags').split(',').map(tag => tag.trim()) : []
-    };
-
-    const success = await createSuccessStory(storyData);
-    if (success) {
-      e.target.reset();
-    }
-  };
-
   // Render Directory
   const renderDirectory = () => (
     <div className="mb-8">
@@ -3158,47 +3008,40 @@ const getConnectionButton = () => {
     </div>
   );
 
-  // UseEffects
-  // Enhanced useEffect for data synchronization
-useEffect(() => {
+  // FIXED: Enhanced useEffect for data synchronization
+  useEffect(() => {
   const token = localStorage.getItem('token');
   if (!token) {
     toast.error('Please login first');
     return;
   }
 
-  console.log(`🔄 Loading section: ${activeSection}`);
-
   const loadSectionData = async () => {
-    if (activeSection === 'directory') {
-      if (directoryType === 'alumni') {
-        await fetchAlumniDirectory();
-      } else {
-        await fetchStudentDirectory();
-      }
-    } else if (activeSection === 'connections') {
-      try {
-        // Load both connection requests and connections first
-        await Promise.all([fetchConnectionRequests(), fetchMyConnections()]);
-        console.log('✅ Both connection requests and connections loaded');
-        
-        // Then refresh directory data if needed
-        if (alumniData.length > 0 || studentData.length > 0) {
-          await refreshDirectoryData(pendingRequests, myConnections);
+    try {
+      // Always load connection data first for proper status display
+      console.log('📥 Loading connection data first...');
+      
+      await fetchConnectionRequests();
+      await fetchMyConnections();
+      
+      console.log('✅ Connection data loaded, now loading directory data');
+      
+      // Then load directory data with proper connection status
+      if (activeSection === 'directory') {
+        if (directoryType === 'alumni') {
+          await fetchAlumniDirectory();
+        } else {
+          await fetchStudentDirectory();
         }
-      } catch (error) {
-        console.error('❌ Error loading connections data:', error);
       }
-    } else if (activeSection === 'stories') {
-      fetchSuccessStories();
-    } else if (activeSection === 'discussions') {
-      fetchDiscussions();
+    } catch (error) {
+      console.error('❌ Error loading section data:', error);
+      toast.error('Failed to load data');
     }
   };
 
   loadSectionData();
 }, [activeSection, directoryType]);
-
 
   useEffect(() => {
     if (activeSection === 'discussions') {
