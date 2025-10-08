@@ -41,47 +41,40 @@ const handleLogin = async (e) => {
       password,
     });
     
+    console.log('🔍 LOGIN RESPONSE:', response.data);
+    
     // Save token and user data
-    localStorage.setItem('token', response.data.token);
-    localStorage.setItem('user', JSON.stringify(response.data.user));
-    localStorage.setItem('userRole', response.data.user.role);
-    localStorage.setItem('profileCompleted', response.data.user.profileCompleted ? 'true' : 'false');
-    localStorage.setItem('registrationComplete', response.data.user.registrationComplete ? 'true' : 'false');
+    const token = response.data.token;
+    const user = response.data.user;
+    
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('userRole', user.role);
+    localStorage.setItem('profileCompleted', user.profileCompleted);
     
     setMessage('Login successful! Redirecting...');
     
-    // Enhanced redirect logic
-    setTimeout(() => {
-      if (!response.data.user.registrationComplete) {
-        // User exists but hasn't completed alumni profile - redirect to profile completion
-        if (response.data.user.hasAlumniProfile === false) {
-          navigate('/alumni-profile', {
-            state: {
-              userData: response.data.user,
-              verified: true,
-              role: response.data.user.role
-            }
-          });
-        } else {
-          // Should not happen, but fallback
-          navigate('/alumni-profile');
-        }
+    // SIMPLE REDIRECT LOGIC
+    if (user.role === 'student') {
+      if (user.profileCompleted) {
+        console.log('✅ Student with complete profile -> Dashboard');
+        navigate('/student-dashboard');
       } else {
-        // Registration complete - redirect to dashboard based on role
-        if (response.data.user.role === 'student') {
-          navigate('/student-dashboard');
-        } else {
-          navigate('/dashboard');
-        }
+        console.log('❌ Student with incomplete profile -> Profile');
+        navigate('/student-profile');
       }
-    }, 1000);
+    } else {
+      if (user.profileCompleted) {
+        navigate('/dashboard');
+      } else {
+        navigate('/alumni-profile');
+      }
+    }
       
   } catch (error) {
     console.error('Login error:', error);
     
-    // Enhanced error handling
     if (error.response?.status === 404) {
-      // User not found - redirect to signup
       setMessage('Account not found. Redirecting to signup...');
       setTimeout(() => {
         navigate('/register', {
