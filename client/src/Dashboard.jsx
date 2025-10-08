@@ -535,18 +535,6 @@ const AlumniConnectDashboard = () => {
               <NewsAndAchievements />
             </div>
           )}
-          
-          {/* Other Sections (Placeholders) */}
-          {activeSection !== 'dashboard' && activeSection !== 'profile' && (
-            <div className="content-section">
-              <h1 className="text-3xl font-bold text-gray-900 mb-6">
-                {navItems.find(item => item.id === activeSection)?.label}
-              </h1>
-              <div className="bg-white rounded-xl shadow p-8">
-                <p className="text-gray-600">This section is under development. Coming soon!</p>
-              </div>
-            </div>
-          )}
         </main>
       </div>
     </div>
