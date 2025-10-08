@@ -2,10 +2,10 @@ import express from 'express';
 const router = express.Router();
 
 import { getMessages, sendMessage, markAsRead } from '../controllers/messageController.js';
-import { protect } from '../middleware/authMiddleware.js';
+import auth from '../middleware/authMiddleware.js';
 
-router.get('/:mentorshipId', protect, getMessages);
-router.post('/', protect, sendMessage);
-router.put('/:messageId/read', protect, markAsRead);
+router.get('/:mentorshipId', auth, getMessages);
+router.post('/', auth, sendMessage);
+router.put('/:messageId/read', auth, markAsRead);
 
 export default router;

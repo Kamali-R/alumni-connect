@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 import User from "../models/User.js";
 
-// Validate environment variables
+// Validate environment variable
 if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_CALLBACK_URL) {
   console.error("❌ Google OAuth environment variables are missing");
   console.log("Required variables:");
@@ -93,8 +93,7 @@ passport.use(
           profileCompleted: user.profileCompleted
         });
         
-        return done(null, user);
-        
+        return done(null, user);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
       } catch (error) {
         console.error('❌ Google OAuth strategy error:', error);
         return done(error, null);
@@ -118,5 +117,4 @@ passport.deserializeUser(async (id, done) => {
     done(err, null);
   }
 });
-
 export default passport; 

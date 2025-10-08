@@ -7,11 +7,11 @@ import {
   updateRequest,
   getMentorships
 } from '../controllers/mentorshipController.js';
-import { protect } from '../middleware/authMiddleware.js';
+import  auth from '../middleware/authMiddleware.js';
 
-router.post('/request', protect, sendRequest);
-router.get('/requests', protect, getRequests);
-router.put('/requests/:id', protect, updateRequest);
-router.get('/mentorships', protect, getMentorships);
+router.post('/request', auth, sendRequest);
+router.get('/requests', auth, getRequests);
+router.put('/requests/:id', auth, updateRequest);
+router.get('/mentorships', auth , getMentorships);
 
 export default router;
