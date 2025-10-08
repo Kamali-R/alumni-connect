@@ -1,3 +1,4 @@
+// models/Job.js - Updated version
 import mongoose from 'mongoose';
 
 const JobSchema = new mongoose.Schema({
@@ -16,9 +17,9 @@ const JobSchema = new mongoose.Schema({
     required: true
   },
   salary: {
-  type: String,
-  default: ''
-},
+    type: String,
+    default: ''
+  },
   type: {
     type: String,
     required: true,
@@ -58,9 +59,34 @@ const JobSchema = new mongoose.Schema({
   datePosted: {
     type: Date,
     default: Date.now
-  }
+  },
+  // New fields for applications
+  applications: [{
+    studentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    appliedAt: {
+      type: Date,
+      default: Date.now
+    },
+    status: {
+      type: String,
+      enum: ['Applied', 'Under Review', 'Rejected', 'Accepted'],
+      default: 'Applied'
+    },
+    coverLetter: {
+      type: String,
+      default: ''
+    }
+  }]
 }, {
   timestamps: true
 });
+
+// Index for better query performance
+JobSchema.index({ status: 1, createdAt: -1 });
+JobSchema.index({ 'applications.studentId': 1 });
 
 export default mongoose.model('Job', JobSchema);
