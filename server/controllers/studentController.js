@@ -135,23 +135,18 @@ export const saveStudentProfile = async (req, res) => {
       studentProfile: studentProfile._id
     };
     
-    // Update user name if provided in personal info
+    // Update user name if provided
     if (profileData.personalInfo && profileData.personalInfo.fullName) {
       updateData.name = profileData.personalInfo.fullName;
     }
     
-    // Update graduation year if provided
-    if (profileData.academicInfo && profileData.academicInfo.graduationYear) {
-      updateData.graduationYear = profileData.academicInfo.graduationYear;
-    }
-
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       updateData,
       { new: true }
     ).select('-password');
     
-    console.log('Student profile saved successfully');
+    console.log('✅ Student profile saved and user updated');
     
     res.status(200).json({
       message: 'Student profile saved successfully',
