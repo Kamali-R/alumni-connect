@@ -5,7 +5,7 @@ import Event from '../models/Events.js';
 // @access  Public
 export const getEvents = async (req, res) => {
   try {
-  const { eventType, startDate, endDate, location, mode } = req.query;
+  const { eventType, startDate, endDate, location, mode, audience } = req.query;
     
     // Build filter object
     let filter = {};
@@ -38,6 +38,13 @@ export const getEvents = async (req, res) => {
         ];
       }
     }
+    // Filter by audience if provided (apply regardless of mode)
+    if (audience && (audience === 'alumni' || audience === 'student' || audience === 'all')) {
+      // only apply filter when audience is specific (student or alumni). 'all' means no filtering.
+      if (audience === 'student' || audience === 'alumni') {
+        filter.audience = audience;
+      }
+    }
     
     const events = await Event.find(filter)
       .populate('postedBy', 'name email')
@@ -62,6 +69,7 @@ export const getEvents = async (req, res) => {
       // Ensure mode and eventLink defaults
       eventObj.mode = event.mode || 'offline';
       eventObj.eventLink = event.eventLink || '';
+    eventObj.audience = event.audience || 'all';
       
       return eventObj;
     });
@@ -117,6 +125,7 @@ export const getEvent = async (req, res) => {
     eventObj.attendance = event.attendees.length;
     eventObj.mode = event.mode || 'offline';
     eventObj.eventLink = event.eventLink || '';
+  eventObj.audience = event.audience || 'all';
     
     res.status(200).json({
       success: true,
@@ -141,6 +150,25 @@ export const createEvent = async (req, res) => {
     
     // Use req.user.id (from your auth middleware)
     req.body.postedBy = req.user.id;
+    // Normalize audience (accept case-insensitive and common plurals from frontend)
+    if (req.body.audience && typeof req.body.audience === 'string') {
+      const rawAudience = req.body.audience.toLowerCase().trim();
+      if (rawAudience === 'students' || rawAudience === 'student') {
+        req.body.audience = 'student';
+      } else if (rawAudience === 'alumni' || rawAudience === 'alumnus' || rawAudience === 'alum') {
+        req.body.audience = 'alumni';
+      } else if (rawAudience === 'all' || rawAudience === '') {
+        req.body.audience = 'all';
+      } else {
+        // leave as provided (will be validated below)
+        req.body.audience = rawAudience;
+      }
+    }
+
+    // Validate audience (allow 'student', 'alumni', or 'all')
+    if (!req.body.audience || !['alumni', 'student', 'all'].includes(req.body.audience)) {
+      return res.status(400).json({ success: false, message: 'Event audience must be one of "alumni", "student", or "all"' });
+    }
     // Ensure mode and eventLink consistency
     if (req.body.mode === 'online') {
       if (!req.body.eventLink || typeof req.body.eventLink !== 'string' || req.body.eventLink.trim() === '') {
@@ -161,6 +189,7 @@ export const createEvent = async (req, res) => {
     const eventObj = populatedEvent.toObject();
     eventObj.isUserAttending = false; // New event, user not attending yet
     eventObj.attendance = 0; // New event, no attendees
+  eventObj.audience = eventObj.audience || 'all';
     
     console.log('Event created successfully:', populatedEvent);
     
@@ -206,6 +235,24 @@ export const updateEvent = async (req, res) => {
     } else if (req.body.mode === 'offline') {
       // clear link if switching to offline
       req.body.eventLink = req.body.eventLink || '';
+    }
+    // Normalize audience on update (accept case-insensitive and common plurals)
+    if (req.body.audience && typeof req.body.audience === 'string') {
+      const rawAudience = req.body.audience.toLowerCase().trim();
+      if (rawAudience === 'students' || rawAudience === 'student') {
+        req.body.audience = 'student';
+      } else if (rawAudience === 'alumni' || rawAudience === 'alumnus' || rawAudience === 'alum') {
+        req.body.audience = 'alumni';
+      } else if (rawAudience === 'all' || rawAudience === '') {
+        req.body.audience = 'all';
+      } else {
+        req.body.audience = rawAudience;
+      }
+    }
+
+    // Validate audience on update if provided
+    if (req.body.audience && !['alumni', 'student', 'all'].includes(req.body.audience)) {
+      return res.status(400).json({ success: false, message: 'Event audience must be one of "alumni", "student", or "all"' });
     }
     
     event = await Event.findByIdAndUpdate(req.params.id, req.body, {
