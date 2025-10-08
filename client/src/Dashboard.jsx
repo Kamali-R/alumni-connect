@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AlumniProfilePage from './profile';
 import AlumniJobDashboard from './AlumniJobDashboard';
+import NetworkingHub from './NetworkingHub';
 import NewsAndAchievements from './NewsAndAchievements';
 import EventsAndReunions from './EventsAndReunions';
+import Messages from './Messages';
 const AlumniConnectDashboard = () => {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -14,106 +16,149 @@ const AlumniConnectDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [profileCompleted, setProfileCompleted] = useState(false);
   
+  // Function to fetch fresh user data
+  const fetchUserData = async () => {
+    try {
+      const storedToken = localStorage.getItem('token');
+      
+      if (!storedToken) {
+        console.log('No token found, redirecting to login');
+        navigate('/login');
+        return;
+      }
+
+      // Fetch current user data from backend
+      const response = await fetch('http://localhost:5000/user', {
+        headers: {
+          'Authorization': `Bearer ${storedToken}`
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          console.log('Token expired, redirecting to login');
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          navigate('/login');
+          return;
+        }
+        throw new Error('Failed to fetch user data');
+      }
+
+      const userData = await response.json();
+      console.log('Fresh user data fetched:', {
+        name: userData.name,
+        graduationYear: userData.graduationYear,
+        profileCompleted: userData.profileCompleted
+      });
+
+      // Check registration completion based on role
+      let registrationComplete = false;
+      
+      if (userData.role === 'alumni') {
+        registrationComplete = userData.profileCompleted && userData.alumniProfile;
+        
+        // Double-check alumni profile exists
+        if (userData.profileCompleted) {
+          try {
+            const alumniResponse = await fetch('http://localhost:5000/api/alumni/profile', {
+              headers: {
+                'Authorization': `Bearer ${storedToken}`
+              }
+            });
+            
+            if (alumniResponse.status === 404) {
+              registrationComplete = false;
+              console.log('Alumni profile not found, registration incomplete');
+            } else if (alumniResponse.ok) {
+              const alumniData = await alumniResponse.json();
+              registrationComplete = alumniData.status === 'complete';
+              console.log('Alumni profile status:', alumniData.status);
+            }
+          } catch (error) {
+            console.error('Error checking alumni profile:', error);
+            registrationComplete = false;
+          }
+        }
+      } else {
+        registrationComplete = userData.profileCompleted;
+      }
+      
+      console.log('Registration complete status:', registrationComplete);
+      
+      // If alumni hasn't completed registration, redirect to profile setup
+      if (!registrationComplete && userData.role === 'alumni') {
+        console.log('Registration not complete, redirecting to profile setup');
+        navigate('/alumni-profile', {
+          state: {
+            userData: userData,
+            verified: true,
+            role: userData.role
+          }
+        });
+        return;
+      }
+
+      // Update state with fresh data
+      setUserRole(userData.role);
+      setUserName(userData.name || 'User');
+      setProfileCompleted(registrationComplete);
+      
+      
+
+      // Update localStorage with fresh data
+      const updatedUserData = {
+        ...userData,
+        profileCompleted: registrationComplete,
+        registrationComplete: registrationComplete
+      };
+      localStorage.setItem('user', JSON.stringify(updatedUserData));
+      localStorage.setItem('registrationComplete', registrationComplete ? 'true' : 'false');
+
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+      navigate('/login');
+    }
+  };
+
   // Check authentication and fetch user data on component mount
   useEffect(() => {
     const initializeUser = async () => {
-      try {
-        const storedToken = localStorage.getItem('token');
-        
-        if (!storedToken) {
-          console.log('No token found, redirecting to login');
-          navigate('/login');
-          return;
-        }
-
-        // Fetch current user data from backend
-        const response = await fetch('http://localhost:5000/user', {
-          headers: {
-            'Authorization': `Bearer ${storedToken}`
-          }
-        });
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            console.log('Token expired, redirecting to login');
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            navigate('/login');
-            return;
-          }
-          throw new Error('Failed to fetch user data');
-        }
-
-        const userData = response.data;
-        console.log('User data fetched:', userData);
-
-        // Update state with fresh user data
-        setUserRole(userData.role);
-        setUserName(userData.name || 'User');
-        setProfileCompleted(userData.profileCompleted);
-        
-        // Set graduation year if available
-        if (userData.graduationYear) {
-          setUserGraduation(`Class of ${userData.graduationYear}`);
-        } else {
-          setUserGraduation('Alumni');
-        }
-
-        // Update localStorage with fresh data
-        localStorage.setItem('user', JSON.stringify(userData));
-
-        // Check if profile completion is required
-        if (!userData.profileCompleted && userData.role === 'alumni') {
-          console.log('Profile not completed, redirecting to profile setup');
-          navigate('/alumni-profile', {
-            state: {
-              userData: userData,
-              verified: true,
-              role: userData.role
-            }
-          });
-          return;
-        }
-
-        // Redirect students to student dashboard if needed
-        if (userData.role === 'student') {
-          console.log('Student user, should redirect to student dashboard');
-          // navigate('/student-dashboard'); // Uncomment when student dashboard is ready
-        }
-
-      } catch (error) {
-        console.error('Error initializing user:', error);
-        // If error fetching user data, try using stored data as fallback
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-          try {
-            const userData = JSON.parse(storedUser);
-            setUserRole(userData.role);
-            setUserName(userData.name || 'User');
-            setProfileCompleted(userData.profileCompleted || false);
-            
-            if (userData.graduationYear) {
-              setUserGraduation(`Class of ${userData.graduationYear}`);
-            } else {
-              setUserGraduation('Alumni');
-            }
-          } catch (parseError) {
-            console.error('Error parsing stored user data:', parseError);
-            navigate('/login');
-            return;
-          }
-        } else {
-          navigate('/login');
-          return;
-        }
-      } finally {
-        setLoading(false);
-      }
+      setLoading(true);
+      await fetchUserData();
+      setLoading(false);
     };
 
     initializeUser();
   }, [navigate]);
-  
+
+  // NEW: Refresh user data when activeSection changes (especially when returning from profile)
+  useEffect(() => {
+    if (activeSection === 'dashboard') {
+      // Refresh data when returning to dashboard
+      fetchUserData();
+    }
+  }, [activeSection]);
+
+  // NEW: Listen for profile update events
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      console.log('Profile update detected, refreshing user data...');
+      fetchUserData();
+    };
+
+    // Listen for custom event that can be triggered from profile page
+    window.addEventListener('profileUpdated', handleProfileUpdate);
+    
+    // Also listen for storage events (if profile updates localStorage)
+    window.addEventListener('storage', handleProfileUpdate);
+
+    return () => {
+      window.removeEventListener('profileUpdated', handleProfileUpdate);
+      window.removeEventListener('storage', handleProfileUpdate);
+    };
+  }, []);
+
   // Navigation items
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: (
@@ -141,7 +186,6 @@ const AlumniConnectDashboard = () => {
           <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"></path>
         </svg>
       ) },
-      
     { id: 'mentorship', label: 'Mentorship Program', icon: (
         <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
           <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3z"></path>
@@ -511,30 +555,45 @@ const AlumniConnectDashboard = () => {
           {/* Profile Section */}
           {activeSection === 'profile' && (
             <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
-              <AlumniProfilePage />
+              <AlumniProfilePage onProfileUpdate={fetchUserData} />
             </div>
           )}
 
-          {/* Profile Section */}
+          {/* Jobs Section */}
           {activeSection === 'jobs' && (
             <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
               <AlumniJobDashboard />
             </div>
           )}
 
-          {/* Profile Section */}
+          {/* Events Section */}
           {activeSection === 'events' && (
             <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
               <EventsAndReunions />
             </div>
           )}
 
-          {/* Profile Section */}
+          {/* News Section */}
           {activeSection === 'news' && (
             <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
               <NewsAndAchievements />
             </div>
           )}
+          
+          {/* Networking Section */}
+          {activeSection === 'networking' && (
+            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
+              <NetworkingHub/>
+            </div>
+          )}
+          {/* Networking Section */}
+          {activeSection === 'messages' && (
+            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
+              <Messages/>
+            </div>
+          )}
+          
+          
         </main>
       </div>
     </div>

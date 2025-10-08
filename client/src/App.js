@@ -6,12 +6,16 @@ import VerifyOtp from './VerifyOtp';
 import PasswordResetFlow from './password';
 import Login from './Login';
 import AlumniDashboard from './Dashboard';
+import StudentDashboard from './studentdashboard';
 import AlumniConnectProfile from './AlumniProfile';
+import StudentProfile from './studentprofile';
 import EventsAndReunions from "./EventsAndReunions";
 import GoogleAuthHandler from './GoogleAuthHandler';
 import './index.css';
+import Messages from './Messages';
 import AlumniJobDashboard from './AlumniJobDashboard';
 
+// In App.js, ensure the student-profile route is properly defined
 function App() {
   const [userData, setUserData] = useState(null);
   
@@ -34,14 +38,15 @@ function App() {
           <Route path="/VerifyOtp" element={<VerifyOtp userData={userData} />} />
           <Route path="/forgot-password" element={<PasswordResetFlow />} />
           <Route path="/alumni-profile" element={<AlumniConnectProfile />} />
+          <Route path="/student-profile" element={<StudentProfile />} />
           <Route path="/dashboard" element={<AlumniDashboard />} />
-          {/* Add this route for Events */}
+          <Route path="/student-dashboard" element={<StudentDashboard />} />
           <Route path="/events" element={<EventsAndReunions />} />
+          <Route path="/messages" element={<Messages />} />
           <Route path="/auth/google/callback" element={<GoogleAuthHandler />} />
         </Routes>
       </div>
     </Router>
   );
 }
-
 export default App;

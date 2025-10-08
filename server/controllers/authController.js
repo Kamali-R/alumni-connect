@@ -68,6 +68,7 @@ export const sendOtp = async (req, res) => {
 };
 
 // STEP 2: Verify OTP and Create User (but not Alumni profile yet)
+// In your authController.js, update the verifyOtp function to ensure student registration works
 export const verifyOtp = async (req, res) => {
   try {
     const { name, email, password, role, otp, purpose } = req.body;
@@ -140,34 +141,42 @@ export const verifyOtp = async (req, res) => {
 };
 
 // Login function
+// Updated login function in authController.js
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
     
-    // Check if user exists
+    // Check if user exists in Users table
     const user = await User.findOne({ email }).populate('alumniProfile');
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: 'User not found. Please sign up first.' });
     }
     
-    // Compare password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+    // For password-based login, verify password
+    if (user.authProvider === 'local') {
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
     }
+    
+    // Check if user has completed registration (has alumni profile)
+    const hasAlumniProfile = await Alumni.exists({ userId: user._id });
+    const isRegistrationComplete = user.profileCompleted && hasAlumniProfile;
     
     // Update last login
     user.lastLogin = new Date();
     await user.save();
     
-    // Create JWT token with complete user info
+    // Create JWT token
     const token = jwt.sign(
       {
         id: user._id,
         role: user.role,
-        profileCompleted: user.profileCompleted,
+        profileCompleted: isRegistrationComplete,
         email: user.email,
-        name: user.name
+        name: user.name,
+        registrationComplete: isRegistrationComplete
       },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
@@ -181,8 +190,10 @@ export const login = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        profileCompleted: user.profileCompleted,
-        graduationYear: user.graduationYear
+        profileCompleted: isRegistrationComplete,
+        registrationComplete: isRegistrationComplete,
+        graduationYear: user.graduationYear,
+        hasAlumniProfile: hasAlumniProfile
       }
     });
   } catch (error) {
@@ -190,7 +201,6 @@ export const login = async (req, res) => {
     res.status(500).json({ message: 'Server error during login' });
   }
 };
-
 // Password reset functions
 export const verifyResetOtp = async (req, res) => {
   try {
