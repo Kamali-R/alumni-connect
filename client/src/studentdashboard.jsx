@@ -24,7 +24,6 @@ const StudentDashboard = () => {
   const checkAuthenticationAndFetchProfile = async () => {
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
-    const profileCompleted = localStorage.getItem('profileCompleted') === 'true';
     
     if (!storedToken) {
       console.log('No token found, redirecting to login');
@@ -39,8 +38,15 @@ const StudentDashboard = () => {
       setUserRole(userData.role);
       setUserName(userData.name || 'Student User');
       
-      // If profile is not completed, redirect to profile completion
-      if (!profileCompleted && userData.role === 'student') {
+      // If user is an alumni, redirect to alumni dashboard
+      if (userData.role === 'alumni') {
+        navigate('/dashboard');
+        return;
+      }
+      
+      // For students, check if profile is completed
+      if (!userData.profileCompleted) {
+        console.log('Student profile not completed, redirecting to profile');
         navigate('/student-profile', {
           state: {
             userData: userData,
@@ -51,44 +57,36 @@ const StudentDashboard = () => {
         return;
       }
     }
-      
-      // Only redirect if user is an alumni (not student)
-      if (storedUser && JSON.parse(storedUser).role === 'alumni') {
-        navigate('/dashboard');
-        return;
-      }
-
-      // Fetch student profile data
-      try {
-        const response = await fetch('http://localhost:5000/api/student/profile', {
-          headers: {
-            'Authorization': `Bearer ${storedToken}`
-          }
-        });
-
-        if (response.ok) {
-          const profileData = await response.json();
-          setProfileData(profileData);
-          
-          // Set major and graduation from profile data
-          if (profileData.academicInfo) {
-            setUserMajor(profileData.academicInfo.branch || '');
-            setExpectedGraduation(`Class of ${profileData.academicInfo.graduationYear || ''}`);
-          }
-        } else if (response.status === 404) {
-          // Profile not found, redirect to complete profile
-          navigate('/student-profile');
-          return;
+    
+    // If we get here, user is authenticated student with complete profile
+    console.log('✅ Student authenticated with complete profile - loading dashboard');
+    
+    // Fetch student profile data for display
+    try {
+      const response = await fetch('http://localhost:5000/api/student/profile', {
+        headers: {
+          'Authorization': `Bearer ${storedToken}`
         }
-      } catch (error) {
-        console.error('Error fetching student profile:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+      });
 
-    checkAuthenticationAndFetchProfile();
-  }, [navigate]);
+      if (response.ok) {
+        const profileData = await response.json();
+        setProfileData(profileData);
+        
+        if (profileData.academicInfo) {
+          setUserMajor(profileData.academicInfo.branch || '');
+          setExpectedGraduation(`Class of ${profileData.academicInfo.graduationYear || ''}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching student profile:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  checkAuthenticationAndFetchProfile();
+}, [navigate]);
 
   // Navigation items
   const navItems = [

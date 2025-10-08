@@ -147,7 +147,7 @@ export const login = async (req, res) => {
     const { email, password } = req.body;
     
     // Check if user exists in Users table
-    const user = await User.findOne({ email }).populate('alumniProfile');
+    const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ message: 'User not found. Please sign up first.' });
     }
@@ -160,9 +160,19 @@ export const login = async (req, res) => {
       }
     }
     
-    // Check if user has completed registration (has alumni profile)
-    const hasAlumniProfile = await Alumni.exists({ userId: user._id });
-    const isRegistrationComplete = user.profileCompleted && hasAlumniProfile;
+    // PROFILE COMPLETION CHECK - FIXED VERSION
+    let isProfileComplete = false;
+    
+    if (user.role === 'student') {
+      // For students, check if they have a student profile
+      const studentProfile = await Student.findOne({ userId: user._id });
+      isProfileComplete = !!studentProfile && studentProfile.status === 'complete';
+      console.log('🎓 Student profile check:', { exists: !!studentProfile, status: studentProfile?.status, isProfileComplete });
+    } else {
+      // For alumni, check if they have an alumni profile
+      const hasAlumniProfile = await Alumni.exists({ userId: user._id });
+      isProfileComplete = user.profileCompleted && hasAlumniProfile;
+    }
     
     // Update last login
     user.lastLogin = new Date();
@@ -173,10 +183,10 @@ export const login = async (req, res) => {
       {
         id: user._id,
         role: user.role,
-        profileCompleted: isRegistrationComplete,
+        profileCompleted: isProfileComplete,
         email: user.email,
         name: user.name,
-        registrationComplete: isRegistrationComplete
+        registrationComplete: isProfileComplete
       },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
@@ -190,12 +200,12 @@ export const login = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        profileCompleted: isRegistrationComplete,
-        registrationComplete: isRegistrationComplete,
-        graduationYear: user.graduationYear,
-        hasAlumniProfile: hasAlumniProfile
+        profileCompleted: isProfileComplete,
+        registrationComplete: isProfileComplete,
+        graduationYear: user.graduationYear
       }
     });
+    
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Server error during login' });
