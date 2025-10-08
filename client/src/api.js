@@ -82,6 +82,15 @@ export const eventsAPI = {
   getUserEventsById: (userId) => api.get(`/events/user/${userId}`),
 };
 
+// Applications API
+export const applicationsAPI = {
+  apply: (applicationData) => api.post('/applications', applicationData),
+  getMyApplications: () => api.get('/applications/my-applications')
+};
+
+// Cancel application
+export const cancelApplication = (eventId) => api.delete(`/applications/${eventId}`);
+
 // Job API - ADD THIS TO YOUR EXISTING api.js
 // In api.js - Add these to your existing jobAPI
 export const jobAPI = {

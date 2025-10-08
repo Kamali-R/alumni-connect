@@ -29,9 +29,17 @@ const eventSchema = new mongoose.Schema({
     enum: ['online', 'offline'],
     default: 'offline'
   },
+  // Audience of the event: who the event is intended for
   eventLink: {
     type: String,
     default: ''
+  },
+  // Audience for the event: student, alumni, or all
+  audience: {
+    type: String,
+    enum: ['student', 'alumni', 'all'],
+    required: [true, 'Event audience is required'],
+    default: 'all'
   },
   description: {
     type: String,

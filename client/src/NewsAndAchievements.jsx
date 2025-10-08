@@ -300,16 +300,32 @@ Current students can register through the student portal. Limited spots availabl
   };
 
   // Get fallback profile
-  const getFallbackProfile = () => {
-    return {
-      name: "Prithika",
-      initials: "PR",
-      department: "Information Technology",
-      graduationYear: "2018",
-      currentPosition: "Alumni"
-    };
+  // Get fallback profile based on role
+const getFallbackProfile = () => {
+  const storedUser = localStorage.getItem('user');
+  if (storedUser) {
+    const userData = JSON.parse(storedUser);
+    if (userData.role === 'student') {
+      return {
+        name: userData.name || "Student User",
+        initials: getInitials(userData.name || "Student User"),
+        department: "Computer Science",
+        graduationYear: "2024",
+        currentPosition: "Student",
+        role: 'student'
+      };
+    }
+  }
+  
+  return {
+    name: "Alumni User",
+    initials: "AU",
+    department: "Information Technology",
+    graduationYear: "2018",
+    currentPosition: "Alumni",
+    role: 'alumni'
   };
-
+};
   // Format date for display
   const formatDate = (dateString) => {
     const options = { year: 'numeric', month: 'long', day: 'numeric' };
@@ -393,17 +409,25 @@ Current students can register through the student portal. Limited spots availabl
   ];
 
   // Load user profile from profile data
-  const loadUserProfile = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        console.warn('No authentication token found');
-        setUserProfile(getFallbackProfile());
-        return;
-      }
+ // Load user profile based on role
+const loadUserProfile = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('user');
+    
+    if (!token || !storedUser) {
+      console.warn('No authentication token or user data found');
+      setUserProfile(getFallbackProfile());
+      return;
+    }
 
-      // Try multiple endpoints to find user profile
+    const userData = JSON.parse(storedUser);
+    const userRole = userData.role; // 'student' or 'alumni'
+    
+    console.log('Current user role:', userRole);
+
+    if (userRole === 'alumni') {
+      // Load alumni profile
       const endpoints = [
         'http://localhost:5000/api/alumni/profile',
         'http://localhost:5000/api/user/profile',
@@ -425,7 +449,7 @@ Current students can register through the student portal. Limited spots availabl
 
           if (response.ok) {
             const data = await response.json();
-            console.log('Profile response from', endpoint, ':', data);
+            console.log('Alumni profile response from', endpoint, ':', data);
             
             if (data.success && data.data) {
               profileData = data.data;
@@ -438,7 +462,7 @@ Current students can register through the student portal. Limited spots availabl
             }
             
             if (profileData) {
-              console.log('Profile loaded from:', endpoint, profileData);
+              console.log('Alumni profile loaded from:', endpoint, profileData);
               break;
             }
           }
@@ -452,8 +476,8 @@ Current students can register through the student portal. Limited spots availabl
           name: profileData.personalInfo?.fullName || 
                 profileData.fullName ||
                 profileData.name || 
-                "Prithika",
-          initials: getInitials(profileData.personalInfo?.fullName || profileData.fullName || profileData.name || "Prithika"),
+                "Alumni User",
+          initials: getInitials(profileData.personalInfo?.fullName || profileData.fullName || profileData.name || "Alumni User"),
           department: profileData.academicInfo?.branch || 
                      profileData.department || 
                      profileData.branch ||
@@ -467,10 +491,11 @@ Current students can register through the student portal. Limited spots availabl
             profileData.careerStatus, 
             profileData.careerDetails,
             profileData.currentPosition
-          ) || "Alumni"
+          ) || "Alumni",
+          role: 'alumni'
         };
         
-        console.log('Processed user profile:', userProfileData);
+        console.log('Processed alumni profile:', userProfileData);
         setUserProfile(userProfileData);
         localStorage.setItem('userProfile', JSON.stringify(userProfileData));
         
@@ -478,17 +503,88 @@ Current students can register through the student portal. Limited spots availabl
           setCurrentUserId(profileData._id);
         }
       } else {
-        console.warn('No profile data found from any endpoint');
+        console.warn('No alumni profile data found from any endpoint');
         setUserProfile(getFallbackProfile());
       }
-    } catch (error) {
-      console.error('Error loading user profile:', error);
+    } else if (userRole === 'student') {
+      // Load student profile
+      try {
+        const response = await fetch('http://localhost:5000/api/student/profile', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Student profile response:', data);
+          
+          let profileData = data.data || data;
+          
+          const userProfileData = {
+            name: profileData.personalInfo?.fullName || 
+                  profileData.fullName ||
+                  profileData.name || 
+                  userData.name ||
+                  "Student User",
+            initials: getInitials(profileData.personalInfo?.fullName || profileData.fullName || profileData.name || userData.name || "Student User"),
+            department: profileData.academicInfo?.branch || 
+                       profileData.department || 
+                       profileData.branch ||
+                       "Computer Science",
+            graduationYear: profileData.academicInfo?.graduationYear || 
+                           profileData.graduationYear || 
+                           "2024",
+            currentPosition: "Student",
+            role: 'student'
+          };
+          
+          console.log('Processed student profile:', userProfileData);
+          setUserProfile(userProfileData);
+          localStorage.setItem('userProfile', JSON.stringify(userProfileData));
+          
+          if (profileData._id || userData._id) {
+            setCurrentUserId(profileData._id || userData._id);
+          }
+        } else {
+          console.warn('Student profile not found, using basic user data');
+          const userProfileData = {
+            name: userData.name || "Student User",
+            initials: getInitials(userData.name || "Student User"),
+            department: userData.department || "Computer Science",
+            graduationYear: userData.graduationYear || "2024",
+            currentPosition: "Student",
+            role: 'student'
+          };
+          setUserProfile(userProfileData);
+        }
+      } catch (error) {
+        console.error('Error loading student profile:', error);
+        // Use basic user data as fallback
+        const userProfileData = {
+          name: userData.name || "Student User",
+          initials: getInitials(userData.name || "Student User"),
+          department: userData.department || "Computer Science",
+          graduationYear: userData.graduationYear || "2024",
+          currentPosition: "Student",
+          role: 'student'
+        };
+        setUserProfile(userProfileData);
+      }
+    } else {
+      console.warn('Unknown user role:', userRole);
       setUserProfile(getFallbackProfile());
     }
-  };
-
+  } catch (error) {
+    console.error('Error loading user profile:', error);
+    setUserProfile(getFallbackProfile());
+  }
+};
   // Load achievements from API
   // Load achievements from API - UPDATED
+// Load achievements from API - UPDATED
 const loadAchievements = async () => {
   try {
     console.log('🔄 Loading achievements from API...');
@@ -513,11 +609,36 @@ const loadAchievements = async () => {
     
     const congratulated = getCongratulatedAchievements();
     
-    const enhancedAchievements = achievementsData.map(achievement => ({
-      ...achievement,
-      congratulations: achievement.congratulations || { count: 0, users: [] },
-      userCongratulated: congratulated.includes(achievement._id)
-    }));
+    // Enhanced achievements with role preservation
+    const enhancedAchievements = achievementsData.map(achievement => {
+      // Determine role based on userProfile data
+      let userRole = 'alumni'; // Default to alumni
+      
+      if (achievement.userProfile) {
+        // If role is already defined, use it
+        if (achievement.userProfile.role) {
+          userRole = achievement.userProfile.role;
+        } 
+        // Otherwise, determine role based on profile data
+        else if (achievement.userProfile.currentPosition?.toLowerCase().includes('student') || 
+                 achievement.userProfile.currentPosition === 'Student') {
+          userRole = 'student';
+        } else if (achievement.userProfile.graduationYear && 
+                  parseInt(achievement.userProfile.graduationYear) > new Date().getFullYear()) {
+          userRole = 'student'; // Future graduation year indicates student
+        }
+      }
+      
+      return {
+        ...achievement,
+        userProfile: {
+          ...achievement.userProfile,
+          role: userRole // Ensure role is included
+        },
+        congratulations: achievement.congratulations || { count: 0, users: [] },
+        userCongratulated: congratulated.includes(achievement._id)
+      };
+    });
     
     setAchievements(enhancedAchievements);
     return enhancedAchievements;
@@ -532,32 +653,42 @@ const loadAchievements = async () => {
 };
 
   // NEW: Load only current user's achievements
-  const loadMyAchievements = async () => {
-    try {
-      if (!currentUserId && !userProfile) return;
-      
-      console.log('🔄 Loading my achievements for user:', currentUserId);
-      const response = await achievementsAPI.getAll();
-      const allAchievements = response.data.data || response.data || [];
-      
-      // Filter achievements created by current user
-      const myAchievementsData = allAchievements.filter(achievement => 
-        achievement.userId === currentUserId || 
-        achievement.userProfile?.name === userProfile?.name
-      );
-      
-      console.log(`✅ Found ${myAchievementsData.length} achievements by current user`);
-      setMyAchievements(myAchievementsData);
-      
-    } catch (error) {
-      console.error('❌ Error loading my achievements:', error);
-      // Use sample data as fallback
-      const sampleMyAchievements = getSampleAchievements().filter(achievement => 
-        achievement.userProfile?.name === userProfile?.name
-      );
-      setMyAchievements(sampleMyAchievements);
-    }
-  };
+  // NEW: Load only current user's achievements
+const loadMyAchievements = async () => {
+  try {
+    if (!currentUserId && !userProfile) return;
+    
+    console.log('🔄 Loading my achievements for user:', currentUserId);
+    const response = await achievementsAPI.getAll();
+    const allAchievements = response.data.data || response.data || [];
+    
+    // Filter achievements created by current user
+    const myAchievementsData = allAchievements.filter(achievement => 
+      achievement.userId === currentUserId || 
+      achievement.userProfile?.name === userProfile?.name
+    );
+    
+    // Enhance with role information
+    const enhancedMyAchievements = myAchievementsData.map(achievement => ({
+      ...achievement,
+      userProfile: {
+        ...achievement.userProfile,
+        role: userProfile?.role || 'alumni' // Use current user's role
+      }
+    }));
+    
+    console.log(`✅ Found ${enhancedMyAchievements.length} achievements by current user`);
+    setMyAchievements(enhancedMyAchievements);
+    
+  } catch (error) {
+    console.error('❌ Error loading my achievements:', error);
+    // Use sample data as fallback
+    const sampleMyAchievements = getSampleAchievements().filter(achievement => 
+      achievement.userProfile?.name === userProfile?.name
+    );
+    setMyAchievements(sampleMyAchievements);
+  }
+};
 
   const loadNews = async () => {
     try {
@@ -812,12 +943,20 @@ const loadData = async () => {
   };
   
   // Handle opening achievement modal
+// Handle opening achievement modal
 const handleOpenAchievementModal = () => {
   console.log('🎯 Share Achievement button clicked');
   console.log('📊 User Profile:', userProfile);
   
   if (!userProfile) {
     setError('Please complete your profile first to share achievements.');
+    setTimeout(() => setError(null), 3000);
+    return;
+  }
+  
+  // Additional check for student profile completion
+  if (userProfile.role === 'student' && userProfile.name === 'Student User') {
+    setError('Please complete your student profile first to share achievements.');
     setTimeout(() => setError(null), 3000);
     return;
   }
@@ -855,40 +994,53 @@ const handleOpenAchievementModal = () => {
   };
   
   // Handle form submission
-  const handleSubmitAchievement = async (e) => {
-    e.preventDefault();
-    
-    try {
-      const achievementData = {
-        ...newAchievement,
-        userProfile: userProfile
-      };
+  // Handle form submission
+const handleSubmitAchievement = async (e) => {
+  e.preventDefault();
+  
+  try {
+    // Get current user role from localStorage
+    const storedUser = localStorage.getItem('user');
+    const userData = storedUser ? JSON.parse(storedUser) : {};
+    const userRole = userData.role || 'alumni'; // Default to alumni if not found
 
-      const response = await achievementsAPI.create(achievementData);
-      
-      if (response.data.success) {
-        const newAchievementWithCongrats = {
-          ...response.data.data,
-          congratulations: { count: 0, users: [] },
-          userCongratulated: false
-        };
-        
-        // Add to all achievements
-        setAchievements([newAchievementWithCongrats, ...achievements]);
-        
-        // Add to my achievements
-        setMyAchievements([newAchievementWithCongrats, ...myAchievements]);
-        
-        handleCloseAchievementModal();
-        setSuccessMessage("🎉 Achievement added successfully! 🏆");
-        setShowSuccessMessage(true);
-        setTimeout(() => setShowSuccessMessage(false), 3000);
+    const achievementData = {
+      ...newAchievement,
+      userProfile: {
+        ...userProfile,
+        role: userRole // Add role to userProfile
       }
-    } catch (error) {
-      console.error('Error adding achievement:', error);
-      setError('Failed to add achievement. Please try again.');
+    };
+
+    const response = await achievementsAPI.create(achievementData);
+    
+    if (response.data.success) {
+      const newAchievementWithCongrats = {
+        ...response.data.data,
+        congratulations: { count: 0, users: [] },
+        userCongratulated: false,
+        userProfile: {
+          ...response.data.data.userProfile,
+          role: userRole // Ensure role is included
+        }
+      };
+      
+      // Add to all achievements
+      setAchievements([newAchievementWithCongrats, ...achievements]);
+      
+      // Add to my achievements
+      setMyAchievements([newAchievementWithCongrats, ...myAchievements]);
+      
+      handleCloseAchievementModal();
+      setSuccessMessage("🎉 Achievement added successfully! 🏆");
+      setShowSuccessMessage(true);
+      setTimeout(() => setShowSuccessMessage(false), 3000);
     }
-  };
+  } catch (error) {
+    console.error('Error adding achievement:', error);
+    setError('Failed to add achievement. Please try again.');
+  }
+};
 
   // ✅ USE EFFECT HOOKS
   useEffect(() => {
@@ -1067,8 +1219,6 @@ const handleOpenAchievementModal = () => {
           </div>
         )}
         
- {/* NEW: My Achievements Section */}
-{/* All Achievements Section - UPDATED */}
 {/* All Achievements Section */}
 {activeTab === 'achievements' && (
   <div>
@@ -1097,26 +1247,40 @@ const handleOpenAchievementModal = () => {
           <div key={achievement._id} className="achievement-card bg-white rounded-xl shadow-md overflow-hidden border border-gray-100 hover:shadow-lg transition-all duration-300">
             <div className="p-6">
               <div className="flex items-start justify-between mb-4">
-                <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white px-3 py-1 rounded-full text-xs font-medium">
-                  👨‍🎓 Alumni
+                {/* UPDATED BADGE SECTION */}
+                <div className={`bg-gradient-to-r ${
+                  achievement.userProfile?.role === 'student' 
+                    ? 'from-green-600 to-green-800' 
+                    : 'from-blue-600 to-blue-800'
+                } text-white px-3 py-1 rounded-full text-xs font-medium`}>
+                  {achievement.userProfile?.role === 'student' ? '🎓 Student' : '👨‍🎓 Alumni'}
                 </div>
                 <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
                   {getTimeDisplay(achievement.createdAt, achievement.achievementDate)}
                 </span>
               </div>
               
-              {/* User profile display */}
+              {/* UPDATED User profile display */}
               <div className="flex items-center mb-4">
-                <div className={`w-12 h-12 bg-gradient-to-r ${achievement.avatarColor || 'from-blue-500 to-purple-500'} rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg`}>
+                <div className={`w-12 h-12 bg-gradient-to-r ${
+                  achievement.userProfile?.role === 'student' 
+                    ? 'from-green-500 to-teal-500' 
+                    : (achievement.avatarColor || 'from-blue-500 to-purple-500')
+                } rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg`}>
                   {achievement.userProfile?.initials || "UN"}
                 </div>
                 <div className="ml-3">
                   <h4 className="font-bold text-gray-900 text-sm">
-                    {achievement.userProfile?.name || "Alumni Member"}
+                    {achievement.userProfile?.name || (achievement.userProfile?.role === 'student' ? "Student" : "Alumni")}
                   </h4>
                   <p className="text-xs text-gray-500">
-                    Class of {achievement.userProfile?.graduationYear || '2020'} • {achievement.userProfile?.currentPosition || 'Alumni'}
+                    Class of {achievement.userProfile?.graduationYear || '2020'} • {achievement.userProfile?.currentPosition || (achievement.userProfile?.role === 'student' ? 'Student' : 'Alumni')}
                   </p>
+                  {achievement.userProfile?.role && (
+                    <p className="text-xs text-blue-600 mt-1">
+                      {achievement.userProfile.role === 'student' ? '🎓 Current Student' : '👨‍🎓 Alumni'}
+                    </p>
+                  )}
                 </div>
               </div>
               
@@ -1179,6 +1343,7 @@ const handleOpenAchievementModal = () => {
   </div>
 )}
 {/* NEW: My Achievements Section */}
+{/* NEW: My Achievements Section */}
 {activeTab === 'my-achievements' && (
   <div>
     {/* Header Section */}
@@ -1193,7 +1358,6 @@ const handleOpenAchievementModal = () => {
       </div>
     </div>
 
-    {/* Rest of your My Achievements JSX remains the same */}
     {myAchievements.length === 0 ? (
       <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-200">
         <div className="text-6xl mb-4">📋</div>
@@ -1234,40 +1398,52 @@ const handleOpenAchievementModal = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {myAchievements.map((achievement) => (
           <div key={achievement._id} className="achievement-card bg-white rounded-xl shadow-md overflow-hidden border border-gray-100 hover:shadow-lg transition-all duration-300">
+            {/* UPDATED Edit/Delete Actions */}
             {/* Edit/Delete Actions */}
-            <div className="flex justify-between items-start mb-4 p-6 pb-0">
-              <div className="bg-gradient-to-r from-purple-600 to-purple-800 text-white px-3 py-1 rounded-full text-xs font-medium">
-                👑 My Achievement
-              </div>
-              <div className="flex space-x-2">
-                <button 
-                  onClick={() => handleEditAchievement(achievement)}
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors shadow-md flex items-center"
-                >
-                  <span className="mr-1">✏️</span>
-                  Edit
-                </button>
-                <button 
-                  onClick={() => handleDeleteAchievement(achievement._id)}
-                  className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors shadow-md flex items-center"
-                >
-                  <span className="mr-1">🗑️</span>
-                  Delete
-                </button>
-              </div>
-            </div>
+<div className="flex justify-between items-start mb-4 p-6 pb-0">
+  <div className="bg-gradient-to-r from-purple-600 to-purple-800 text-white px-3 py-1 rounded-full text-xs font-medium">
+    👑 My Achievement
+  </div>
+  <div className="flex space-x-2">
+    <button 
+      onClick={() => handleEditAchievement(achievement)}
+      className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors shadow-md flex items-center"
+    >
+      <span className="mr-1">✏️</span>
+      Edit
+    </button>
+    <button 
+      onClick={() => handleDeleteAchievement(achievement._id)}
+      className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors shadow-md flex items-center"
+    >
+      <span className="mr-1">🗑️</span>
+      Delete
+    </button>
+  </div>
+</div>
             
             <div className="p-6 pt-4">
-              {/* User profile display */}
+              {/* UPDATED User profile display */}
               <div className="flex items-center mb-4">
-                <div className={`w-12 h-12 bg-gradient-to-r ${achievement.avatarColor} rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg`}>
+                <div className={`w-12 h-12 bg-gradient-to-r ${
+                  achievement.userProfile?.role === 'student' 
+                    ? 'from-green-500 to-teal-500' 
+                    : (achievement.avatarColor || 'from-blue-500 to-purple-500')
+                } rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg`}>
                   {achievement.userProfile?.initials || "UN"}
                 </div>
                 <div className="ml-3">
-                  <h4 className="font-bold text-gray-900 text-sm">{achievement.userProfile?.name || "User Name"}</h4>
+                  <h4 className="font-bold text-gray-900 text-sm">
+                    {achievement.userProfile?.name || (achievement.userProfile?.role === 'student' ? "Student" : "Alumni")}
+                  </h4>
                   <p className="text-xs text-gray-500">
-                    Class of {achievement.userProfile?.graduationYear} • {achievement.userProfile?.currentPosition}
+                    Class of {achievement.userProfile?.graduationYear || '2020'} • {achievement.userProfile?.currentPosition || (achievement.userProfile?.role === 'student' ? 'Student' : 'Alumni')}
                   </p>
+                  {achievement.userProfile?.role && (
+                    <p className="text-xs text-blue-600 mt-1">
+                      {achievement.userProfile.role === 'student' ? '🎓 Current Student' : '👨‍🎓 Alumni'}
+                    </p>
+                  )}
                 </div>
               </div>
               

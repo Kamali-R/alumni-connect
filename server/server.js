@@ -22,6 +22,7 @@ import networkingRoutes from './routes/networkingRoutes.js';
 import successStoryRoutes from './routes/successStoryRoutes.js';
 import discussionRoutes from './routes/discussionRoutes.js';
 import eventRoutes from './routes/eventRoutes.js';
+import applicationRoutes from './routes/applicationRoutes.js';
 import newsAndAchievementsRoutes from './routes/NewsAndAchievementsRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 import studentRoutes from './routes/studentRoutes.js';
@@ -101,6 +102,7 @@ app.use('/api', successStoryRoutes);
 app.use('/api', discussionRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api', newsAndAchievementsRoutes);
+app.use('/api/applications', applicationRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/student', studentRoutes);
 
