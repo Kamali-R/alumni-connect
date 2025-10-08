@@ -39,6 +39,25 @@ const connectionSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// In your Connection model, add better population handling
+connectionSchema.pre('find', function() {
+  this.populate({
+    path: 'requesterId',
+    select: 'name email graduationYear role',
+    populate: {
+      path: 'alumniProfile',
+      model: 'Alumni'
+    }
+  }).populate({
+    path: 'recipientId',
+    select: 'name email graduationYear role', 
+    populate: {
+      path: 'alumniProfile',
+      model: 'Alumni'
+    }
+  });
+});
+
 // Enhanced pre-save validation
 connectionSchema.pre('save', function(next) {
   // Validate ObjectIds

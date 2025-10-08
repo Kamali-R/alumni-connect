@@ -150,6 +150,161 @@ export const sendConnectionRequest = async (req, res) => {
   }
 };
 
+// Get student directory
+export const getStudentDirectory = async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const { 
+      page = 1, 
+      limit = 12, 
+      search = '', 
+      graduationYear = '', 
+      branch = '' 
+    } = req.query;
+
+    console.log('📋 Fetching student directory with filters:', {
+      page, limit, search, graduationYear, branch
+    });
+
+    // Get users with student profiles using proper aggregation
+    let matchStage = {
+      role: 'student',
+      _id: { $ne: new mongoose.Types.ObjectId(currentUserId) }
+    };
+
+    if (search && search.trim() !== '') {
+      const searchRegex = { $regex: search.trim(), $options: 'i' };
+      matchStage.$or = [
+        { name: searchRegex },
+        { email: searchRegex }
+      ];
+    }
+
+    // Build aggregation pipeline
+    const pipeline = [
+      { $match: matchStage },
+      {
+        $lookup: {
+          from: 'students', // Collection name for Student model
+          localField: '_id',
+          foreignField: 'userId',
+          as: 'studentProfile'
+        }
+      },
+      {
+        $unwind: {
+          path: '$studentProfile',
+          preserveNullAndEmptyArrays: false // Only include users with student profiles
+        }
+      }
+    ];
+
+    // Add graduation year filter if specified
+    if (graduationYear && graduationYear !== '') {
+      pipeline.push({
+        $match: {
+          $or: [
+            { graduationYear: parseInt(graduationYear) },
+            { 'studentProfile.academicInfo.graduationYear': parseInt(graduationYear) }
+          ]
+        }
+      });
+    }
+
+    // Add branch filter if specified
+    if (branch && branch.trim() !== '') {
+      pipeline.push({
+        $match: {
+          'studentProfile.academicInfo.branch': { 
+            $regex: branch.trim(), 
+            $options: 'i' 
+          }
+        }
+      });
+    }
+
+    // Add pagination
+    pipeline.push(
+      { $sort: { name: 1 } },
+      { $skip: (parseInt(page) - 1) * parseInt(limit) },
+      { $limit: parseInt(limit) }
+    );
+
+    // Execute aggregation
+    const users = await User.aggregate(pipeline);
+    
+    // Get total count for pagination
+    const countPipeline = [...pipeline];
+    countPipeline.pop(); // Remove limit
+    countPipeline.pop(); // Remove skip
+    countPipeline.pop(); // Remove sort
+    countPipeline.push({ $count: "total" });
+    
+    const countResult = await User.aggregate(countPipeline);
+    const total = countResult.length > 0 ? countResult[0].total : 0;
+
+    // Get connection status for each user
+    const studentsWithConnections = await Promise.all(
+      users.map(async (user) => {
+        const connection = await Connection.findConnection(currentUserId, user._id);
+        
+        let connectionStatus = 'not_connected';
+        if (connection) {
+          if (connection.status === 'accepted') {
+            connectionStatus = 'connected';
+          } else if (connection.status === 'pending') {
+            connectionStatus = connection.requesterId.toString() === currentUserId 
+              ? 'pending_sent' 
+              : 'pending_received';
+          }
+        }
+
+        // Enhanced graduation year resolution
+        const graduationYear = user.studentProfile?.academicInfo?.graduationYear || 
+                              user.graduationYear || 
+                              null;
+
+        // Enhanced profile image URL handling
+        const profileImageUrl = user.studentProfile?.profileImage 
+          ? `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${user.studentProfile.profileImage}`
+          : null;
+
+        return {
+          id: user._id,
+          userId: user._id,
+          name: user.name,
+          email: user.email,
+          role: 'student', // Explicitly set since we filtered for students
+          graduationYear: graduationYear,
+          studentProfile: user.studentProfile,
+          profileImageUrl: profileImageUrl,
+          connectionStatus,
+          branch: user.studentProfile?.academicInfo?.branch,
+          currentYear: user.studentProfile?.academicInfo?.currentYear
+        };
+      })
+    );
+
+    console.log(`📊 Found ${studentsWithConnections.length} student profiles`);
+
+    res.status(200).json({
+      success: true,
+      students: studentsWithConnections,
+      totalPages: Math.ceil(total / parseInt(limit)),
+      currentPage: parseInt(page),
+      total,
+      hasMore: (parseInt(page) - 1) * parseInt(limit) + studentsWithConnections.length < total
+    });
+
+  } catch (error) {
+    console.error('❌ Get student directory error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error fetching student directory',
+      error: error.message 
+    });
+  }
+};
 // Get connection requests
 // Fixed getConnectionRequests function in networkingController.js
 export const getConnectionRequests = async (req, res) => {
@@ -547,6 +702,7 @@ export const getAlumniDirectory = async (req, res) => {
 };
 // Get my connections
 // Enhanced getMyConnections function in networkingController.js
+// Enhanced getMyConnections function in networkingController.js
 export const getMyConnections = async (req, res) => {
   try {
     const currentUserId = req.user.id;
@@ -565,7 +721,8 @@ export const getMyConnections = async (req, res) => {
       select: 'name email graduationYear role',
       populate: {
         path: 'alumniProfile',
-        select: 'profileImage personalInfo academicInfo'
+        select: 'profileImage personalInfo academicInfo',
+        model: 'Alumni'
       }
     })
     .populate({
@@ -573,7 +730,8 @@ export const getMyConnections = async (req, res) => {
       select: 'name email graduationYear role',
       populate: {
         path: 'alumniProfile',
-        select: 'profileImage personalInfo academicInfo'
+        select: 'profileImage personalInfo academicInfo',
+        model: 'Alumni'
       }
     })
     .sort({ respondedAt: -1 });
@@ -582,10 +740,22 @@ export const getMyConnections = async (req, res) => {
 
     // Format the response to show the other person in the connection
     const formattedConnections = connections.map(connection => {
+      // Safely check if populated data exists
+      if (!connection.requesterId || !connection.recipientId) {
+        console.warn('⚠️ Connection has null user data:', connection._id);
+        return null;
+      }
+
       const isRequester = connection.requesterId._id.toString() === currentUserId;
       const otherPerson = isRequester ? connection.recipientId : connection.requesterId;
 
-      // FIXED: Enhanced graduation year resolution
+      // Skip if otherPerson is null
+      if (!otherPerson) {
+        console.warn('⚠️ Other person is null in connection:', connection._id);
+        return null;
+      }
+
+      // Enhanced graduation year resolution
       const graduationYear = otherPerson.alumniProfile?.academicInfo?.graduationYear ||
                             otherPerson.graduationYear ||
                             null;
@@ -599,10 +769,10 @@ export const getMyConnections = async (req, res) => {
         id: connection._id,
         person: {
           id: otherPerson._id,
-          name: otherPerson.name,
-          email: otherPerson.email,
-          role: otherPerson.role || 'alumni', // FIXED: Properly set role
-          graduationYear: graduationYear, // FIXED: Use resolved graduation year
+          name: otherPerson.name || 'Unknown User',
+          email: otherPerson.email || 'No email',
+          role: otherPerson.role || 'alumni',
+          graduationYear: graduationYear,
           profileImageUrl: profileImageUrl,
           profileImage: otherPerson.alumniProfile?.profileImage,
           // Add alumni profile reference for compatibility
@@ -612,7 +782,9 @@ export const getMyConnections = async (req, res) => {
         status: connection.status,
         initiatedByMe: isRequester
       };
-    });
+    }).filter(connection => connection !== null); // Remove null entries
+
+    console.log(`✅ Returning ${formattedConnections.length} valid connections`);
 
     res.status(200).json({
       success: true,

@@ -20,9 +20,8 @@ import {
   FaTrash
 } from 'react-icons/fa';
 
-
 // Enhanced profile image URL function with better error handling
-const getProfileImageUrl = (user, alumniProfile = null) => {
+const getProfileImageUrl = (user, alumniProfile = null, studentProfile = null) => {
   if (!user) return null;
   
   const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
@@ -32,7 +31,7 @@ const getProfileImageUrl = (user, alumniProfile = null) => {
     return user.profileImageUrl;
   }
   
-  // Priority 2: Profile image from alumni profile (passed as parameter or from user)
+  // Priority 2: Profile image from alumni profile
   const profileImageFromAlumni = alumniProfile?.profileImage || user?.alumniProfile?.profileImage;
   if (profileImageFromAlumni) {
     if (profileImageFromAlumni.startsWith('http')) {
@@ -42,7 +41,17 @@ const getProfileImageUrl = (user, alumniProfile = null) => {
     }
   }
   
-  // Priority 3: Profile image from user data (direct field)
+  // Priority 3: Profile image from student profile
+  const profileImageFromStudent = studentProfile?.profileImage || user?.studentProfile?.profileImage;
+  if (profileImageFromStudent) {
+    if (profileImageFromStudent.startsWith('http')) {
+      return profileImageFromStudent;
+    } else {
+      return `${backendUrl}/uploads/${profileImageFromStudent}`;
+    }
+  }
+  
+  // Priority 4: Profile image from user data (direct field)
   if (user?.profileImage) {
     if (user.profileImage.startsWith('http')) {
       return user.profileImage;
@@ -59,16 +68,16 @@ const getDisplayName = (user) => {
   return user?.name || user?.personalInfo?.fullName || 'Unknown User';
 };
 
-
-// FIXED: Enhanced graduation year detection
+// Enhanced graduation year detection
 const getGraduationYear = (user) => {
   console.log('Getting graduation year for user:', user?.name, {
     userGraduationYear: user?.graduationYear,
     fromAlumniProfile: user?.alumniProfile?.academicInfo?.graduationYear,
+    fromStudentProfile: user?.studentProfile?.academicInfo?.graduationYear,
     fromAcademicInfo: user?.academicInfo?.graduationYear
   });
 
-  // Priority 1: User model graduationYear (most recent from profile updates)
+  // Priority 1: User model graduationYear
   if (user?.graduationYear) {
     return user.graduationYear;
   }
@@ -78,7 +87,12 @@ const getGraduationYear = (user) => {
     return user.alumniProfile.academicInfo.graduationYear;
   }
   
-  // Priority 3: From academicInfo directly (fallback)
+  // Priority 3: From academicInfo in studentProfile
+  if (user?.studentProfile?.academicInfo?.graduationYear) {
+    return user.studentProfile.academicInfo.graduationYear;
+  }
+  
+  // Priority 4: From academicInfo directly
   if (user?.academicInfo?.graduationYear) {
     return user.academicInfo.graduationYear;
   }
@@ -90,29 +104,34 @@ const getGraduationYear = (user) => {
 const getRoleDisplay = (user) => {
   console.log('Getting role for user:', user.name, {
     role: user.role,
-    hasAlumniProfile: !!user.alumniProfile
+    hasAlumniProfile: !!user.alumniProfile,
+    hasStudentProfile: !!user.studentProfile
   });
 
-  // Priority 1: Use explicit role field if it's 'alumni'
+  // Priority 1: Use explicit role field
   if (user.role === 'alumni') {
     return 'Alumni';
   }
   
-  // Priority 2: Check if user has alumniProfile (indicates they're alumni)
-  if (user.alumniProfile) {
-    return 'Alumni';
-  }
-  
-  // Priority 3: Default based on role field
   if (user.role === 'student') {
     return 'Student';
   }
   
-  // Fallback: Default to Alumni if we're in the networking hub
-  return 'Alumni';
+  // Priority 2: Check if user has alumniProfile
+  if (user.alumniProfile) {
+    return 'Alumni';
+  }
+  
+  // Priority 3: Check if user has studentProfile
+  if (user.studentProfile) {
+    return 'Student';
+  }
+  
+  // Fallback: Default based on context
+  return 'User';
 };
 
-// Helper function to get current user ID - MOVED TO HIGHER SCOPE
+// Helper function to get current user ID
 const getCurrentUserId = () => {
   try {
     const token = localStorage.getItem('token');
@@ -126,7 +145,7 @@ const getCurrentUserId = () => {
   return null;
 };
 
-// Memoized DiscussionCard component to prevent unnecessary re-renders
+// Memoized DiscussionCard component
 const DiscussionCard = memo(({ discussion, onOpen, onLike }) => {
   const categoryNames = {
     'career': 'Career Advice',
@@ -234,7 +253,7 @@ const DiscussionCard = memo(({ discussion, onOpen, onLike }) => {
   );
 });
 
-// Memoized DiscussionDetail component to prevent unnecessary re-renders
+// Memoized DiscussionDetail component
 const DiscussionDetail = memo(({ discussionData, onBack, onLike, onReplyLike, onAddReply }) => {
   const discussion = discussionData.discussion;
   const replies = discussionData.replies || [];
@@ -255,12 +274,10 @@ const DiscussionDetail = memo(({ discussionData, onBack, onLike, onReplyLike, on
   const graduationYear = getGraduationYear(author);
   const isCurrentUser = author._id === getCurrentUserId();
 
-  // FIXED: Use useState for reply content to maintain focus
   const [replyContent, setReplyContent] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
   const textareaRef = useRef(null);
 
-  // FIXED: Focus textarea when replyingTo changes
   useEffect(() => {
     if (replyingTo && textareaRef.current) {
       textareaRef.current.focus();
@@ -362,7 +379,6 @@ const DiscussionDetail = memo(({ discussionData, onBack, onLike, onReplyLike, on
             </div>
           </div>
           
-          {/* Nested replies */}
           {renderReplies(repliesList, reply._id, depth + 1)}
         </div>
       );
@@ -456,7 +472,6 @@ const DiscussionDetail = memo(({ discussionData, onBack, onLike, onReplyLike, on
         </div>
       </div>
       
-      {/* Replies Section */}
       <div className="mb-8">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
           Replies ({replies.length})
@@ -470,7 +485,6 @@ const DiscussionDetail = memo(({ discussionData, onBack, onLike, onReplyLike, on
         </div>
       </div>
       
-      {/* Reply Form - FIXED: Moved to the end and proper textarea handling */}
       <div className="border-t pt-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
           {replyingTo ? 'Reply to Comment' : 'Add a Reply'}
@@ -525,8 +539,10 @@ const DiscussionDetail = memo(({ discussionData, onBack, onLike, onReplyLike, on
 
 const NetworkingHub = () => {
   const [activeSection, setActiveSection] = useState('directory');
+  const [directoryType, setDirectoryType] = useState('alumni'); // 'alumni' or 'students'
   const [alumniData, setAlumniData] = useState([]);
-  const [filteredAlumni, setFilteredAlumni] = useState([]);
+  const [studentData, setStudentData] = useState([]);
+  const [filteredData, setFilteredData] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [myConnections, setMyConnections] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -582,7 +598,7 @@ const NetworkingHub = () => {
 
   // Navigation items
   const navItems = [
-    { id: 'directory', label: 'Alumni Directory', icon: '👥' },
+    { id: 'directory', label: 'Directory', icon: '👥' },
     { id: 'connections', label: 'My Connections', icon: '🔗' },
     { id: 'stories', label: 'Success Stories', icon: '🌟' },
     { id: 'discussions', label: 'Discussion Forum', icon: '💬' }
@@ -597,153 +613,298 @@ const NetworkingHub = () => {
     };
   };
 
-  // FIXED: Enhanced alumni data processing
-  const processAlumniData = (alumniArray) => {
-  return alumniArray.map(alumni => {
-    const graduationYear = getGraduationYear(alumni);
-    const role = getRoleDisplay(alumni);
-    
-    console.log('Processing alumni:', alumni.name, {
-      originalRole: alumni.role,
-      processedRole: role,
-      originalGradYear: alumni.graduationYear,
-      processedGradYear: graduationYear
-    });
-    
-    return {
-      ...alumni,
-      profileImageUrl: getProfileImageUrl(alumni, alumni.alumniProfile),
-      role: role,
-      graduationYear: graduationYear
-    };
+  // Enhanced getConnectionStatus function
+const getConnectionStatus = (user, pendingRequests, myConnections) => {
+  const currentUserId = getCurrentUserId();
+  if (!currentUserId || !user || !user.id) return 'not_connected';
+  
+  // Check if already connected
+  const isConnected = myConnections.some(conn => {
+    const connectionUserId = conn.person?.id || conn.person?._id;
+    return connectionUserId === user.id || connectionUserId === user._id;
   });
+  if (isConnected) return 'connected';
+
+  // Check if request sent by current user
+  const isRequestSent = pendingRequests.some(req => {
+    const requesterId = req.person?.id || req.person?._id;
+    return requesterId === currentUserId && req.recipientId === user.id;
+  });
+  if (isRequestSent) return 'pending_sent';
+
+  // Check if request received from this user
+  const isRequestReceived = pendingRequests.some(req => {
+    const recipientId = req.person?.id || req.person?._id;
+    return recipientId === currentUserId && req.requesterId === user.id;
+  });
+  if (isRequestReceived) return 'pending_received';
+
+  return 'not_connected';
 };
 
-  // Fetch alumni directory from backend
-  const fetchAlumniDirectory = async () => {
-    setLoading(true);
-    try {
-      const queryParams = new URLSearchParams({
-        page: filters.page.toString(),
-        limit: filters.limit.toString(),
-        ...(filters.search && { search: filters.search }),
-        ...(filters.year && { graduationYear: filters.year }),
-        ...(filters.branch && { branch: filters.branch })
-      });
-
-      const response = await fetch(`http://localhost:5000/api/alumni-directory?${queryParams}`, {
-        method: 'GET',
-        headers: getAuthHeaders()
-      });
-
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
-      }
-
-      const data = await response.json();
+  // Enhanced data processing
+  const processUserData = (userArray, pendingRequests = [], myConnections = []) => {
+    return userArray.map(user => {
+      const graduationYear = getGraduationYear(user);
+      const role = getRoleDisplay(user);
+      const connectionStatus = getConnectionStatus(user, pendingRequests, myConnections);
       
-      if (data.success) {
-        // FIXED: Use enhanced processing function
-        const processedAlumni = processAlumniData(data.alumni);
-        setAlumniData(processedAlumni);
-        setFilteredAlumni(processedAlumni); // Initialize filtered data
-      } else {
-        throw new Error(data.message || 'Failed to load alumni directory');
-      }
-    } catch (error) {
-      console.error('Error fetching alumni directory:', error);
-      toast.error('Failed to load alumni directory.');
-    } finally {
-      setLoading(false);
-    }
+      console.log('Processing user:', user.name, {
+        originalRole: user.role,
+        processedRole: role,
+        originalGradYear: user.graduationYear,
+        processedGradYear: graduationYear,
+        connectionStatus: connectionStatus
+      });
+      
+      return {
+        ...user,
+        profileImageUrl: getProfileImageUrl(user, user.alumniProfile, user.studentProfile),
+        role: role,
+        graduationYear: graduationYear,
+        connectionStatus: connectionStatus
+      };
+    });
   };
 
-  // Fetch alumni profile for viewing
-  const fetchAlumniProfile = async (userId) => {
+  // Fetch alumni directory from backend
+  // Enhanced fetchAlumniDirectory
+const fetchAlumniDirectory = async () => {
+  setLoading(true);
+  try {
+    const queryParams = new URLSearchParams({
+      page: filters.page.toString(),
+      limit: filters.limit.toString(),
+      ...(filters.search && { search: filters.search }),
+      ...(filters.year && { graduationYear: filters.year }),
+      ...(filters.branch && { branch: filters.branch })
+    });
+
+    const response = await fetch(`http://localhost:5000/api/alumni-directory?${queryParams}`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (data.success) {
+      // Process with current connection data
+      const processedAlumni = processUserData(data.alumni, pendingRequests, myConnections);
+      setAlumniData(processedAlumni);
+      if (directoryType === 'alumni') {
+        setFilteredData(processedAlumni);
+      }
+      
+      console.log('✅ Alumni directory loaded with connections:', {
+        total: processedAlumni.length,
+        connected: processedAlumni.filter(a => a.connectionStatus === 'connected').length,
+        pending: processedAlumni.filter(a => a.connectionStatus.includes('pending')).length
+      });
+    } else {
+      throw new Error(data.message || 'Failed to load alumni directory');
+    }
+  } catch (error) {
+    console.error('Error fetching alumni directory:', error);
+    toast.error('Failed to load alumni directory.');
+  } finally {
+    setLoading(false);
+  }
+};
+
+// Enhanced fetchStudentDirectory
+const fetchStudentDirectory = async () => {
+  setLoading(true);
+  try {
+    const queryParams = new URLSearchParams({
+      page: filters.page.toString(),
+      limit: filters.limit.toString(),
+      ...(filters.search && { search: filters.search }),
+      ...(filters.year && { graduationYear: filters.year }),
+      ...(filters.branch && { branch: filters.branch })
+    });
+
+    const response = await fetch(`http://localhost:5000/api/student-directory?${queryParams}`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (data.success) {
+      // Process with current connection data
+      const processedStudents = processUserData(data.students, pendingRequests, myConnections);
+      setStudentData(processedStudents);
+      if (directoryType === 'students') {
+        setFilteredData(processedStudents);
+      }
+      
+      console.log('✅ Student directory loaded with connections:', {
+        total: processedStudents.length,
+        connected: processedStudents.filter(s => s.connectionStatus === 'connected').length,
+        pending: processedStudents.filter(s => s.connectionStatus.includes('pending')).length
+      });
+    } else {
+      throw new Error(data.message || 'Failed to load student directory');
+    }
+  } catch (error) {
+    console.error('Error fetching student directory:', error);
+    toast.error('Failed to load student directory.');
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // Fetch user profile for viewing
+  const fetchUserProfile = async (userId, userType) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/alumni/profile/${userId}`, {
+      const endpoint = userType === 'alumni' 
+        ? `http://localhost:5000/api/alumni/profile/${userId}`
+        : `http://localhost:5000/api/student/profile/${userId}`;
+
+      const response = await fetch(endpoint, {
         method: 'GET',
         headers: getAuthHeaders()
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch alumni profile');
+        throw new Error('Failed to fetch user profile');
       }
 
       const profileData = await response.json();
-      setSelectedProfile(profileData);
+      setSelectedProfile({...profileData, userType});
     } catch (error) {
-      console.error('Error fetching alumni profile:', error);
-      toast.error('Failed to load alumni profile');
+      console.error('Error fetching user profile:', error);
+      toast.error('Failed to load user profile');
     }
   };
 
-  // Fetch connection requests
-  const fetchConnectionRequests = async () => {
-    try {
-      const response = await fetch('http://localhost:5000/api/connection-requests', {
-        method: 'GET',
-        headers: getAuthHeaders()
-      });
+  // Enhanced fetchConnectionRequests function
+  // Enhanced fetchConnectionRequests
+const fetchConnectionRequests = async () => {
+  try {
+    console.log('📥 Fetching connection requests...');
+    const response = await fetch('http://localhost:5000/api/connection-requests', {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch connection requests: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        // FIXED: Enhanced processing for pending requests
-        const processedRequests = data.pendingRequests.map(request => ({
-          ...request,
-          person: {
-            ...request.person,
-            role: request.person.role || (request.person.alumniProfile ? 'alumni' : 'student'),
-            graduationYear: getGraduationYear(request.person)
-          }
-        }));
-        setPendingRequests(processedRequests || []);
-      } else {
-        throw new Error(data.message || 'Failed to load connection requests');
-      }
-    } catch (error) {
-      console.error('Error fetching connection requests:', error);
-      toast.error('Failed to load connection requests');
+    if (!response.ok) {
+      throw new Error(`Failed to fetch connection requests: ${response.status}`);
     }
-  };
 
-  // Fetch my connections
-  const fetchMyConnections = async () => {
-    try {
-      const response = await fetch('http://localhost:5000/api/my-connections', {
-        method: 'GET',
-        headers: getAuthHeaders()
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch connections: ${response.status}`);
-      }
-
-      const data = await response.json();
+    const data = await response.json();
+    
+    console.log('📋 Connection requests response:', data);
+    
+    if (data.success) {
+      const processedRequests = (data.pendingRequests || []).map(request => ({
+        ...request,
+        id: request._id || request.id,
+        person: {
+          ...request.person,
+          id: request.person._id || request.person.id,
+          role: getRoleDisplay(request.person),
+          graduationYear: getGraduationYear(request.person)
+        }
+      }));
       
-      // FIXED: Enhanced processing for connections
-      const processedConnections = data.connections.map(connection => ({
+      console.log('✅ Processed connection requests:', processedRequests);
+      setPendingRequests(processedRequests);
+      
+      // Refresh directory data with updated connection status
+      await refreshDirectoryData(processedRequests, myConnections);
+      
+    } else {
+      throw new Error(data.message || 'Failed to load connection requests');
+    }
+  } catch (error) {
+    console.error('❌ Error fetching connection requests:', error);
+    toast.error('Failed to load connection requests');
+  }
+};
+
+const handleConnectionError = (error, context) => {
+  console.error(`❌ Connection error in ${context}:`, error);
+  
+  if (error.message.includes('Failed to fetch')) {
+    toast.error('Network error: Could not connect to server');
+  } else if (error.message.includes('401') || error.message.includes('403')) {
+    toast.error('Authentication error: Please login again');
+    localStorage.removeItem('token');
+    window.location.reload();
+  } else {
+    toast.error(`Failed to load ${context}`);
+  }
+};
+
+// Enhanced fetchMyConnections
+const fetchMyConnections = async () => {
+  try {
+    console.log('🔗 Fetching my connections...');
+    const response = await fetch('http://localhost:5000/api/my-connections', {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch connections: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    console.log('🤝 My connections response:', data);
+    
+    if (data.success) {
+      const processedConnections = (data.connections || []).map(connection => ({
         ...connection,
+        id: connection._id || connection.id,
         person: {
           ...connection.person,
+          id: connection.person._id || connection.person.id,
           profileImageUrl: getProfileImageUrl(connection.person),
-          role: connection.person.role || (connection.person.alumniProfile ? 'alumni' : 'student'),
+          role: getRoleDisplay(connection.person),
           graduationYear: getGraduationYear(connection.person)
         }
       }));
       
-      setMyConnections(processedConnections || []);
-    } catch (error) {
-      console.error('Error fetching connections:', error);
-      toast.error('Failed to load connections');
+      console.log('✅ Processed connections:', processedConnections);
+      setMyConnections(processedConnections);
+      
+      // Refresh directory data with updated connection status
+      await refreshDirectoryData(pendingRequests, processedConnections);
+      
+    } else {
+      throw new Error(data.message || 'Failed to load connections');
     }
-  };
+  } catch (error) {
+    handleConnectionError(error, 'connections');
+    console.error('❌ Error fetching connections:', error);
+    toast.error('Failed to load connections');
+  }
+};
 
+// Add this helper function to refresh directory data
+const refreshDirectoryData = async (updatedPendingRequests, updatedMyConnections) => {
+  if (activeSection === 'directory') {
+    if (directoryType === 'alumni' && alumniData.length > 0) {
+      const updatedAlumni = processUserData(alumniData, updatedPendingRequests, updatedMyConnections);
+      setAlumniData(updatedAlumni);
+      setFilteredData(updatedAlumni);
+    } else if (directoryType === 'students' && studentData.length > 0) {
+      const updatedStudents = processUserData(studentData, updatedPendingRequests, updatedMyConnections);
+      setStudentData(updatedStudents);
+      setFilteredData(updatedStudents);
+    }
+  }
+};
   // Fixed fetchSuccessStories function
   const fetchSuccessStories = async (page = 1, filters = {}) => {
     setStoryLoading(true);
@@ -1091,73 +1252,89 @@ const NetworkingHub = () => {
     setActiveSection(section);
   };
 
-  // AlumniCard Component
-  const AlumniCard = ({ alumni, onConnect, onViewProfile }) => {
-    const profileImageUrl = getProfileImageUrl(alumni, alumni.alumniProfile);
-    const displayName = getDisplayName(alumni);
-    // FIXED: Use enhanced role detection
-    const roleDisplay = getRoleDisplay(alumni);
-    // FIXED: Use enhanced graduation year detection
-    const graduationYear = getGraduationYear(alumni);
+  // Directory type handler
+  const handleDirectoryTypeChange = (type) => {
+    setDirectoryType(type);
+    if (type === 'alumni') {
+      setFilteredData(alumniData);
+    } else {
+      setFilteredData(studentData);
+    }
+  };
 
-    const getConnectionButton = () => {
-      const buttonClass = "px-4 py-2 rounded-lg font-medium text-sm flex-1 transition-colors flex items-center justify-center";
-      
-      switch (alumni.connectionStatus) {
-        case 'connected':
-          return (
-            <button 
-              className={`${buttonClass} bg-green-600 text-white cursor-not-allowed`}
-              disabled
-            >
-              <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-              Connected
-            </button>
-          );
-        case 'pending_sent':
-          return (
-            <button 
-              className={`${buttonClass} bg-yellow-600 text-white cursor-not-allowed`}
-              disabled
-            >
-              <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-              </svg>
-              Request Sent
-            </button>
-          );
-        case 'pending_received':
-          return (
-            <button 
-              onClick={() => {
-                setActiveSection('connections');
-                toast.info('Please go to Connections tab to respond');
-              }}
-              className={`${buttonClass} bg-blue-600 hover:bg-blue-700 text-white`}
-            >
-              <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
-                <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
-              </svg>
-              Respond
-            </button>
-          );
-        default:
-          return (
-            <button 
-              onClick={() => onConnect(alumni.id)}
-              className={`${buttonClass} bg-blue-600 hover:bg-blue-700 text-white`}
-            >
-              <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-              </svg>
-              Connect
-            </button>
-          );
-      }
-    };
+  // UserCard Component (for both alumni and students)
+  const UserCard = ({ user, onConnect, onViewProfile }) => {
+    const profileImageUrl = getProfileImageUrl(user, user.alumniProfile, user.studentProfile);
+    const displayName = getDisplayName(user);
+    const roleDisplay = getRoleDisplay(user);
+    const graduationYear = getGraduationYear(user);
+
+    // In UserCard component, update the connection status display:
+const getConnectionButton = () => {
+  const buttonClass = "px-4 py-2 rounded-lg font-medium text-sm flex-1 transition-colors flex items-center justify-center";
+  
+  // Debug log to see what's happening
+  console.log('User connection status:', {
+    userName: displayName,
+    status: user.connectionStatus,
+    userId: user.id
+  });
+  
+  switch (user.connectionStatus) {
+    case 'connected':
+      return (
+        <button 
+          className={`${buttonClass} bg-green-600 text-white cursor-not-allowed`}
+          disabled
+        >
+          <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+          Connected
+        </button>
+      );
+    case 'pending_sent':
+      return (
+        <button 
+          className={`${buttonClass} bg-yellow-600 text-white cursor-not-allowed`}
+          disabled
+        >
+          <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+          </svg>
+          Request Sent
+        </button>
+      );
+    case 'pending_received':
+      return (
+        <button 
+          onClick={() => {
+            setActiveSection('connections');
+            toast.info('Please go to Connections tab to respond');
+          }}
+          className={`${buttonClass} bg-blue-600 hover:bg-blue-700 text-white`}
+        >
+          <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+            <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+          </svg>
+          Respond
+        </button>
+      );
+    default:
+      return (
+        <button 
+          onClick={() => onConnect(user.id)}
+          className={`${buttonClass} bg-blue-600 hover:bg-blue-700 text-white`}
+        >
+          <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+          </svg>
+          Connect
+        </button>
+      );
+  }
+};
 
     return (
       <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow duration-200">
@@ -1187,7 +1364,7 @@ const NetworkingHub = () => {
             </div>
             <div>
               <h3 className="text-lg font-semibold text-gray-900">{displayName}</h3>
-              <p className="text-gray-600 text-sm">{alumni.email}</p>
+              <p className="text-gray-600 text-sm">{user.email}</p>
               <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs mt-1">
                 {roleDisplay}
               </span>
@@ -1195,14 +1372,14 @@ const NetworkingHub = () => {
           </div>
           
           <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-            alumni.connectionStatus === 'connected' ? 'bg-green-100 text-green-800' :
-            alumni.connectionStatus === 'pending_sent' ? 'bg-yellow-100 text-yellow-800' :
-            alumni.connectionStatus === 'pending_received' ? 'bg-blue-100 text-blue-800' :
+            user.connectionStatus === 'connected' ? 'bg-green-100 text-green-800' :
+            user.connectionStatus === 'pending_sent' ? 'bg-yellow-100 text-yellow-800' :
+            user.connectionStatus === 'pending_received' ? 'bg-blue-100 text-blue-800' :
             'bg-gray-100 text-gray-800'
           }`}>
-            {alumni.connectionStatus === 'connected' ? 'Connected' :
-             alumni.connectionStatus === 'pending_sent' ? 'Request Sent' :
-             alumni.connectionStatus === 'pending_received' ? 'Request Received' :
+            {user.connectionStatus === 'connected' ? 'Connected' :
+             user.connectionStatus === 'pending_sent' ? 'Request Sent' :
+             user.connectionStatus === 'pending_received' ? 'Request Received' :
              'Not Connected'}
           </div>
         </div>
@@ -1214,48 +1391,60 @@ const NetworkingHub = () => {
               <span>Class of {graduationYear}</span>
             </div>
           )}
-          {alumni.alumniProfile?.academicInfo?.branch && (
+          {user.alumniProfile?.academicInfo?.branch && (
             <div className="flex items-center text-sm text-gray-600">
               <span className="font-medium w-20">Branch:</span>
-              <span className="capitalize">{alumni.alumniProfile.academicInfo.branch?.replace(/-/g, ' ')}</span>
+              <span className="capitalize">{user.alumniProfile.academicInfo.branch?.replace(/-/g, ' ')}</span>
             </div>
           )}
-          {alumni.alumniProfile?.careerDetails?.companyName && (
+          {user.studentProfile?.academicInfo?.branch && (
+            <div className="flex items-center text-sm text-gray-600">
+              <span className="font-medium w-20">Branch:</span>
+              <span className="capitalize">{user.studentProfile.academicInfo.branch?.replace(/-/g, ' ')}</span>
+            </div>
+          )}
+          {user.alumniProfile?.careerDetails?.companyName && (
             <div className="flex items-center text-sm text-gray-600">
               <span className="font-medium w-20">Company:</span>
-              <span>{alumni.alumniProfile.careerDetails.companyName}</span>
+              <span>{user.alumniProfile.careerDetails.companyName}</span>
             </div>
           )}
-          {alumni.alumniProfile?.careerDetails?.jobTitle && (
+          {user.alumniProfile?.careerDetails?.jobTitle && (
             <div className="flex items-center text-sm text-gray-600">
               <span className="font-medium w-20">Role:</span>
-              <span>{alumni.alumniProfile.careerDetails.jobTitle}</span>
+              <span>{user.alumniProfile.careerDetails.jobTitle}</span>
             </div>
           )}
-          {alumni.alumniProfile?.careerDetails?.yearsOfExperience && (
+          {user.alumniProfile?.careerDetails?.yearsOfExperience && (
             <div className="flex items-center text-sm text-gray-600">
               <span className="font-medium w-20">Experience:</span>
-              <span>{alumni.alumniProfile.careerDetails.yearsOfExperience} years</span>
+              <span>{user.alumniProfile.careerDetails.yearsOfExperience} years</span>
             </div>
           )}
-          {alumni.alumniProfile?.personalInfo?.location && (
+          {user.alumniProfile?.personalInfo?.location && (
             <div className="flex items-center text-sm text-gray-600">
               <span className="font-medium w-20">Location:</span>
-              <span>{alumni.alumniProfile.personalInfo.location}</span>
+              <span>{user.alumniProfile.personalInfo.location}</span>
+            </div>
+          )}
+          {user.studentProfile?.personalInfo?.location && (
+            <div className="flex items-center text-sm text-gray-600">
+              <span className="font-medium w-20">Location:</span>
+              <span>{user.studentProfile.personalInfo.location}</span>
             </div>
           )}
         </div>
 
-        {alumni.alumniProfile?.skills && alumni.alumniProfile.skills.length > 0 && (
+        {(user.alumniProfile?.skills || user.studentProfile?.skills) && (
           <div className="mb-4">
             <div className="flex flex-wrap gap-1">
-              {alumni.alumniProfile.skills.slice(0, 3).map((skill, index) => (
+              {(user.alumniProfile?.skills || user.studentProfile?.skills || []).slice(0, 3).map((skill, index) => (
                 <span key={index} className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs">
                   {skill}
                 </span>
               ))}
-              {alumni.alumniProfile.skills.length > 3 && (
-                <span className="text-gray-500 text-xs">+{alumni.alumniProfile.skills.length - 3} more</span>
+              {(user.alumniProfile?.skills || user.studentProfile?.skills || []).length > 3 && (
+                <span className="text-gray-500 text-xs">+{(user.alumniProfile?.skills || user.studentProfile?.skills || []).length - 3} more</span>
               )}
             </div>
           </div>
@@ -1264,7 +1453,7 @@ const NetworkingHub = () => {
         <div className="flex space-x-2">
           {getConnectionButton()}
           <button 
-            onClick={() => onViewProfile(alumni.id)}
+            onClick={() => onViewProfile(user.id, user.role)}
             className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center"
           >
             <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -1284,9 +1473,7 @@ const NetworkingHub = () => {
 
     const profileImageUrl = getProfileImageUrl(profile);
     const displayName = getDisplayName(profile);
-    // FIXED: Use enhanced role detection
-    const roleDisplay = getRoleDisplay(profile);
-    // FIXED: Use enhanced graduation year detection
+    const roleDisplay = profile.userType === 'alumni' ? 'Alumni' : 'Student';
     const graduationYear = getGraduationYear(profile);
 
     const formatDate = (dateString) => {
@@ -1344,7 +1531,9 @@ const NetworkingHub = () => {
         <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
           <div className="p-6">
             <div className="flex justify-between items-start mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Alumni Profile</h2>
+              <h2 className="text-2xl font-bold text-gray-900">
+                {profile.userType === 'alumni' ? 'Alumni' : 'Student'} Profile
+              </h2>
               <button 
                 onClick={onClose}
                 className="text-gray-400 hover:text-gray-600 text-2xl p-2"
@@ -1434,10 +1623,12 @@ const NetworkingHub = () => {
                     <span className="text-gray-600">Branch:</span>
                     <span className="font-medium">{profile.academicInfo?.branch || 'Not specified'}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">CGPA:</span>
-                    <span className="font-medium">{profile.academicInfo?.cgpa || 'Not specified'}</span>
-                  </div>
+                  {profile.academicInfo?.cgpa && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">CGPA:</span>
+                      <span className="font-medium">{profile.academicInfo.cgpa}</span>
+                    </div>
+                  )}
                   {graduationYear && (
                     <div className="flex justify-between">
                       <span className="text-gray-600">Graduation Year:</span>
@@ -1575,9 +1766,7 @@ const NetworkingHub = () => {
   const PendingRequestCard = ({ request, onAccept, onDecline }) => {
     const profileImageUrl = getProfileImageUrl(request.person);
     const displayName = getDisplayName(request.person);
-    // FIXED: Use enhanced role detection
     const roleDisplay = getRoleDisplay(request.person);
-    // FIXED: Use enhanced graduation year detection
     const graduationYear = getGraduationYear(request.person);
 
     return (
@@ -1639,9 +1828,7 @@ const NetworkingHub = () => {
   const ConnectionCard = ({ connection, onMessage }) => {
     const profileImageUrl = getProfileImageUrl(connection.person);
     const displayName = getDisplayName(connection.person);
-    // FIXED: Use enhanced role detection
     const roleDisplay = getRoleDisplay(connection.person);
-    // FIXED: Use enhanced graduation year detection
     const graduationYear = getGraduationYear(connection.person);
 
     return (
@@ -2012,42 +2199,47 @@ const NetworkingHub = () => {
   };
 
   // Enhanced filter function
-  const applyAlumniFilters = () => {
-    let filtered = alumniData;
+  const applyFilters = () => {
+    let filtered = directoryType === 'alumni' ? alumniData : studentData;
     
     if (filters.search) {
       const searchTerm = filters.search.toLowerCase();
-      filtered = filtered.filter(alumni => 
-        alumni.name?.toLowerCase().includes(searchTerm) ||
-        alumni.email?.toLowerCase().includes(searchTerm) ||
-        alumni.alumniProfile?.careerDetails?.companyName?.toLowerCase().includes(searchTerm) ||
-        alumni.alumniProfile?.academicInfo?.branch?.toLowerCase().includes(searchTerm)
+      filtered = filtered.filter(user => 
+        user.name?.toLowerCase().includes(searchTerm) ||
+        user.email?.toLowerCase().includes(searchTerm) ||
+        user.alumniProfile?.careerDetails?.companyName?.toLowerCase().includes(searchTerm) ||
+        user.alumniProfile?.academicInfo?.branch?.toLowerCase().includes(searchTerm) ||
+        user.studentProfile?.academicInfo?.branch?.toLowerCase().includes(searchTerm)
       );
     }
     
     if (filters.year) {
-      filtered = filtered.filter(alumni => {
-        const gradYear = getGraduationYear(alumni);
+      filtered = filtered.filter(user => {
+        const gradYear = getGraduationYear(user);
         return gradYear?.toString() === filters.year;
       });
     }
     
     if (filters.branch) {
-      filtered = filtered.filter(alumni => 
-        alumni.alumniProfile?.academicInfo?.branch?.toLowerCase().includes(filters.branch.toLowerCase())
+      filtered = filtered.filter(user => 
+        user.alumniProfile?.academicInfo?.branch?.toLowerCase().includes(filters.branch.toLowerCase()) ||
+        user.studentProfile?.academicInfo?.branch?.toLowerCase().includes(filters.branch.toLowerCase())
       );
     }
     
     if (filters.careerStatus) {
-      filtered = filtered.filter(alumni => 
-        alumni.alumniProfile?.careerStatus?.toLowerCase() === filters.careerStatus.toLowerCase()
+      filtered = filtered.filter(user => 
+        user.alumniProfile?.careerStatus?.toLowerCase() === filters.careerStatus.toLowerCase()
       );
     }
     
     if (filters.skills) {
       const skillsTerm = filters.skills.toLowerCase();
-      filtered = filtered.filter(alumni => 
-        alumni.alumniProfile?.skills?.some(skill => 
+      filtered = filtered.filter(user => 
+        user.alumniProfile?.skills?.some(skill => 
+          skill.toLowerCase().includes(skillsTerm)
+        ) ||
+        user.studentProfile?.skills?.some(skill => 
           skill.toLowerCase().includes(skillsTerm)
         )
       );
@@ -2055,8 +2247,8 @@ const NetworkingHub = () => {
     
     if (filters.interests) {
       const interestsTerm = filters.interests.toLowerCase();
-      filtered = filtered.filter(alumni => {
-        const interests = alumni.alumniProfile?.interests || [];
+      filtered = filtered.filter(user => {
+        const interests = user.alumniProfile?.interests || user.studentProfile?.interests || [];
         return interests.some(interest => 
           interest.toLowerCase().includes(interestsTerm)
         );
@@ -2065,22 +2257,23 @@ const NetworkingHub = () => {
     
     if (filters.company) {
       const companyTerm = filters.company.toLowerCase();
-      filtered = filtered.filter(alumni => 
-        alumni.alumniProfile?.careerDetails?.companyName?.toLowerCase().includes(companyTerm)
+      filtered = filtered.filter(user => 
+        user.alumniProfile?.careerDetails?.companyName?.toLowerCase().includes(companyTerm)
       );
     }
     
     if (filters.location) {
       const locationTerm = filters.location.toLowerCase();
-      filtered = filtered.filter(alumni => 
-        alumni.alumniProfile?.personalInfo?.location?.toLowerCase().includes(locationTerm) ||
-        alumni.alumniProfile?.careerDetails?.companyLocation?.toLowerCase().includes(locationTerm)
+      filtered = filtered.filter(user => 
+        user.alumniProfile?.personalInfo?.location?.toLowerCase().includes(locationTerm) ||
+        user.alumniProfile?.careerDetails?.companyLocation?.toLowerCase().includes(locationTerm) ||
+        user.studentProfile?.personalInfo?.location?.toLowerCase().includes(locationTerm)
       );
     }
     
     if (filters.experience) {
-      filtered = filtered.filter(alumni => {
-        const experience = alumni.alumniProfile?.careerDetails?.yearsOfExperience;
+      filtered = filtered.filter(user => {
+        const experience = user.alumniProfile?.careerDetails?.yearsOfExperience;
         if (!experience) return false;
         
         const expNum = parseInt(experience);
@@ -2095,26 +2288,26 @@ const NetworkingHub = () => {
     }
     
     if (filters.connectionStatus) {
-      filtered = filtered.filter(alumni => 
-        alumni.connectionStatus === filters.connectionStatus
+      filtered = filtered.filter(user => 
+        user.connectionStatus === filters.connectionStatus
       );
     }
     
-    setFilteredAlumni(filtered);
+    setFilteredData(filtered);
   };
 
   // Send connection request
-  const sendConnectionRequest = async (alumniId) => {
+  const sendConnectionRequest = async (userId) => {
     try {
-      if (!alumniId) {
-        toast.error('Invalid alumni ID');
+      if (!userId) {
+        toast.error('Invalid user ID');
         return;
       }
 
       const response = await fetch('http://localhost:5000/api/connection-request', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ recipientId: alumniId })
+        body: JSON.stringify({ recipientId: userId })
       });
 
       const data = await response.json();
@@ -2123,18 +2316,18 @@ const NetworkingHub = () => {
         if (data.message.includes('already exists') || 
             data.message.includes('already sent') ||
             data.message.includes('pending request')) {
-          updateAlumniConnectionStatus(alumniId, 'pending_sent');
+          updateUserConnectionStatus(userId, 'pending_sent');
           toast.info(data.message);
           return;
         }
         if (data.message.includes('connected')) {
-          updateAlumniConnectionStatus(alumniId, 'connected');
+          updateUserConnectionStatus(userId, 'connected');
           toast.info(data.message);
           return;
         }
         if (data.message.includes('previously declined') || 
             data.message.includes('cancelled')) {
-          updateAlumniConnectionStatus(alumniId, 'not_connected');
+          updateUserConnectionStatus(userId, 'not_connected');
           toast.info(data.message);
           return;
         }
@@ -2142,7 +2335,7 @@ const NetworkingHub = () => {
       }
 
       if (data.success) {
-        updateAlumniConnectionStatus(alumniId, 'pending_sent');
+        updateUserConnectionStatus(userId, 'pending_sent');
         toast.success('Connection request sent successfully!');
         
         if (activeSection === 'connections') {
@@ -2167,19 +2360,24 @@ const NetworkingHub = () => {
     }
   };
 
-  // Helper function to update alumni connection status
-  const updateAlumniConnectionStatus = (alumniId, status) => {
-    const updateStatus = (alumni) => 
-      alumni.id === alumniId 
-        ? { ...alumni, connectionStatus: status }
-        : alumni;
+  // Helper function to update user connection status
+  const updateUserConnectionStatus = (userId, status) => {
+    const updateStatus = (user) => 
+      user.id === userId 
+        ? { ...user, connectionStatus: status }
+        : user;
 
-    setAlumniData(prev => prev.map(updateStatus));
-    setFilteredAlumni(prev => prev.map(updateStatus));
+    if (directoryType === 'alumni') {
+      setAlumniData(prev => prev.map(updateStatus));
+      setFilteredData(prev => prev.map(updateStatus));
+    } else {
+      setStudentData(prev => prev.map(updateStatus));
+      setFilteredData(prev => prev.map(updateStatus));
+    }
   };
 
   // Accept connection request
-  const acceptConnection = async (connectionId, alumniId) => {
+  const acceptConnection = async (connectionId, userId) => {
     try {
       const response = await fetch('http://localhost:5000/api/accept-connection', {
         method: 'POST',
@@ -2195,7 +2393,7 @@ const NetworkingHub = () => {
       const data = await response.json();
 
       setPendingRequests(prev => prev.filter(req => req.id !== connectionId));
-      updateAlumniConnectionStatus(alumniId, 'connected');
+      updateUserConnectionStatus(userId, 'connected');
 
       await fetchMyConnections();
       
@@ -2207,7 +2405,7 @@ const NetworkingHub = () => {
   };
 
   // Decline connection request
-  const declineConnection = async (connectionId, alumniId) => {
+  const declineConnection = async (connectionId, userId) => {
     try {
       const response = await fetch('http://localhost:5000/api/decline-connection', {
         method: 'POST',
@@ -2221,7 +2419,7 @@ const NetworkingHub = () => {
       }
 
       setPendingRequests(prev => prev.filter(req => req.id !== connectionId));
-      updateAlumniConnectionStatus(alumniId, 'not_connected');
+      updateUserConnectionStatus(userId, 'not_connected');
 
       toast.info('Connection request declined');
     } catch (error) {
@@ -2231,8 +2429,8 @@ const NetworkingHub = () => {
   };
 
   // View profile handler
-  const handleViewProfile = async (alumniId) => {
-    await fetchAlumniProfile(alumniId);
+  const handleViewProfile = async (userId, userType) => {
+    await fetchUserProfile(userId, userType);
   };
 
   // Close profile modal
@@ -2284,15 +2482,43 @@ const NetworkingHub = () => {
     }
   };
 
-  // Render Alumni Directory
-  const renderAlumniDirectory = () => (
+  // Render Directory
+  const renderDirectory = () => (
     <div className="mb-8">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Alumni Directory</h2>
-        <p className="text-gray-600">Connect with fellow alumni from your institution</p>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          {directoryType === 'alumni' ? 'Alumni Directory' : 'Student Directory'}
+        </h2>
+        <p className="text-gray-600">
+          Connect with fellow {directoryType === 'alumni' ? 'alumni' : 'students'} from your institution
+        </p>
       </div>
       
+      {/* Directory Type Toggle */}
       <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <div className="flex space-x-4 mb-4">
+          <button
+            onClick={() => handleDirectoryTypeChange('alumni')}
+            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+              directoryType === 'alumni'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Alumni Directory
+          </button>
+          <button
+            onClick={() => handleDirectoryTypeChange('students')}
+            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+              directoryType === 'students'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Student Directory
+          </button>
+        </div>
+      
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">Search (Name, Email, Company)</label>
@@ -2340,20 +2566,22 @@ const NetworkingHub = () => {
             </select>
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Career Status</label>
-            <select 
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              value={filters.careerStatus}
-              onChange={(e) => handleFilterChange('careerStatus', e.target.value)}
-            >
-              <option value="">All Status</option>
-              <option value="working">Working</option>
-              <option value="entrepreneur">Entrepreneur</option>
-              <option value="studies">Higher Studies</option>
-              <option value="not-working">Not Working</option>
-            </select>
-          </div>
+          {directoryType === 'alumni' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Career Status</label>
+              <select 
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={filters.careerStatus}
+                onChange={(e) => handleFilterChange('careerStatus', e.target.value)}
+              >
+                <option value="">All Status</option>
+                <option value="working">Working</option>
+                <option value="entrepreneur">Entrepreneur</option>
+                <option value="studies">Higher Studies</option>
+                <option value="not-working">Not Working</option>
+              </select>
+            </div>
+          )}
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Skills</label>
@@ -2377,16 +2605,18 @@ const NetworkingHub = () => {
             />
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Company</label>
-            <input 
-              type="text" 
-              placeholder="Company name" 
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              value={filters.company}
-              onChange={(e) => handleFilterChange('company', e.target.value)}
-            />
-          </div>
+          {directoryType === 'alumni' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Company</label>
+              <input 
+                type="text" 
+                placeholder="Company name" 
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={filters.company}
+                onChange={(e) => handleFilterChange('company', e.target.value)}
+              />
+            </div>
+          )}
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
@@ -2399,20 +2629,22 @@ const NetworkingHub = () => {
             />
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Experience</label>
-            <select 
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              value={filters.experience}
-              onChange={(e) => handleFilterChange('experience', e.target.value)}
-            >
-              <option value="">All Experience</option>
-              <option value="0-2">0-2 years</option>
-              <option value="3-5">3-5 years</option>
-              <option value="6-10">6-10 years</option>
-              <option value="10+">10+ years</option>
-            </select>
-          </div>
+          {directoryType === 'alumni' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Experience</label>
+              <select 
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={filters.experience}
+                onChange={(e) => handleFilterChange('experience', e.target.value)}
+              >
+                <option value="">All Experience</option>
+                <option value="0-2">0-2 years</option>
+                <option value="3-5">3-5 years</option>
+                <option value="6-10">6-10 years</option>
+                <option value="10+">10+ years</option>
+              </select>
+            </div>
+          )}
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Connection Status</label>
@@ -2435,7 +2667,7 @@ const NetworkingHub = () => {
             Clear All Filters
           </button>
           <span className="text-sm text-gray-500">
-            Showing {filteredAlumni.length} of {alumniData.length} alumni
+            Showing {filteredData.length} of {directoryType === 'alumni' ? alumniData.length : studentData.length} {directoryType}
           </span>
         </div>
       </div>
@@ -2448,10 +2680,10 @@ const NetworkingHub = () => {
       
       {!loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredAlumni.map(alumni => (
-            <AlumniCard 
-              key={alumni.id} 
-              alumni={alumni} 
+          {filteredData.map(user => (
+            <UserCard 
+              key={user.id} 
+              user={user} 
               onConnect={sendConnectionRequest}
               onViewProfile={handleViewProfile}
             />
@@ -2459,9 +2691,9 @@ const NetworkingHub = () => {
         </div>
       )}
       
-      {!loading && filteredAlumni.length === 0 && (
+      {!loading && filteredData.length === 0 && (
         <div className="text-center py-8">
-          <p className="text-gray-500">No alumni found matching your criteria.</p>
+          <p className="text-gray-500">No {directoryType} found matching your criteria.</p>
         </div>
       )}
     </div>
@@ -2927,24 +3159,46 @@ const NetworkingHub = () => {
   );
 
   // UseEffects
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      toast.error('Please login first');
-      return;
-    }
+  // Enhanced useEffect for data synchronization
+useEffect(() => {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    toast.error('Please login first');
+    return;
+  }
 
+  console.log(`🔄 Loading section: ${activeSection}`);
+
+  const loadSectionData = async () => {
     if (activeSection === 'directory') {
-      fetchAlumniDirectory();
+      if (directoryType === 'alumni') {
+        await fetchAlumniDirectory();
+      } else {
+        await fetchStudentDirectory();
+      }
     } else if (activeSection === 'connections') {
-      fetchConnectionRequests();
-      fetchMyConnections();
+      try {
+        // Load both connection requests and connections first
+        await Promise.all([fetchConnectionRequests(), fetchMyConnections()]);
+        console.log('✅ Both connection requests and connections loaded');
+        
+        // Then refresh directory data if needed
+        if (alumniData.length > 0 || studentData.length > 0) {
+          await refreshDirectoryData(pendingRequests, myConnections);
+        }
+      } catch (error) {
+        console.error('❌ Error loading connections data:', error);
+      }
     } else if (activeSection === 'stories') {
       fetchSuccessStories();
     } else if (activeSection === 'discussions') {
       fetchDiscussions();
     }
-  }, [activeSection]);
+  };
+
+  loadSectionData();
+}, [activeSection, directoryType]);
+
 
   useEffect(() => {
     if (activeSection === 'discussions') {
@@ -2953,8 +3207,8 @@ const NetworkingHub = () => {
   }, [discussionFilters, activeSection]);
 
   useEffect(() => {
-    if (activeSection === 'directory' && alumniData.length > 0) {
-      applyAlumniFilters();
+    if (activeSection === 'directory' && (alumniData.length > 0 || studentData.length > 0)) {
+      applyFilters();
     }
   }, [
     filters.search, 
@@ -2968,25 +3222,26 @@ const NetworkingHub = () => {
     filters.experience,
     filters.connectionStatus,
     alumniData, 
+    studentData,
+    directoryType,
     activeSection
   ]);
-  // Add this useEffect after the existing ones
-useEffect(() => {
-  if (activeSection === 'stories') {
-    fetchSuccessStories(1, storyFilters);
-  }
-}, [storyFilters, activeSection]);
+
   useEffect(() => {
-    // When selectedStory changes, ensure it has the latest data from the stories list
+    if (activeSection === 'stories') {
+      fetchSuccessStories(1, storyFilters);
+    }
+  }, [storyFilters, activeSection]);
+
+  useEffect(() => {
     if (selectedStory) {
       const updatedStory = successStories.find(story => story._id === selectedStory._id);
       if (updatedStory) {
-        // Only update if there's an actual difference
         if (updatedStory.isLiked !== selectedStory.isLiked || updatedStory.likeCount !== selectedStory.likeCount) {
           setSelectedStory(prev => ({
             ...prev,
             likeCount: updatedStory.likeCount || 0,
-            isLiked: updatedStory.isLiked === true // Force boolean conversion
+            isLiked: updatedStory.isLiked === true
           }));
         }
       }
@@ -3019,7 +3274,7 @@ useEffect(() => {
       </div>
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeSection === 'directory' && renderAlumniDirectory()}
+        {activeSection === 'directory' && renderDirectory()}
         {activeSection === 'connections' && renderConnections()}
         {activeSection === 'stories' && renderSuccessStories()}
         {activeSection === 'discussions' && renderDiscussionForum()}
