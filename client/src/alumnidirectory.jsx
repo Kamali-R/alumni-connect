@@ -1861,9 +1861,6 @@ const ConnectionCard = ({ connection, onMessage }) => {
           {graduationYear && (
             <p className="text-xs text-gray-500">Class of {graduationYear}</p>
           )}
-          <p className="text-xs text-blue-500">
-            Connected via {connection.connectionType || 'network'}
-          </p>
         </div>
       </div>
       

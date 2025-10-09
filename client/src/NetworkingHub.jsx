@@ -1624,7 +1624,8 @@ const handleViewProfile = async (userId, userRole) => {
   };
 
   // UserCard Component (for both alumni and students)
-  const UserCard = ({ user, onConnect, onViewProfile }) => {
+  // UserCard Component (for both alumni and students) - ENHANCED VERSION
+const UserCard = ({ user, onConnect, onViewProfile }) => {
   const profileImageUrl = getProfileImageUrl(user, user.alumniProfile, user.studentProfile);
   const displayName = getDisplayName(user);
   const roleDisplay = getRoleDisplay(user);
@@ -1699,14 +1700,21 @@ const handleViewProfile = async (userId, userRole) => {
                 src={profileImageUrl} 
                 alt={displayName}
                 className="w-12 h-12 rounded-full object-cover mr-4"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  const fallback = e.target.parentNode.querySelector('.profile-fallback');
+                  if (fallback) fallback.style.display = 'flex';
+                }}
               />
-            ) : (
-              <div className="bg-gradient-to-br from-blue-100 to-blue-200 rounded-full w-12 h-12 flex items-center justify-center mr-4">
-                <span className="text-blue-600 font-semibold text-lg">
-                  {displayName.charAt(0).toUpperCase()}
-                </span>
-              </div>
-            )}
+            ) : null}
+            <div 
+              className="profile-fallback bg-gradient-to-br from-blue-100 to-blue-200 rounded-full w-12 h-12 flex items-center justify-center mr-4"
+              style={{ display: profileImageUrl ? 'none' : 'flex' }}
+            >
+              <span className="text-blue-600 font-semibold text-lg">
+                {displayName.charAt(0).toUpperCase()}
+              </span>
+            </div>
           </div>
           <div>
             <h3 className="text-lg font-semibold text-gray-900">{displayName}</h3>
@@ -1730,7 +1738,7 @@ const handleViewProfile = async (userId, userRole) => {
         </div>
       </div>
       
-      {/* User details */}
+      {/* ENHANCED: Add detailed user information like in alumnidirectory.jsx */}
       <div className="space-y-2 mb-4">
         {graduationYear && (
           <div className="flex items-center text-sm text-gray-600">
@@ -1738,8 +1746,65 @@ const handleViewProfile = async (userId, userRole) => {
             <span>Class of {graduationYear}</span>
           </div>
         )}
-        {/* Add other user details */}
+        {user.alumniProfile?.academicInfo?.branch && (
+          <div className="flex items-center text-sm text-gray-600">
+            <span className="font-medium w-20">Branch:</span>
+            <span className="capitalize">{user.alumniProfile.academicInfo.branch?.replace(/-/g, ' ')}</span>
+          </div>
+        )}
+        {user.studentProfile?.academicInfo?.branch && (
+          <div className="flex items-center text-sm text-gray-600">
+            <span className="font-medium w-20">Branch:</span>
+            <span className="capitalize">{user.studentProfile.academicInfo.branch?.replace(/-/g, ' ')}</span>
+          </div>
+        )}
+        {user.alumniProfile?.careerDetails?.companyName && (
+          <div className="flex items-center text-sm text-gray-600">
+            <span className="font-medium w-20">Company:</span>
+            <span>{user.alumniProfile.careerDetails.companyName}</span>
+          </div>
+        )}
+        {user.alumniProfile?.careerDetails?.jobTitle && (
+          <div className="flex items-center text-sm text-gray-600">
+            <span className="font-medium w-20">Role:</span>
+            <span>{user.alumniProfile.careerDetails.jobTitle}</span>
+          </div>
+        )}
+        {user.alumniProfile?.careerDetails?.yearsOfExperience && (
+          <div className="flex items-center text-sm text-gray-600">
+            <span className="font-medium w-20">Experience:</span>
+            <span>{user.alumniProfile.careerDetails.yearsOfExperience} years</span>
+          </div>
+        )}
+        {user.alumniProfile?.personalInfo?.location && (
+          <div className="flex items-center text-sm text-gray-600">
+            <span className="font-medium w-20">Location:</span>
+            <span>{user.alumniProfile.personalInfo.location}</span>
+          </div>
+        )}
+        {user.studentProfile?.personalInfo?.location && (
+          <div className="flex items-center text-sm text-gray-600">
+            <span className="font-medium w-20">Location:</span>
+            <span>{user.studentProfile.personalInfo.location}</span>
+          </div>
+        )}
       </div>
+
+      {/* ENHANCED: Add skills display */}
+      {(user.alumniProfile?.skills || user.studentProfile?.skills) && (
+        <div className="mb-4">
+          <div className="flex flex-wrap gap-1">
+            {(user.alumniProfile?.skills || user.studentProfile?.skills || []).slice(0, 3).map((skill, index) => (
+              <span key={index} className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs">
+                {skill}
+              </span>
+            ))}
+            {(user.alumniProfile?.skills || user.studentProfile?.skills || []).length > 3 && (
+              <span className="text-gray-500 text-xs">+{(user.alumniProfile?.skills || user.studentProfile?.skills || []).length - 3} more</span>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="flex space-x-2">
         {getConnectionButton()}
@@ -1747,6 +1812,10 @@ const handleViewProfile = async (userId, userRole) => {
           onClick={() => onViewProfile(user.id, user.role)}
           className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center"
         >
+          <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+            <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+          </svg>
           View Profile
         </button>
       </div>
@@ -2158,9 +2227,6 @@ const ConnectionCard = ({ connection, onMessage }) => {
           {graduationYear && (
             <p className="text-xs text-gray-500">Class of {graduationYear}</p>
           )}
-          <p className="text-xs text-blue-500">
-            Connected via {connection.connectionType || 'network'}
-          </p>
         </div>
       </div>
       
