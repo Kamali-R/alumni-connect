@@ -147,7 +147,6 @@ const fetchProfileData = async () => {
     });
     
     if (response.status === 404) {
-      // Profile doesn't exist yet - this is normal for new users
       console.log('Alumni profile not found - user needs to complete profile');
       setProfileData(null);
       return;
@@ -159,9 +158,9 @@ const fetchProfileData = async () => {
     
     const data = await response.json();
     console.log('Profile data fetched successfully');
-    console.log('Fetched achievements:', data.achievements);
-    console.log('Fetched awards:', data.awards);
-    console.log('Fetched recognitions:', data.recognitions);
+    
+    // Enhanced file URL handling
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
     
     setProfileData(data);
     
@@ -195,29 +194,33 @@ const fetchProfileData = async () => {
       setOtherInfo(data.otherInfo);
     }
     
-    // Set arrays with fallback to empty arrays
+    // Set arrays
     setExperiences(data.experiences || []);
     setSkills(data.skills || []);
     setInterests(data.interests || []);
     
-    // CRITICAL: Properly set achievements, awards, and recognitions
-    console.log('Setting achievements state:', data.achievements || []);
-    console.log('Setting awards state:', data.awards || []);
-    console.log('Setting recognitions state:', data.recognitions || []);
-    
+    // Properly set achievements, awards, and recognitions
     setAchievements(data.achievements || []);
     setAwards(data.awards || []);
     setRecognitions(data.recognitions || []);
     
-    // Set file data
+    // Enhanced file URL handling
     if (data.profileImage) {
-      setProfileImagePreview(data.profileImage.startsWith('http') ? 
-        data.profileImage : 
-        `http://localhost:5000/uploads/${data.profileImage}`
+      setProfileImagePreview(
+        data.profileImage.startsWith('http') ? 
+          data.profileImage : 
+          `${backendUrl}/uploads/${data.profileImage}`
       );
     }
-    if (data.resumeFileName) {
-      setResumeName(data.resumeFileName);
+    
+    // Fix resume file handling
+    if (data.resumeFile) {
+      setResumeName(data.resumeFileName || 'Resume');
+      // Store resume URL for download
+      setResumeFile({
+        name: data.resumeFileName || 'Resume',
+        url: data.resumeUrl || `${backendUrl}/uploads/${data.resumeFile}`
+      });
     }
     
   } catch (error) {
@@ -284,6 +287,15 @@ const debugAchievements = () => {
       setResumeName(file.name);
     }
   };
+  const downloadResume = () => {
+  if (resumeFile && resumeFile.url) {
+    window.open(resumeFile.url, '_blank');
+  } else if (resumeName) {
+    // Fallback: try to construct URL
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
+    window.open(`${backendUrl}/uploads/${resumeName}`, '_blank');
+  }
+};
 
   const validateUrl = (url) => {
     if (!url) return true;

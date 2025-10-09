@@ -2,20 +2,14 @@ import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 const alumniSchema = new mongoose.Schema({
-  // Basic profile
-  name: {
-    type: String,
-    required: true
-  },
+  // Basic profile (optional - credentials are stored in User model)
+  name: String,
   email: {
     type: String,
-    required: true,
-    unique: true
+    unique: true,
+    sparse: true
   },
-  password: {
-    type: String,
-    required: true
-  },
+  password: String,
   graduationYear: String,
   currentPosition: String,
   company: String,

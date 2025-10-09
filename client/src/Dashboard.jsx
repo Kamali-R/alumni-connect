@@ -1,118 +1,184 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import AlumniProfilePage from './profile';
 import AlumniMentorshipPlatform from './AlumniMentorshipPlatform';
 
+import AlumniJobDashboard from './AlumniJobDashboard';
+import NetworkingHub from './NetworkingHub';
+import NewsAndAchievements from './NewsAndAchievements';
+import EventsAndReunions from './EventsAndReunions';
+import Messages from './Messages';
 const AlumniConnectDashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeSection, setActiveSection] = useState('dashboard');
   const [fadeAnimation, setFadeAnimation] = useState(false);
   const [userRole, setUserRole] = useState('');
   const [userName, setUserName] = useState('');
-  const [userGraduation, setUserGraduation] = useState('');
+  // removed unused userGraduation state
   const [loading, setLoading] = useState(true);
   const [profileCompleted, setProfileCompleted] = useState(false);
+  // Helper to safely compute user initials for avatar
+  const getInitials = (name) => {
+    try {
+      if (!name || typeof name !== 'string') return 'U';
+      const parts = name.trim().split(/\s+/).filter(Boolean);
+      if (parts.length === 0) return 'U';
+      // Take up to first two initials
+      return parts.map(p => p[0]).slice(0, 2).join('').toUpperCase();
+    } catch (e) {
+      return 'U';
+    }
+  };
   
+  // Function to fetch fresh user data
+  const fetchUserData = React.useCallback(async () => {
+    try {
+      const storedToken = localStorage.getItem('token');
+      
+      if (!storedToken) {
+        console.log('No token found, redirecting to login');
+        navigate('/login');
+        return;
+      }
+
+      // Fetch current user data from backend
+      const response = await fetch('http://localhost:5000/user', {
+        headers: {
+          'Authorization': `Bearer ${storedToken}`
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          console.log('Token expired, redirecting to login');
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          navigate('/login');
+          return;
+        }
+        throw new Error('Failed to fetch user data');
+      }
+
+      const userData = await response.json();
+      console.log('Fresh user data fetched:', {
+        name: userData.name,
+        graduationYear: userData.graduationYear,
+        profileCompleted: userData.profileCompleted
+      });
+
+      // Check registration completion based on role
+      let registrationComplete = false;
+      
+      if (userData.role === 'alumni') {
+        registrationComplete = userData.profileCompleted && userData.alumniProfile;
+        
+        // Double-check alumni profile exists
+        if (userData.profileCompleted) {
+          try {
+            const alumniResponse = await fetch('http://localhost:5000/api/alumni/profile', {
+              headers: {
+                'Authorization': `Bearer ${storedToken}`
+              }
+            });
+            
+            if (alumniResponse.status === 404) {
+              registrationComplete = false;
+              console.log('Alumni profile not found, registration incomplete');
+            } else if (alumniResponse.ok) {
+              const alumniData = await alumniResponse.json();
+              registrationComplete = alumniData.status === 'complete';
+              console.log('Alumni profile status:', alumniData.status);
+            }
+          } catch (error) {
+            console.error('Error checking alumni profile:', error);
+            registrationComplete = false;
+          }
+        }
+      } else {
+        registrationComplete = userData.profileCompleted;
+      }
+      
+      console.log('Registration complete status:', registrationComplete);
+      
+      // If alumni hasn't completed registration, redirect to profile setup
+      if (!registrationComplete && userData.role === 'alumni') {
+        console.log('Registration not complete, redirecting to profile setup');
+        navigate('/alumni-profile', {
+          state: {
+            userData: userData,
+            verified: true,
+            role: userData.role
+          }
+        });
+        return;
+      }
+
+      // Update state with fresh data
+      setUserRole(userData.role);
+      setUserName(userData.name || 'User');
+      setProfileCompleted(registrationComplete);
+      
+      
+
+      // Update localStorage with fresh data
+      const updatedUserData = {
+        ...userData,
+        profileCompleted: registrationComplete,
+        registrationComplete: registrationComplete
+      };
+      localStorage.setItem('user', JSON.stringify(updatedUserData));
+      localStorage.setItem('registrationComplete', registrationComplete ? 'true' : 'false');
+
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+      navigate('/login');
+    }
+  }, [navigate]);
+
   // Check authentication and fetch user data on component mount
   useEffect(() => {
     const initializeUser = async () => {
-      try {
-        const storedToken = localStorage.getItem('token');
-        
-        if (!storedToken) {
-          console.log('No token found, redirecting to login');
-          navigate('/login');
-          return;
-        }
+      setLoading(true);
+      await fetchUserData();
+      setLoading(false);
+    };
+    // If navigated here from profile completion, skip immediate profile redirect checks
+    const skipRedirect = location?.state?.fromProfile === true;
+    initializeUser();
+    if (skipRedirect) {
+      // Clear the navigation state so future visits behave normally
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [fetchUserData, location]);
 
-        // Fetch current user data from backend
-        const response = await fetch('http://localhost:5000/user', {
-          headers: {
-            'Authorization': `Bearer ${storedToken}`
-          }
-        });
+  // NEW: Refresh user data when activeSection changes (especially when returning from profile)
+  useEffect(() => {
+    if (activeSection === 'dashboard') {
+      // Refresh data when returning to dashboard
+      fetchUserData();
+    }
+  }, [activeSection, fetchUserData]);
 
-        if (!response.ok) {
-          if (response.status === 401) {
-            console.log('Token expired, redirecting to login');
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            navigate('/login');
-            return;
-          }
-          throw new Error('Failed to fetch user data');
-        }
-
-        const userData = response.data;
-        console.log('User data fetched:', userData);
-
-        // Update state with fresh user data
-        setUserRole(userData.role);
-        setUserName(userData.name || 'User');
-        setProfileCompleted(userData.profileCompleted);
-        
-        // Set graduation year if available
-        if (userData.graduationYear) {
-          setUserGraduation(`Class of ${userData.graduationYear}`);
-        } else {
-          setUserGraduation('Alumni');
-        }
-
-        // Update localStorage with fresh data
-        localStorage.setItem('user', JSON.stringify(userData));
-
-        // Check if profile completion is required
-        if (!userData.profileCompleted && userData.role === 'alumni') {
-          console.log('Profile not completed, redirecting to profile setup');
-          navigate('/alumni-profile', {
-            state: {
-              userData: userData,
-              verified: true,
-              role: userData.role
-            }
-          });
-          return;
-        }
-
-        // Redirect students to student dashboard if needed
-        if (userData.role === 'student') {
-          console.log('Student user, should redirect to student dashboard');
-          // navigate('/student-dashboard'); // Uncomment when student dashboard is ready
-        }
-
-      } catch (error) {
-        console.error('Error initializing user:', error);
-        // If error fetching user data, try using stored data as fallback
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-          try {
-            const userData = JSON.parse(storedUser);
-            setUserRole(userData.role);
-            setUserName(userData.name || 'User');
-            setProfileCompleted(userData.profileCompleted || false);
-            
-            if (userData.graduationYear) {
-              setUserGraduation(`Class of ${userData.graduationYear}`);
-            } else {
-              setUserGraduation('Alumni');
-            }
-          } catch (parseError) {
-            console.error('Error parsing stored user data:', parseError);
-            navigate('/login');
-            return;
-          }
-        } else {
-          navigate('/login');
-          return;
-        }
-      } finally {
-        setLoading(false);
-      }
+  // NEW: Listen for profile update events
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      console.log('Profile update detected, refreshing user data...');
+      fetchUserData();
     };
 
-    initializeUser();
-  }, [navigate]);
-  
+    // Listen for custom event that can be triggered from profile page
+    window.addEventListener('profileUpdated', handleProfileUpdate);
+    
+    // Also listen for storage events (if profile updates localStorage)
+    window.addEventListener('storage', handleProfileUpdate);
+
+    return () => {
+      window.removeEventListener('profileUpdated', handleProfileUpdate);
+      window.removeEventListener('storage', handleProfileUpdate);
+    };
+  }, [fetchUserData]);
+
   // Navigation items
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: (
@@ -364,12 +430,11 @@ const AlumniConnectDashboard = () => {
           <div className="flex items-center mb-6 p-3 bg-gray-50 rounded-lg border border-gray-200">
             <div className="w-12 h-12 bg-blue-700 rounded-full flex items-center justify-center">
               <span className="text-white font-semibold">
-                {userName.split(' ').map(n => n[0]).join('').toUpperCase()}
+                {getInitials(userName)}
               </span>
             </div>
             <div className="ml-3">
               <p className="font-semibold text-gray-900">{userName}</p>
-              <p className="text-sm text-gray-600">{userGraduation}</p>
               <p className="text-xs text-blue-600 mt-1">
                 {userRole === 'alumni' ? 'Alumni' : 'Student'}
                 {!profileCompleted && (
@@ -509,7 +574,28 @@ const AlumniConnectDashboard = () => {
           {/* Profile Section */}
           {activeSection === 'profile' && (
             <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
-              <AlumniProfilePage />
+              <AlumniProfilePage onProfileUpdate={fetchUserData} />
+            </div>
+          )}
+
+          {/* Jobs Section */}
+          {activeSection === 'jobs' && (
+            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
+              <AlumniJobDashboard />
+            </div>
+          )}
+
+          {/* Events Section */}
+          {activeSection === 'events' && (
+            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
+              <EventsAndReunions />
+            </div>
+          )}
+
+          {/* News Section */}
+          {activeSection === 'news' && (
+            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
+              <NewsAndAchievements />
             </div>
           )}
           {/* Mentorship section */}
@@ -519,7 +605,7 @@ const AlumniConnectDashboard = () => {
             </div>
           )}
           {/* Other Sections (Placeholders) */}
-          {activeSection !== 'dashboard' && activeSection !== 'profile' && activeSection!='mentorship' && (
+          {activeSection !== 'dashboard' && activeSection !== 'profile' && activeSection!== 'mentorship' && (
             <div className="content-section">
               <h1 className="text-3xl font-bold text-gray-900 mb-6">
                 {navItems.find(item => item.id === activeSection)?.label}
@@ -529,7 +615,21 @@ const AlumniConnectDashboard = () => {
               </div>
             </div>
           )}
-        </main>
+
+          {/* Networking Section */}
+          {activeSection === 'networking' && (
+            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
+              <NetworkingHub/>
+            </div>
+          )}
+
+          {/* Messages Section */}
+          {activeSection === 'messages' && (
+            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
+              <Messages/>
+            </div>
+          )}
+       </main>
       </div>
     </div>
   );

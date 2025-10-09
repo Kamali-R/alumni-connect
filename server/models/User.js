@@ -1,5 +1,5 @@
+// Fixed User Model - Remove duplicate fields
 import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs';
 
 const userSchema = new mongoose.Schema({
   name: {
@@ -22,7 +22,6 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    // Make password optional for Google OAuth users
     required: function() {
       return this.authProvider === 'local';
     }
@@ -40,18 +39,7 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  registrationComplete: {
-    type: Boolean,
-    default: false
-  },
-  otp: {
-    type: String,
-    select: false
-  },
-  otpExpiry: {
-    type: Date,
-    select: false
-  },
+  // REMOVED: registrationComplete (duplicate)
   profileCompleted: { 
     type: Boolean, 
     default: false 
@@ -62,7 +50,7 @@ const userSchema = new mongoose.Schema({
   },
   graduationYear: { type: Number },
   lastLogin: { type: Date },
-  otp : String,
+  otp: String,
   otpExpiry: Date,
   authProvider: {
     type: String,

@@ -3,7 +3,8 @@ import Otp from '../models/otp.js';
 import bcrypt from 'bcryptjs';
 import sendEmail from '../utils/sendEmail.js';
 import jwt from 'jsonwebtoken';
-//import Alumni from '../models/Alumni.js';
+import Student from '../models/Student.js';
+import Alumni from '../models/Alumni.js';
 
 // Check if user exists (for frontend validation only)
 export const checkUser = async (req, res) => {
@@ -68,6 +69,7 @@ export const sendOtp = async (req, res) => {
 };
 
 // STEP 2: Verify OTP and Create User (but not Alumni profile yet)
+// In your authController.js, update the verifyOtp function to ensure student registration works
 export const verifyOtp = async (req, res) => {
   try {
     const { name, email, password, role, otp, purpose } = req.body;
@@ -140,34 +142,113 @@ export const verifyOtp = async (req, res) => {
 };
 
 // Login function
+// Updated login function in authController.js
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
     
-    // Check if user exists
-    const user = await User.findOne({ email }).populate('alumniProfile');
+    // Check if user exists in Users table
+    const user = await User.findOne({ email });
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      // Fallback: older accounts may exist in the Alumni collection
+      const legacyAlumni = await Alumni.findOne({ email }).select('+password');
+      if (legacyAlumni) {
+        // Verify password against alumni record
+        const isMatchAlumni = await legacyAlumni.matchPassword ? await legacyAlumni.matchPassword(password) : await bcrypt.compare(password, legacyAlumni.password);
+        if (!isMatchAlumni) {
+          return res.status(401).json({ message: 'Invalid credentials' });
+        }
+
+        // Upsert a User document for this alumni so rest of the app expects a User
+        let newUser = await User.findOne({ email });
+        if (!newUser) {
+          newUser = await User.findOneAndUpdate(
+            { email },
+            {
+              $setOnInsert: {
+                name: legacyAlumni.name || legacyAlumni.personalInfo?.fullName || 'Alumni',
+                email: legacyAlumni.email,
+                password: legacyAlumni.password,
+                role: 'alumni',
+                isVerified: true,
+                profileCompleted: true,
+                alumniProfile: legacyAlumni._id,
+                authProvider: 'local'
+              }
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+          );
+        }
+
+        // Treat this newUser as the authenticated user
+        // Update lastLogin
+        newUser.lastLogin = new Date();
+        await newUser.save();
+
+        // Create token for newUser and return
+        const token = jwt.sign(
+          {
+            id: newUser._id,
+            role: newUser.role,
+            profileCompleted: newUser.profileCompleted,
+            email: newUser.email,
+            name: newUser.name
+          },
+          process.env.JWT_SECRET,
+          { expiresIn: '24h' }
+        );
+
+        return res.status(200).json({
+          message: 'Login successful',
+          token,
+          user: {
+            id: newUser._id,
+            name: newUser.name,
+            email: newUser.email,
+            role: newUser.role,
+            profileCompleted: newUser.profileCompleted
+          }
+        });
+      }
+
+      return res.status(404).json({ message: 'User not found. Please sign up first.' });
     }
     
-    // Compare password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+    // For password-based login, verify password
+    if (user.authProvider === 'local') {
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+    }
+    
+    // PROFILE COMPLETION CHECK - FIXED VERSION
+    let isProfileComplete = false;
+    
+    if (user.role === 'student') {
+      // For students, check if they have a student profile
+      const studentProfile = await Student.findOne({ userId: user._id });
+      isProfileComplete = !!studentProfile && studentProfile.status === 'complete';
+      console.log('🎓 Student profile check:', { exists: !!studentProfile, status: studentProfile?.status, isProfileComplete });
+    } else {
+      // For alumni, check if they have an alumni profile
+      const hasAlumniProfile = await Alumni.exists({ userId: user._id });
+      isProfileComplete = user.profileCompleted && hasAlumniProfile;
     }
     
     // Update last login
     user.lastLogin = new Date();
     await user.save();
     
-    // Create JWT token with complete user info
+    // Create JWT token
     const token = jwt.sign(
       {
         id: user._id,
         role: user.role,
-        profileCompleted: user.profileCompleted,
+        profileCompleted: isProfileComplete,
         email: user.email,
-        name: user.name
+        name: user.name,
+        registrationComplete: isProfileComplete
       },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
@@ -181,16 +262,17 @@ export const login = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        profileCompleted: user.profileCompleted,
+        profileCompleted: isProfileComplete,
+        registrationComplete: isProfileComplete,
         graduationYear: user.graduationYear
       }
     });
+    
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Server error during login' });
   }
 };
-
 // Password reset functions
 export const verifyResetOtp = async (req, res) => {
   try {
