@@ -1,12 +1,13 @@
 import express from 'express';
 import {
   getAlumniDirectory,
+  getStudentDirectory,
   sendConnectionRequest,
   getConnectionRequests,
   getMyConnections,
   acceptConnection,
   declineConnection,
-  cancelConnectionRequest  // Make sure this is imported
+  cancelConnectionRequest
 } from '../controllers/networkingController.js';
 import auth from '../middleware/authMiddleware.js';
 
@@ -19,6 +20,9 @@ router.post('/connection-request', auth, sendConnectionRequest);
 
 // Get all alumni for networking/search
 router.get('/alumni-directory', auth, getAlumniDirectory);
+
+// Get all students for networking/search
+router.get('/student-directory', auth, getStudentDirectory);
 
 // Get all pending requests received by current user
 router.get('/connection-requests', auth, getConnectionRequests);
