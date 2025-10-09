@@ -101,36 +101,37 @@ const getGraduationYear = (user) => {
 };
 
 // Enhanced role detection function with better logic
-const getRoleDisplay = (user) => {
-  console.log('Getting role for user:', user.name, {
-    role: user.role,
-    hasAlumniProfile: !!user.alumniProfile,
-    hasStudentProfile: !!user.studentProfile
+// Enhanced role detection function with better logic
+const getRoleDisplay = (user, directoryType = 'alumni') => {
+  if (!user) return directoryType === 'students' ? 'Student' : 'Alumni';
+
+  console.log('🔍 Getting role for user:', user?.name, {
+    role: user?.role,
+    hasAlumniProfile: !!user?.alumniProfile,
+    hasStudentProfile: !!user?.studentProfile,
+    directoryType
   });
 
-  // Priority 1: Use explicit role field
-  if (user.role === 'alumni') {
+  // Priority 1: Use explicit role field from user model
+  if (user?.role === 'alumni') return 'Alumni';
+  if (user?.role === 'student') return 'Student';
+
+  // Priority 2: Check profiles (more specific check)
+  if (user?.alumniProfile && !user?.studentProfile) return 'Alumni';
+  if (user?.studentProfile && !user?.alumniProfile) return 'Student';
+
+  // Priority 3: Check connection data roles
+  if (user?.requesterRole === 'alumni' || user?.recipientRole === 'alumni') return 'Alumni';
+  if (user?.requesterRole === 'student' || user?.recipientRole === 'student') return 'Student';
+
+  // Priority 4: Check if user has graduation year (alumni typically have this)
+  const graduationYear = getGraduationYear(user);
+  if (graduationYear && graduationYear <= new Date().getFullYear()) {
     return 'Alumni';
   }
-  
-  if (user.role === 'student') {
-    return 'Student';
-  }
-  
-  // Priority 2: Check if user has alumniProfile
-  if (user.alumniProfile) {
-    return 'Alumni';
-  }
-  
-  // Priority 3: Check if user has studentProfile
-  if (user.studentProfile) {
-    return 'Student';
-  }
-  
-  // Fallback: If role is not set, check for alumniProfile/studentProfile
-  if (user.alumniProfile) return 'Alumni';
-  if (user.studentProfile) return 'Student';
-  return '';
+
+  // Fallback based on directory type
+  return directoryType === 'students' ? 'Student' : 'Alumni';
 };
 
 // Helper function to get current user ID
@@ -666,23 +667,31 @@ const getConnectionStatus = (user, pendingRequests, myConnections) => {
   return 'not_connected';
 };
   // Enhanced data processing with better connection status handling
-  const processUserData = (userArray, pendingRequests = [], myConnections = []) => {
-    return userArray.map(user => {
-      const graduationYear = getGraduationYear(user);
-      const role = getRoleDisplay(user);
-      
-      // Enhanced connection status with proper ID comparison
-      const connectionStatus = getConnectionStatus(user, pendingRequests, myConnections);
-      
-      return {
-        ...user,
-        profileImageUrl: getProfileImageUrl(user, user.alumniProfile, user.studentProfile),
-        role: role,
-        graduationYear: graduationYear,
-        connectionStatus: connectionStatus
-      };
-    });
-  };
+  // Enhanced data processing with better connection status handling
+const processUserData = (userArray, pendingRequests = [], myConnections = []) => {
+  return userArray.map(user => {
+    const graduationYear = getGraduationYear(user);
+    
+    // Enhanced role detection with directory context
+    let role;
+    if (directoryType === 'students') {
+      role = user.role === 'student' ? 'Student' : getRoleDisplay(user, 'students');
+    } else {
+      role = user.role === 'alumni' ? 'Alumni' : getRoleDisplay(user, 'alumni');
+    }
+    
+    // Enhanced connection status with proper ID comparison
+    const connectionStatus = getConnectionStatus(user, pendingRequests, myConnections);
+    
+    return {
+      ...user,
+      profileImageUrl: getProfileImageUrl(user, user.alumniProfile, user.studentProfile),
+      role: role,
+      graduationYear: graduationYear,
+      connectionStatus: connectionStatus
+    };
+  });
+};
 
   // Fetch connection requests
   const fetchConnectionRequests = async () => {
@@ -721,43 +730,62 @@ const getConnectionStatus = (user, pendingRequests, myConnections) => {
   };
 
   // Fetch my connections
-  const fetchMyConnections = async () => {
-    try {
-      console.log('🔗 Fetching my connections...');
-      const response = await fetch('http://localhost:5000/api/my-connections', {
-        method: 'GET',
-        headers: getAuthHeaders()
-      });
+  // Enhanced fetchMyConnections function
+const fetchMyConnections = async () => {
+  try {
+    console.log('🔗 Fetching my connections...');
+    const response = await fetch('http://localhost:5000/api/my-connections', {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch connections: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        const processedConnections = (data.connections || []).map(connection => ({
-          ...connection,
-          id: connection._id || connection.id,
-          person: {
-            ...connection.person,
-            id: connection.person._id || connection.person.id,
-            profileImageUrl: getProfileImageUrl(connection.person),
-            role: getRoleDisplay(connection.person),
-            graduationYear: getGraduationYear(connection.person)
-          }
-        }));
-        
-        setMyConnections(processedConnections);
-      } else {
-        throw new Error(data.message || 'Failed to load connections');
-      }
-    } catch (error) {
-      console.error('❌ Error fetching connections:', error);
-      toast.error('Failed to load connections');
+    if (!response.ok) {
+      throw new Error(`Failed to fetch connections: ${response.status}`);
     }
-  };
 
+    const data = await response.json();
+    
+    console.log('🤝 My connections response:', data);
+    
+    if (data.success) {
+      const processedConnections = (data.connections || []).map(connection => ({
+        ...connection,
+        id: connection._id || connection.id,
+        person: {
+          ...connection.person,
+          id: connection.person._id || connection.person.id,
+          profileImageUrl: getProfileImageUrl(connection.person),
+          // Use connection type to determine role accurately
+          role: connection.connectionType === 'student-alumni' ? 'alumni' : 
+                connection.connectionType === 'alumni-student' ? 'student' :
+                connection.connectionType === 'student-student' ? 'student' :
+                connection.connectionType === 'alumni-alumni' ? 'alumni' :
+                connection.person.role,
+          graduationYear: getGraduationYear(connection.person)
+        }
+      }));
+      
+      console.log('✅ Processed connections:', processedConnections);
+      setMyConnections(processedConnections);
+      
+      // Update data with new connection status
+      const updatedAlumni = processUserData(alumniData, pendingRequests, processedConnections);
+      const updatedStudents = processUserData(studentData, pendingRequests, processedConnections);
+      setAlumniData(updatedAlumni);
+      setStudentData(updatedStudents);
+      if (directoryType === 'alumni') {
+        setFilteredData(updatedAlumni);
+      } else {
+        setFilteredData(updatedStudents);
+      }
+    } else {
+      throw new Error(data.message || 'Failed to load connections');
+    }
+  } catch (error) {
+    console.error('❌ Error fetching connections:', error);
+    toast.error('Failed to load connections');
+  }
+};
   // Enhanced fetchAlumniDirectory
   const fetchAlumniDirectory = async () => {
   setLoading(true);
@@ -799,27 +827,28 @@ const getConnectionStatus = (user, pendingRequests, myConnections) => {
   }
 };
 // Debug component for connection status
+// Enhanced ConnectionDebug component
 const ConnectionDebug = () => {
   return (
     <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-4 rounded-lg text-xs z-50 max-w-sm">
       <h4 className="font-bold mb-2">Connection Debug</h4>
+      <div>Active Section: {activeSection}</div>
+      <div>Directory Type: {directoryType}</div>
       <div>Pending Requests: {pendingRequests.length}</div>
       <div>My Connections: {myConnections.length}</div>
       <div>Alumni Data: {alumniData.length}</div>
       <div>Student Data: {studentData.length}</div>
       <div className="mt-2">
-        {pendingRequests.slice(0, 2).map(req => (
-          <div key={req.id}>
-            {req.person.name} - {req.person.role}
+        <div className="font-semibold">Connection Roles:</div>
+        {myConnections.slice(0, 3).map(conn => (
+          <div key={conn.id} className="text-xs">
+            {conn.person.name} - Role: {conn.person.role} - Type: {conn.connectionType}
           </div>
         ))}
       </div>
     </div>
   );
 };
-
-// Add this to your main component return:
-{process.env.NODE_ENV === 'development' && <ConnectionDebug />}
   // Enhanced fetchStudentDirectory
   const fetchStudentDirectory = async () => {
     setLoading(true);
@@ -1347,27 +1376,49 @@ const sendConnectionRequest = async (userId) => {
   };
 
   // View profile handler
-  // Enhanced handleViewProfile function
+ // Simplified handleViewProfile function
 const handleViewProfile = async (userId, userRole) => {
   try {
     console.log('👤 Viewing profile:', { userId, userRole });
     
+    // Find user in current data to determine actual type
+    const allUsers = [...alumniData, ...studentData];
+    const user = allUsers.find(u => 
+      (u.id || u._id)?.toString() === userId?.toString()
+    );
+    
+    if (!user) {
+      toast.error('User not found in current data');
+      return;
+    }
+
+    console.log('🔍 Found user data:', {
+      userId,
+      userRole,
+      userRoleFromData: user.role,
+      hasAlumniProfile: !!user.alumniProfile,
+      hasStudentProfile: !!user.studentProfile,
+      directoryType
+    });
+
     let endpoint;
-    if (userRole === 'alumni' || userRole === 'Alumni') {
+    let userType;
+
+    // Determine user type with priority logic
+    if (user.role === 'alumni' || user.alumniProfile) {
       endpoint = `http://localhost:5000/api/alumni/profile/${userId}`;
-    } else if (userRole === 'student' || userRole === 'Student') {
+      userType = 'alumni';
+    } else if (user.role === 'student' || user.studentProfile) {
       endpoint = `http://localhost:5000/api/student/profile/${userId}`;
+      userType = 'student';
     } else {
-      // Fallback: try to detect role from user data
-      const user = [...alumniData, ...studentData].find(u => 
-        (u.id || u._id) === userId
-      );
-      if (user?.alumniProfile) {
+      // Fallback based on directory type
+      if (directoryType === 'alumni') {
         endpoint = `http://localhost:5000/api/alumni/profile/${userId}`;
-      } else if (user?.studentProfile) {
-        endpoint = `http://localhost:5000/api/student/profile/${userId}`;
+        userType = 'alumni';
       } else {
-        throw new Error('Unable to determine user type');
+        endpoint = `http://localhost:5000/api/student/profile/${userId}`;
+        userType = 'student';
       }
     }
 
@@ -1379,16 +1430,12 @@ const handleViewProfile = async (userId, userRole) => {
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || `HTTP ${response.status}`);
+      throw new Error(`Profile not found: ${response.status}`);
     }
 
     const profileData = await response.json();
     
     console.log('✅ Profile data received:', profileData);
-    
-    // Determine user type for the modal
-    const userType = endpoint.includes('alumni') ? 'alumni' : 'student';
     setSelectedProfile({...profileData, userType});
     
   } catch (error) {
@@ -2002,16 +2049,15 @@ const handleViewProfile = async (userId, userRole) => {
   };
 
   // PendingRequestCard Component
- // Enhanced role detection in PendingRequestCard
+// Enhanced PendingRequestCard with proper role detection
 const PendingRequestCard = ({ request, onAccept, onDecline }) => {
   const profileImageUrl = getProfileImageUrl(request.person);
   const displayName = getDisplayName(request.person);
   
-  // Enhanced role detection
-  const roleDisplay = request.person.role === 'alumni' ? 'Alumni' : 
-                     request.person.role === 'student' ? 'Student' :
-                     request.person.alumniProfile ? 'Alumni' :
-                     request.person.studentProfile ? 'Student' : 'User';
+  // Enhanced role detection for pending requests
+  const roleDisplay = request.person.role || 
+                     request.requesterRole || 
+                     (request.person.alumniProfile ? 'Alumni' : 'Student');
   
   const graduationYear = getGraduationYear(request.person);
 
@@ -2043,10 +2089,6 @@ const PendingRequestCard = ({ request, onAccept, onDecline }) => {
           <p className="text-xs text-blue-500 mt-1">
             Requested on {new Date(request.requestedAt).toLocaleDateString()}
           </p>
-          {/* Debug info */}
-          <p className="text-xs text-gray-400 mt-1">
-            Requester Role: {request.requesterRole}
-          </p>
         </div>
       </div>
       <div className="flex space-x-2">
@@ -2066,62 +2108,76 @@ const PendingRequestCard = ({ request, onAccept, onDecline }) => {
     </div>
   );
 };
-  // ConnectionCard Component
-  const ConnectionCard = ({ connection, onMessage }) => {
-    const profileImageUrl = getProfileImageUrl(connection.person);
-    const displayName = getDisplayName(connection.person);
-    const roleDisplay = getRoleDisplay(connection.person);
-    const graduationYear = getGraduationYear(connection.person);
 
-    return (
-      <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-        <div className="flex items-center flex-1">
-          <div className="relative">
-            {profileImageUrl ? (
-              <img 
-                src={profileImageUrl} 
-                alt={displayName}
-                className="w-12 h-12 rounded-full object-cover mr-4"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  const fallback = e.target.parentNode.querySelector('.profile-fallback');
-                  if (fallback) fallback.style.display = 'flex';
-                }}
-              />
-            ) : null}
-            <div 
-              className="profile-fallback bg-green-100 rounded-full w-12 h-12 flex items-center justify-center mr-4"
-              style={{ display: profileImageUrl ? 'none' : 'flex' }}
-            >
-              <span className="text-green-600 font-semibold text-lg">
-                {displayName.charAt(0).toUpperCase()}
-              </span>
-            </div>
-          </div>
-          <div className="flex-1">
-            <h4 className="font-medium text-gray-900">{displayName}</h4>
-            <p className="text-sm text-gray-600">{connection.person.email}</p>
-            <p className="text-xs text-gray-500">{roleDisplay}</p>
-            {graduationYear && (
-              <p className="text-xs text-gray-500">Class of {graduationYear}</p>
-            )}
+
+  // ConnectionCard Component
+ // ConnectionCard Component with proper role detection
+const ConnectionCard = ({ connection, onMessage }) => {
+  const profileImageUrl = getProfileImageUrl(connection.person);
+  const displayName = getDisplayName(connection.person);
+  
+  // Use the connection data to determine role accurately
+  const roleDisplay = connection.person.role || 
+                     (connection.connectionType === 'student-alumni' ? 'Alumni' : 
+                      connection.connectionType === 'alumni-student' ? 'Student' : 
+                      connection.connectionType === 'student-student' ? 'Student' : 
+                      connection.connectionType === 'alumni-alumni' ? 'Alumni' : 
+                      getRoleDisplay(connection.person));
+  
+  const graduationYear = getGraduationYear(connection.person);
+
+  return (
+    <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+      <div className="flex items-center flex-1">
+        <div className="relative">
+          {profileImageUrl ? (
+            <img 
+              src={profileImageUrl} 
+              alt={displayName}
+              className="w-12 h-12 rounded-full object-cover mr-4"
+              onError={(e) => {
+                e.target.style.display = 'none';
+                const fallback = e.target.parentNode.querySelector('.profile-fallback');
+                if (fallback) fallback.style.display = 'flex';
+              }}
+            />
+          ) : null}
+          <div 
+            className="profile-fallback bg-green-100 rounded-full w-12 h-12 flex items-center justify-center mr-4"
+            style={{ display: profileImageUrl ? 'none' : 'flex' }}
+          >
+            <span className="text-green-600 font-semibold text-lg">
+              {displayName.charAt(0).toUpperCase()}
+            </span>
           </div>
         </div>
-        
-        <div className="flex space-x-2">
-          <button 
-            onClick={() => onMessage(connection.person.id)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center"
-          >
-            <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zM7 8H5v2h2V8zm2 0h2v2H9V8zm6 0h-2v2h2V8z" clipRule="evenodd" />
-            </svg>
-            Message
-          </button>
+        <div className="flex-1">
+          <h4 className="font-medium text-gray-900">{displayName}</h4>
+          <p className="text-sm text-gray-600">{connection.person.email}</p>
+          <p className="text-xs text-gray-500">{roleDisplay}</p>
+          {graduationYear && (
+            <p className="text-xs text-gray-500">Class of {graduationYear}</p>
+          )}
+          <p className="text-xs text-blue-500">
+            Connected via {connection.connectionType || 'network'}
+          </p>
         </div>
       </div>
-    );
-  };
+      
+      <div className="flex space-x-2">
+        <button 
+          onClick={() => onMessage(connection.person.id)}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center"
+        >
+          <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zM7 8H5v2h2V8zm2 0h2v2H9V8zm6 0h-2v2h2V8z" clipRule="evenodd" />
+          </svg>
+          Message
+        </button>
+      </div>
+    </div>
+  );
+};
 
   // StoryCard Component
   const StoryCard = ({ story, onLike, onOpen }) => {
