@@ -22,6 +22,7 @@ import networkingRoutes from './routes/networkingRoutes.js';
 import successStoryRoutes from './routes/successStoryRoutes.js';
 import discussionRoutes from './routes/discussionRoutes.js';
 import eventRoutes from './routes/eventRoutes.js';
+import applicationRoutes from './routes/applicationRoutes.js';
 import newsAndAchievementsRoutes from './routes/NewsAndAchievementsRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 import studentRoutes from './routes/studentRoutes.js';
@@ -95,12 +96,13 @@ app.use('/api', contactRoutes);
 app.use('/api', alumniRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api', NewsAndAchievementsRoutes); // ✅ Add this line
-app.use('/api', jobRoutes);
+app.use('/api/jobs', jobRoutes);
 app.use('/api', networkingRoutes);
 app.use('/api', successStoryRoutes);
 app.use('/api', discussionRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api', newsAndAchievementsRoutes);
+app.use('/api/applications', applicationRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/student', studentRoutes);
 
@@ -117,6 +119,29 @@ app.get('/', (req, res) => {
       health: '/api/test'
     }
   });
+});
+
+// Add this temporary debug route to your main server file (app.js/server.js)
+// Add it BEFORE your route mounting:
+
+app.get('/api/debug', (req, res) => {
+    res.json({ 
+        message: 'Server is running',
+        time: new Date().toISOString()
+    });
+});
+
+// Then mount your routes as usual
+app.use('/api/jobs', jobRoutes);
+
+// Add a catch-all for debugging
+app.use('/api', (req, res, next) => {
+    // If no routes handled the request, send 404
+    res.status(404).json({
+        message: 'API route not found',
+        requestedPath: req.originalUrl,
+        method: req.method
+    });
 });
 
 // ✅ 404 Handler

@@ -1,13 +1,126 @@
+// routes/jobRoutes.js - Updated version
 import express from 'express';
 import Job from '../models/Job.js';
+import Application from '../models/Application.js';
 import auth from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Get all jobs (for viewing)
-router.get('/jobs', async (req, res) => {
+// Get jobs posted by current user
+router.get('/my-jobs', auth, async (req, res) => {
   try {
-    const { page = 1, limit = 10, type, location, experience, role, company } = req.query;
+    const jobs = await Job.find({ postedBy: req.user.id })
+      .populate('postedBy', 'name email')
+      .populate('applications.studentId', 'name email')
+      .sort({ createdAt: -1 });
+    
+    res.status(200).json(jobs);
+  } catch (error) {
+    console.error('Get my jobs error:', error);
+    res.status(500).json({ message: 'Server error during my jobs fetch' });
+  }
+});
+
+// Get student's applied jobs - ADD THIS ROUTE
+router.get('/applied-jobs', auth, async (req, res) => {
+  try {
+    const studentId = req.user.id;
+    
+    const applications = await Application.find({ studentId })
+      .populate('jobId')
+      .sort({ appliedAt: -1 });
+    
+    res.status(200).json(applications);
+  } catch (error) {
+    console.error('Get applied jobs error:', error);
+    res.status(500).json({ message: 'Server error during applied jobs fetch' });
+  }
+});
+
+// Apply to a job
+router.post('/:id/apply', auth, async (req, res) => {
+  try {
+    const jobId = req.params.id;
+    const studentId = req.user.id;
+    const { coverLetter } = req.body;
+    
+    console.log('Applying to job:', { jobId, studentId });
+    
+    // Check if job exists and is open
+    const job = await Job.findById(jobId);
+    if (!job) {
+      return res.status(404).json({ message: 'Job not found' });
+    }
+    
+    if (job.status !== 'Open') {
+      return res.status(400).json({ message: 'This job is no longer accepting applications' });
+    }
+    
+    // Check if student has already applied
+    const existingApplication = await Application.findOne({
+      jobId,
+      studentId
+    });
+    
+    if (existingApplication) {
+      return res.status(400).json({ message: 'You have already applied to this job' });
+    }
+    
+    // Create application
+    const application = new Application({
+      jobId,
+      studentId,
+      coverLetter: coverLetter || ''
+    });
+    
+    await application.save();
+    
+    // Also add to job's applications array
+    job.applications.push({
+      studentId,
+      appliedAt: new Date(),
+      status: 'Applied',
+      coverLetter: coverLetter || ''
+    });
+    
+    await job.save();
+    
+    // Populate job details for response
+    await application.populate('jobId');
+    
+    res.status(201).json({
+      message: 'Application submitted successfully',
+      application
+    });
+    
+  } catch (error) {
+    console.error('Apply to job error:', error);
+    res.status(500).json({ message: 'Server error during job application' });
+  }
+});
+
+// Get job by ID
+router.get('/:id', async (req, res) => {
+  try {
+    const job = await Job.findById(req.params.id)
+      .populate('postedBy', 'name email')
+      .populate('applications.studentId', 'name email');
+    
+    if (!job) {
+      return res.status(404).json({ message: 'Job not found' });
+    }
+    
+    res.status(200).json(job);
+  } catch (error) {
+    console.error('Get job error:', error);
+    res.status(500).json({ message: 'Server error during job fetch' });
+  }
+});
+
+// Get all jobs (for viewing) - UPDATED
+router.get('/', async (req, res) => {
+  try {
+    const { page = 1, limit = 10, type, location, experience, role, company, search } = req.query;
     
     let filter = { status: 'Open' };
     
@@ -16,6 +129,15 @@ router.get('/jobs', async (req, res) => {
     if (experience) filter.experience = experience;
     if (role) filter.role = role;
     if (company) filter.company = { $regex: company, $options: 'i' };
+    
+    // Add search functionality
+    if (search) {
+      filter.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { company: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
     
     const jobs = await Job.find(filter)
       .populate('postedBy', 'name email')
@@ -37,22 +159,8 @@ router.get('/jobs', async (req, res) => {
   }
 });
 
-// Get jobs posted by current user
-router.get('/jobs/my-jobs', auth, async (req, res) => {
-  try {
-    const jobs = await Job.find({ postedBy: req.user.id })
-      .populate('postedBy', 'name email')
-      .sort({ createdAt: -1 });
-    
-    res.status(200).json(jobs);
-  } catch (error) {
-    console.error('Get my jobs error:', error);
-    res.status(500).json({ message: 'Server error during my jobs fetch' });
-  }
-});
-
 // Create a new job
-router.post('/jobs', auth, async (req, res) => {
+router.post('/', auth, async (req, res) => {
   try {
     const {
       title,
@@ -60,6 +168,7 @@ router.post('/jobs', auth, async (req, res) => {
       location,
       type,
       experience,
+      salary,
       referralCode,
       description,
       applyLink
@@ -115,6 +224,7 @@ router.post('/jobs', auth, async (req, res) => {
       location,
       type,
       experience,
+      salary: salary || '',
       role: jobRole,
       description,
       applyLink,
@@ -138,7 +248,7 @@ router.post('/jobs', auth, async (req, res) => {
 });
 
 // Update job status (close job)
-router.patch('/jobs/:id/status', auth, async (req, res) => {
+router.patch('/:id/status', auth, async (req, res) => {
   try {
     const { status } = req.body;
     const jobId = req.params.id;
@@ -163,23 +273,6 @@ router.patch('/jobs/:id/status', auth, async (req, res) => {
   } catch (error) {
     console.error('Update job status error:', error);
     res.status(500).json({ message: 'Server error during job status update' });
-  }
-});
-
-// Get job by ID
-router.get('/jobs/:id', async (req, res) => {
-  try {
-    const job = await Job.findById(req.params.id)
-      .populate('postedBy', 'name email');
-    
-    if (!job) {
-      return res.status(404).json({ message: 'Job not found' });
-    }
-    
-    res.status(200).json(job);
-  } catch (error) {
-    console.error('Get job error:', error);
-    res.status(500).json({ message: 'Server error during job fetch' });
   }
 });
 

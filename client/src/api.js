@@ -82,7 +82,17 @@ export const eventsAPI = {
   getUserEventsById: (userId) => api.get(`/events/user/${userId}`),
 };
 
+// Applications API
+export const applicationsAPI = {
+  apply: (applicationData) => api.post('/applications', applicationData),
+  getMyApplications: () => api.get('/applications/my-applications')
+};
+
+// Cancel application
+export const cancelApplication = (eventId) => api.delete(`/applications/${eventId}`);
+
 // Job API - ADD THIS TO YOUR EXISTING api.js
+// In api.js - Add these to your existing jobAPI
 export const jobAPI = {
   // Get current user's jobs
   getMyJobs: () => {
@@ -91,12 +101,29 @@ export const jobAPI = {
 
   // Close job (update status to closed)
   close: (jobId) => {
-    return api.patch(`/jobs/${jobId}/close`);
+    return api.patch(`/jobs/${jobId}/status`);
   },
 
   // Delete job completely
   delete: (jobId) => {
     return api.delete(`/jobs/${jobId}`);
+  },
+
+  // New methods for students
+  getAllJobs: (filters = {}) => {
+    const params = new URLSearchParams();
+    Object.keys(filters).forEach(key => {
+      if (filters[key]) params.append(key, filters[key]);
+    });
+    return api.get(`/jobs?${params}`);
+  },
+
+  applyToJob: (jobId, coverLetter = '') => {
+    return api.post(`/jobs/${jobId}/apply`, { coverLetter });
+  },
+
+  getAppliedJobs: () => {
+    return api.get('/jobs/applied-jobs');
   }
 };
 // Test connection

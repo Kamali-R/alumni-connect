@@ -14,6 +14,7 @@ router.post('/profile', auth, uploadFiles, saveStudentProfile);
 router.get('/profile', auth, getStudentProfile);
 router.put('/profile', auth, uploadFiles, updateStudentProfile);
 // Get student profile by user ID (for public viewing)
+// Add this route for public student profile viewing
 router.get('/profile/:userId', auth, async (req, res) => {
   try {
     const { userId } = req.params;
