@@ -149,13 +149,23 @@ export const login = async (req, res) => {
     
     // Check if user exists in Users table
     const user = await User.findOne({ email });
+    console.log('Login attempt for email:', email, 'found User:', !!user);
     if (!user) {
       // Fallback: older accounts may exist in the Alumni collection
       const legacyAlumni = await Alumni.findOne({ email }).select('+password');
+      console.log('Legacy alumni found:', !!legacyAlumni);
       if (legacyAlumni) {
         // Verify password against alumni record
-        const isMatchAlumni = await legacyAlumni.matchPassword ? await legacyAlumni.matchPassword(password) : await bcrypt.compare(password, legacyAlumni.password);
+        let isMatchAlumni = false;
+        try {
+          isMatchAlumni = legacyAlumni.matchPassword ? await legacyAlumni.matchPassword(password) : await bcrypt.compare(password, legacyAlumni.password);
+        } catch (err) {
+          console.error('Error comparing legacy alumni password:', err);
+        }
+        console.log('Legacy alumni password match:', isMatchAlumni);
         if (!isMatchAlumni) {
+          // Log truncated hash for debugging (do not log full hashes in production)
+          console.warn('Legacy alumni password did not match for', email);
           return res.status(401).json({ message: 'Invalid credentials' });
         }
 

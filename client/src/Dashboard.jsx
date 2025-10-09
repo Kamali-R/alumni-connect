@@ -8,6 +8,7 @@ import NetworkingHub from './NetworkingHub';
 import NewsAndAchievements from './NewsAndAchievements';
 import EventsAndReunions from './EventsAndReunions';
 import Messages from './Messages';
+import AlumniMentorship from './AlumniMentorship';
 const AlumniConnectDashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -582,6 +583,13 @@ const AlumniConnectDashboard = () => {
           {activeSection === 'jobs' && (
             <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
               <AlumniJobDashboard />
+            </div>
+          )}
+
+          {/* Mentorship Section */}
+          {activeSection === 'mentorship' && (
+            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
+              <AlumniMentorshipPlatform />
             </div>
           )}
 
