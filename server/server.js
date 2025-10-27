@@ -27,6 +27,7 @@ import newsAndAchievementsRoutes from './routes/NewsAndAchievementsRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 import studentRoutes from './routes/studentRoutes.js';
 import NewsAndAchievementsRoutes from './routes/NewsAndAchievementsRoutes.js';
+import mentorshipRoutes from './routes/mentorshipRoutes.js';
 
 // Load Google OAuth config
 import './config/googleAuth.js';
@@ -105,7 +106,7 @@ app.use('/api', newsAndAchievementsRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/student', studentRoutes);
-
+app.use('/api/mentorship', mentorshipRoutes);
 // ✅ Root Route
 app.get('/', (req, res) => {
   res.json({
