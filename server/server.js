@@ -8,6 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import { setIo } from './utils/socket.js';
 
 // Load environment variables first
 dotenv.config();
@@ -196,6 +197,9 @@ const io = new Server(server, {
     credentials: true
   }
 });
+
+// expose io to controllers
+setIo(io);
 
 // Socket.io connection handling with WebRTC support
 const connectedUsers = new Map();

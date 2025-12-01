@@ -2,6 +2,37 @@ import Mentorship from '../models/Mentorship.js';
 import MentorProfile from '../models/MentorProfile.js';
 import User from '../models/User.js';
 import Alumni from '../models/Alumni.js';
+import { getIo } from '../utils/socket.js';
+
+// Helper to build a frontend-friendly mentor object
+const buildMentorDto = (mentor, user = {}, alumni = {}) => {
+  const name = alumni.personalInfo?.fullName || user.name || 'Unknown';
+  const initials = (name)
+    .split(' ')
+    .map(n => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+
+  return {
+    id: mentor._id,
+    userId: user._id,
+    name,
+    initials,
+    position: alumni.careerDetails?.jobTitle || 'Professional',
+    company: alumni.careerDetails?.companyName || 'Not specified',
+    graduationYear: alumni.academicInfo?.graduationYear ? `Class of ${alumni.academicInfo.graduationYear}` : 'Alumni',
+    expertise: (mentor.expertise || []).flatMap(exp => [exp.category, ...(exp.skills || [])]).filter(Boolean),
+    description: mentor.description,
+    industry: mentor.industry,
+    experience: mentor.experience,
+    companySize: mentor.companySize,
+    location: mentor.location,
+    availability: mentor.availability,
+    rating: mentor.rating,
+    color: `from-${getColor(mentor.industry)}-500 to-${getColor(mentor.industry)}-600`
+  };
+};
 
 // Become a mentor
 export const becomeMentor = async (req, res) => {
@@ -63,6 +94,10 @@ export const becomeMentor = async (req, res) => {
     // Update user role to include mentor
     user.role = user.role.includes('mentor') ? user.role : [...user.role, 'mentor'];
     await user.save();
+
+    // Emit updated mentor list so frontend can refresh
+    try { await emitMentorsUpdate(); } catch (e) { console.warn('emitMentorsUpdate failed', e); }
+    try { await emitMyMentorships(userId); } catch (e) { console.warn('emitMyMentorships failed', e); }
 
     res.status(201).json({
       success: true,
@@ -366,6 +401,34 @@ export const requestMentorship = async (req, res) => {
     await mentorship.populate('mentorId', 'name email');
     await mentorship.populate('menteeId', 'name email');
 
+    // Emit updates: notify mentor(s) and broadcast requests
+    try {
+      const mentorUserId = mentorProfile.userId?.toString();
+      const io = getIo();
+      // Emit new single request to the mentor's user room
+      const transformedSingle = {
+        id: mentorship._id,
+        name: mentorship.menteeId?.name || 'Unknown',
+        initials: (mentorship.menteeId?.name || 'UU').split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2),
+        major: 'Student',
+        graduationYear: 'Current Student',
+        interests: (mentorship.mentorDetails?.expertise || []).flatMap(exp => [exp.category, ...(exp.skills || [])]).slice(0,3),
+        message: mentorship.requestMessage,
+        status: mentorship.status,
+        createdAt: mentorship.createdAt,
+        color: 'from-blue-500 to-purple-600'
+      };
+      if (io && mentorUserId) {
+        io.to(`user_${mentorUserId}`).emit('mentorshipRequest', transformedSingle);
+      }
+      // Emit full requests update
+      await emitRequestsUpdate(mentorProfile.userId);
+      // Emit my mentorships update for the mentee
+      await emitMyMentorships(menteeId);
+    } catch (err) {
+      console.warn('Failed to emit mentorship events', err);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Mentorship request sent successfully',
@@ -464,6 +527,17 @@ export const acceptMentorship = async (req, res) => {
       data: mentorship
     });
 
+    // Emit updates to mentor and mentee
+    try {
+      const mentorUserId = mentorId;
+      const menteeUserId = mentorship.menteeId?._id?.toString();
+      await emitRequestsUpdate(mentorUserId);
+      await emitMyMentorships(mentorUserId);
+      if (menteeUserId) await emitMyMentorships(menteeUserId);
+    } catch (err) {
+      console.warn('emit after accept failed', err);
+    }
+
   } catch (error) {
     console.error('Accept mentorship error:', error);
     res.status(500).json({
@@ -500,6 +574,15 @@ export const declineMentorship = async (req, res) => {
       success: true,
       message: 'Mentorship request declined'
     });
+
+    // Emit updates for the mentor
+    try {
+      const mentorUserId = mentorId;
+      await emitRequestsUpdate(mentorUserId);
+      await emitMyMentorships(mentorUserId);
+    } catch (err) {
+      console.warn('emit after decline failed', err);
+    }
 
   } catch (error) {
     console.error('Decline mentorship error:', error);
@@ -609,5 +692,89 @@ export const getMentorProfile = async (req, res) => {
       message: 'Server error fetching mentor profile',
       error: error.message
     });
+  }
+};
+
+// Emit helpers
+const emitMentorsUpdate = async () => {
+  try {
+    const aggregation = [
+      { $match: { isActive: true } },
+      { $lookup: { from: 'users', localField: 'userId', foreignField: '_id', as: 'user' } },
+      { $unwind: '$user' },
+      { $lookup: { from: 'alumnis', localField: 'userId', foreignField: 'userId', as: 'alumni' } },
+      { $unwind: { path: '$alumni', preserveNullAndEmptyArrays: true } },
+      { $project: { _id: 1, user: 1, alumni: 1, expertise: 1, availability:1, description:1, industry:1, experience:1, companySize:1, location:1, rating:1, createdAt:1 } },
+      { $sort: { 'rating.average': -1, createdAt: -1 } }
+    ];
+    const docs = await MentorProfile.aggregate(aggregation);
+    const transformed = docs.map(d => buildMentorDto(d, d.user || {}, d.alumni || {}));
+    const io = getIo();
+    if (io) io.emit('mentorsUpdated', transformed);
+  } catch (err) {
+    console.error('emitMentorsUpdate error:', err);
+  }
+};
+
+const emitRequestsUpdate = async (mentorUserId) => {
+  try {
+    const query = mentorUserId ? { mentorId: mentorUserId, status: 'pending' } : { status: 'pending' };
+    const requests = await Mentorship.find(query)
+      .populate('menteeId', 'name email')
+      .populate('mentorId', 'name email')
+      .sort({ createdAt: -1 });
+
+    const transformed = requests.map(request => ({
+      id: request._id,
+      name: request.menteeId?.name || 'Unknown',
+      initials: (request.menteeId?.name || 'UU').split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2),
+      major: 'Student',
+      graduationYear: 'Current Student',
+      interests: (request.mentorDetails?.expertise || []).flatMap(exp => [exp.category, ...(exp.skills || [])]).slice(0,3),
+      message: request.requestMessage,
+      status: request.status,
+      createdAt: request.createdAt,
+      color: 'from-blue-500 to-purple-600'
+    }));
+
+    const io = getIo();
+    if (io) {
+      // send to the specific mentor room and broadcast general update
+      if (mentorUserId) io.to(`user_${mentorUserId}`).emit('requestsUpdated', transformed.filter(r => true));
+      io.emit('requestsUpdated', transformed);
+    }
+  } catch (err) {
+    console.error('emitRequestsUpdate error:', err);
+  }
+};
+
+const emitMyMentorships = async (userId) => {
+  try {
+    if (!userId) return;
+    const asMenteeDocs = await Mentorship.find({ menteeId: userId, status: 'active' }).populate('mentorId', 'name email').sort({ startDate: -1 });
+    const asMentorDocs = await Mentorship.find({ mentorId: userId, status: 'active' }).populate('menteeId', 'name email').sort({ startDate: -1 });
+
+    const asMentee = asMenteeDocs.map(m => ({
+      id: m._id,
+      name: m.mentorId?.name || 'Unknown Mentor',
+      initials: (m.mentorId?.name || 'UM').split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2),
+      expertise: (m.mentorDetails?.expertise || []).flatMap(e=> [e.category, ...(e.skills||[])]).slice(0,2).join(', '),
+      nextSession: 'To be scheduled',
+      color: 'from-blue-500 to-purple-600'
+    }));
+
+    const asMentor = asMentorDocs.map(m => ({
+      id: m._id,
+      name: m.menteeId?.name || 'Unknown Mentee',
+      initials: (m.menteeId?.name || 'UM').split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2),
+      expertise: 'Student',
+      nextSession: 'To be scheduled',
+      color: 'from-green-500 to-teal-600'
+    }));
+
+    const io = getIo();
+    if (io) io.to(`user_${userId}`).emit('myMentorshipsUpdated', { asMentee, asMentor });
+  } catch (err) {
+    console.error('emitMyMentorships error:', err);
   }
 };
