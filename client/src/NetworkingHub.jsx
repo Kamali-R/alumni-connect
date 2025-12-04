@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { 
@@ -598,6 +599,9 @@ const NetworkingHub = () => {
     hasNext: false,
     hasPrev: false
   });
+
+  // Router navigate hook must be at top-level to obey the Rules of Hooks
+  const navigate = useNavigate();
 
   // Navigation items
   const navItems = [
@@ -2782,7 +2786,8 @@ const ConnectionCard = ({ connection, onMessage }) => {
   // Render Connections
   const renderConnections = () => {
     const handleMessage = (userId) => {
-      toast.info(`Messaging feature for user ${userId} will be implemented soon`);
+      // Navigate to the messages page and pass the recipient id via location state
+      navigate('/messages', { state: { otherUserId: userId } });
     };
 
     return (
