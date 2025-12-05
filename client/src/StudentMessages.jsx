@@ -71,7 +71,7 @@ const CallStatus = ({ callStatus, activeCall, onEndCall, callDuration }) => {
   };
 
   return (
-    <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-40 flex items-center space-x-4">
+    <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-lg z-40 flex items-center space-x-4">
       <span className="text-xl animate-pulse">{getCallIcon()}</span>
       <div className="flex flex-col">
         <span className="font-medium">{getCallText()}</span>
@@ -213,19 +213,19 @@ const CallInterface = ({
                 alt={activeConversation.otherUser.name}
                 className="w-32 h-32 rounded-full mx-auto mb-4 object-cover border-4 border-white"
               />
-            ) : (
-              <div className="w-32 h-32 rounded-full mx-auto mb-4 bg-green-500 flex items-center justify-center border-4 border-white">
-                <span className="text-4xl font-bold">
+              ) : (
+              <div className="w-32 h-32 rounded-full mx-auto mb-4 bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-4 border-white">
+                <span className="text-4xl font-bold text-blue-600">
                   {activeConversation?.otherUser?.name?.charAt(0).toUpperCase()}
                 </span>
               </div>
             )}
             <h2 className="text-2xl font-bold">{activeConversation?.otherUser?.name}</h2>
             <div className="flex items-center justify-center space-x-2 mt-2">
-              <span className={`text-sm px-3 py-1 rounded-full ${
+                <span className={`text-sm px-3 py-1 rounded-full ${
                 activeConversation.otherUser.role === 'alumni' 
                   ? 'bg-blue-600 text-white' 
-                  : 'bg-green-600 text-white'
+                  : 'bg-blue-600 text-white'
               }`}>
                 {activeConversation.otherUser.role === 'alumni' ? '🎓 Alumni' : '👨‍🎓 Student'}
               </span>
@@ -317,7 +317,7 @@ const CallInterface = ({
                 onClick={onAcceptCall}
                 className="flex flex-col items-center space-y-2"
               >
-                <div className="w-20 h-20 bg-green-600 rounded-full flex items-center justify-center hover:bg-green-500 animate-pulse">
+                <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center hover:bg-blue-500 animate-pulse">
                   <span className="text-3xl">📞</span>
                 </div>
                 <span className="text-sm">Accept</span>
@@ -757,7 +757,7 @@ const CallMessage = ({ message, isOwnMessage, onDelete }) => {
   };
 
   const getCallColor = () => {
-    if (message.callStatus === 'connected') return 'bg-green-500 text-white';
+    if (message.callStatus === 'connected') return 'bg-blue-500 text-white';
     if (message.callStatus === 'missed') return 'bg-red-500 text-white';
     if (message.callStatus === 'declined') return 'bg-orange-500 text-white';
     return isOwnMessage ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700';
@@ -1110,7 +1110,7 @@ const StudentMessages = () => {
         case 'alumni':
           return { color: 'bg-blue-100 text-blue-700', text: 'Alumni', icon: '🎓' };
         case 'student':
-          return { color: 'bg-green-100 text-green-700', text: 'Student', icon: '👨‍🎓' };
+          return { color: 'bg-blue-100 text-blue-700', text: 'Student', icon: '👨‍🎓' };
         default:
           return { color: 'bg-gray-100 text-gray-700', text: 'User', icon: '👤' };
       }
@@ -1144,7 +1144,7 @@ const StudentMessages = () => {
               </div>
             )}
             <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 border-2 border-white rounded-full ${
-              user.otherUser.isOnline ? 'bg-green-500' : 'bg-gray-400'
+              user.otherUser.isOnline ? 'bg-blue-500' : 'bg-gray-400'
             }`}></div>
             {hasUnread && (
               <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
@@ -2141,12 +2141,12 @@ const StudentMessages = () => {
         />
       )}
 
-      <nav className="bg-green-600 border-b border-green-700 shadow-sm z-10">
+      <nav className="bg-blue-600 border-b border-blue-700 shadow-sm z-10">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between py-3">
             <div className="flex items-center">
               <h1 className="text-xl font-bold text-white">💬 Student Messages</h1>
-              <span className="ml-2 text-sm text-green-100 bg-green-700 px-2 py-1 rounded-full">
+              <span className="ml-2 text-sm text-blue-100 bg-blue-700 px-2 py-1 rounded-full">
                 Connect with Alumni & Students
               </span>
             </div>
@@ -2156,11 +2156,11 @@ const StudentMessages = () => {
                 <input 
                   type="text" 
                   placeholder="Search connections..." 
-                  className="w-full pl-10 pr-4 py-2 border border-green-500 rounded-lg focus:ring-2 focus:ring-green-300 focus:border-transparent bg-green-50 text-sm placeholder-green-700"
+                  className="w-full pl-10 pr-4 py-2 border border-blue-500 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-transparent bg-blue-50 text-sm placeholder-blue-700"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
-                <div className="absolute left-3 top-2.5 text-green-600">
+                <div className="absolute left-3 top-2.5 text-blue-600">
                   🔍
                 </div>
               </div>
@@ -2176,20 +2176,20 @@ const StudentMessages = () => {
             <div className="w-2/5 border-r border-gray-200 flex flex-col bg-white">
               <div className="p-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-gray-900 flex items-center">
+                      <h3 className="font-semibold text-gray-900 flex items-center">
                     🤝 Connected Users
-                    <span className="ml-2 text-xs bg-green-100 text-green-600 px-2 py-1 rounded-full">
+                    <span className="ml-2 text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
                       {connectedUsers.length} connections
                     </span>
                   </h3>
                   
                   {/* Role Filter Tabs */}
-                  <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
+                      <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
                     <button
                       onClick={() => setRoleFilter('all')}
                       className={`px-3 py-1 text-xs rounded-md transition-colors ${
                         roleFilter === 'all' 
-                          ? 'bg-white text-green-600 shadow-sm' 
+                          ? 'bg-white text-blue-600 shadow-sm' 
                           : 'text-gray-600 hover:text-gray-900'
                       }`}
                     >
@@ -2199,7 +2199,7 @@ const StudentMessages = () => {
                       onClick={() => setRoleFilter('alumni')}
                       className={`px-3 py-1 text-xs rounded-md transition-colors ${
                         roleFilter === 'alumni' 
-                          ? 'bg-white text-green-600 shadow-sm' 
+                          ? 'bg-white text-blue-600 shadow-sm' 
                           : 'text-gray-600 hover:text-gray-900'
                       }`}
                     >
@@ -2209,7 +2209,7 @@ const StudentMessages = () => {
                       onClick={() => setRoleFilter('student')}
                       className={`px-3 py-1 text-xs rounded-md transition-colors ${
                         roleFilter === 'student' 
-                          ? 'bg-white text-green-600 shadow-sm' 
+                          ? 'bg-white text-blue-600 shadow-sm' 
                           : 'text-gray-600 hover:text-gray-900'
                       }`}
                     >
@@ -2220,10 +2220,10 @@ const StudentMessages = () => {
                 
                 {/* Search Input */}
                 <div className="relative">
-                  <input 
+                    <input 
                     type="text" 
                     placeholder="Search connections..." 
-                    className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-300 focus:border-transparent bg-white text-sm"
+                    className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-transparent bg-white text-sm"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
@@ -2235,8 +2235,8 @@ const StudentMessages = () => {
               
               <div className="flex-1 overflow-y-auto">
                 {loading ? (
-                  <div className="flex justify-center items-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-500"></div>
+                    <div className="flex justify-center items-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
                   </div>
                 ) : filteredUsers.length > 0 ? (
                   <div>
@@ -2258,8 +2258,8 @@ const StudentMessages = () => {
                     {/* Students Section */}
                     {filteredUsers.filter(user => user.otherUser.role === 'student').length > 0 && (
                       <div>
-                        <div className="px-4 py-2 bg-gradient-to-r from-green-50 to-emerald-50">
-                          <h4 className="text-xs font-semibold text-green-700 uppercase tracking-wide flex items-center">
+                        <div className="px-4 py-2 bg-gradient-to-r from-blue-50 to-indigo-50">
+                          <h4 className="text-xs font-semibold text-blue-700 uppercase tracking-wide flex items-center">
                             <span className="mr-2">👨‍🎓</span>
                             Students ({filteredUsers.filter(user => user.otherUser.role === 'student').length})
                           </h4>
@@ -2278,7 +2278,7 @@ const StudentMessages = () => {
                     </p>
                     <button 
                       onClick={() => window.location.href = '/networking'}
-                      className="mt-3 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm"
+                      className="mt-3 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm"
                     >
                       Go to Networking Hub
                     </button>
@@ -2290,7 +2290,7 @@ const StudentMessages = () => {
             <div className="flex-1 flex flex-col">
               {activeConversation ? (
                 <>
-                  <div className="p-4 border-b border-gray-200 bg-green-50">
+                  <div className="p-4 border-b border-gray-200 bg-blue-50">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
                         <div className="relative">
@@ -2301,14 +2301,14 @@ const StudentMessages = () => {
                               className="w-10 h-10 rounded-full object-cover mr-3"
                             />
                           ) : (
-                            <div className="bg-gradient-to-br from-green-100 to-green-200 rounded-full w-10 h-10 flex items-center justify-center mr-3">
-                              <span className="text-green-600 font-semibold">
+                            <div className="bg-gradient-to-br from-blue-100 to-blue-200 rounded-full w-10 h-10 flex items-center justify-center mr-3">
+                              <span className="text-blue-600 font-semibold">
                                 {getDisplayName(activeConversation.otherUser).charAt(0).toUpperCase()}
                               </span>
                             </div>
                           )}
                           <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-white rounded-full ${
-                            activeConversation.otherUser.isOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+                            activeConversation.otherUser.isOnline ? 'bg-blue-500 animate-pulse' : 'bg-gray-400'
                           }`}></div>
                         </div>
                         <div>
@@ -2319,14 +2319,14 @@ const StudentMessages = () => {
                             <span className={`text-xs px-2 py-0.5 rounded-full ${
                               activeConversation.otherUser.role === 'alumni' 
                                 ? 'bg-blue-100 text-blue-700' 
-                                : 'bg-green-100 text-green-700'
+                                : 'bg-blue-100 text-blue-700'
                             }`}>
                               {activeConversation.otherUser.role === 'alumni' ? '🎓 Alumni' : '👨‍🎓 Student'}
                             </span>
                           </div>
                           <p className="text-xs text-gray-600">
                             {activeConversation.otherUser.isOnline ? (
-                              <span className="text-green-600 font-medium">🟢 Online</span>
+                              <span className="text-blue-600 font-medium">🔵 Online</span>
                             ) : (
                               <span className="text-gray-500">⚫ Offline</span>
                             )} • Real-time Chat
@@ -2340,7 +2340,7 @@ const StudentMessages = () => {
                           className={`p-3 rounded-full transition-all ${
                             activeCall || callStatus === 'calling' || callStatus === 'ringing'
                               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                              : 'bg-green-500 hover:bg-green-600 text-white shadow-lg hover:shadow-xl'
+                              : 'bg-blue-500 hover:bg-blue-600 text-white shadow-lg hover:shadow-xl'
                           }`}
                           title="Voice Call"
                         >
@@ -2399,7 +2399,7 @@ const StudentMessages = () => {
                     />
                     
                     {filePreview && (
-                      <div className="mb-3 p-3 bg-green-50 rounded-lg border border-green-200">
+                          <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
                             <img 
@@ -2461,7 +2461,7 @@ const StudentMessages = () => {
                         <input 
                           type="text" 
                           placeholder={replyingTo ? `Replying to ${replyingTo.senderName || 'user'}...` : "Type a message"} 
-                          className="w-full px-4 py-2.5 border border-gray-300 rounded-full focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white text-sm"
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-full focus:ring-2 focus:ring-blue-300 focus:border-transparent bg-white text-sm"
                           value={messageInput}
                           onChange={handleInputChange}
                           onKeyPress={handleKeyPress}
@@ -2478,7 +2478,7 @@ const StudentMessages = () => {
                           flex items-center justify-center min-w-[44px] min-h-[44px]
                           ${(!messageInput.trim() && !selectedFile) || sendingMessage || uploadingFile
                             ? 'bg-gray-400 cursor-not-allowed text-gray-200'
-                            : 'bg-green-500 hover:bg-green-600 hover:shadow-xl text-white'
+                            : 'bg-blue-500 hover:bg-blue-600 hover:shadow-xl text-white'
                           }
                         `}
                         title="Send message"
@@ -2508,7 +2508,7 @@ const StudentMessages = () => {
                     {connectedUsers.length === 0 && (
                       <button 
                         onClick={() => window.location.href = '/networking'}
-                        className="mt-4 bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg"
+                        className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg"
                       >
                         Find Users to Connect With
                       </button>

@@ -2612,6 +2612,15 @@ const ConnectionCard = ({ connection, onMessage }) => {
                     toast.error('Unable to determine author to message');
                     return;
                   }
+
+                  // If not connected, prompt to send a connection request instead
+                  if (!isUserConnected(authorId)) {
+                    promptSendConnectionRequest(authorId);
+                    // keep modal open so user can act on the toast, then close modal
+                    onClose();
+                    return;
+                  }
+
                   const currentPath = location?.pathname || '';
                   if (currentPath.startsWith('/dashboard') || currentPath.startsWith('/student-dashboard')) {
                     navigate(currentPath, { state: { openMessagesWith: authorId } });
