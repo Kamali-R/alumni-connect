@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import AlumniProfilePage from './profile';
 import AlumniJobDashboard from './AlumniJobDashboard';
 import NetworkingHub from './NetworkingHub';
@@ -160,6 +160,23 @@ const AlumniConnectDashboard = () => {
     };
   }, []);
 
+  // If navigation state requests opening messages (from NetworkingHub), handle it
+  const location = useLocation();
+  useEffect(() => {
+    try {
+      const openWith = location?.state?.openMessagesWith;
+      const otherUserId = location?.state?.otherUserId;
+      if (openWith && activeSection !== 'messages') {
+        setActiveSection('messages');
+        navigate(location.pathname, { replace: true, state: { otherUserId: openWith } });
+      } else if (otherUserId && activeSection !== 'messages') {
+        setActiveSection('messages');
+      }
+    } catch (err) {
+      // ignore
+    }
+  }, [location]);
+
   // Navigation items
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: (
@@ -203,11 +220,7 @@ const AlumniConnectDashboard = () => {
           <path fillRule="evenodd" d="M2 5a2 2 0 012-2h8a2 2 0 012 2v10a2 2 0 002 2H4a2 2 0 01-2-2V5zm3 1h6v4H5V6zm6 6H5v2h6v-2z" clipRule="evenodd"></path>
         </svg>
       ) },
-    { id: 'donations', label: 'Donations', icon: (
-        <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"></path>
-        </svg>
-      ) },
+
     { id: 'logout', label: 'Logout', icon: (
         <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd"></path>
@@ -343,7 +356,7 @@ const AlumniConnectDashboard = () => {
   const statCards = [
     { 
       title: 'Network Connections', 
-      value: '0', 
+      value: '6', 
       icon: (
         <svg className="w-8 h-8 text-blue-700" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>

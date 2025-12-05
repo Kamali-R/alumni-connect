@@ -6,6 +6,7 @@ import VerifyOtp from './VerifyOtp';
 import PasswordResetFlow from './password';
 import Login from './Login';
 import AlumniDashboard from './Dashboard';
+import AdminDashboard from './AdminDashboard';
 import StudentDashboard from './studentdashboard';
 import AlumniConnectProfile from './AlumniProfile';
 import StudentProfile from './studentprofile';
@@ -40,6 +41,7 @@ function App() {
           <Route path="/alumni-profile" element={<AlumniConnectProfile />} />
           <Route path="/student-profile" element={<StudentProfile />} />
           <Route path="/dashboard" element={<AlumniDashboard />} />
+          <Route path="/admin-dashboard" element={<AdminDashboard />} />
           <Route path="/student-dashboard" element={<StudentDashboard />} />
           <Route path="/events" element={<EventsAndReunions />} />
           <Route path="/messages" element={<Messages />} />
