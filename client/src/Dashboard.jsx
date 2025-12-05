@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import AlumniProfilePage from './profile';
 import AlumniJobDashboard from './AlumniJobDashboard';
 import NetworkingHub from './NetworkingHub';
@@ -159,6 +159,23 @@ const AlumniConnectDashboard = () => {
       window.removeEventListener('storage', handleProfileUpdate);
     };
   }, []);
+
+  // If navigation state requests opening messages (from NetworkingHub), handle it
+  const location = useLocation();
+  useEffect(() => {
+    try {
+      const openWith = location?.state?.openMessagesWith;
+      const otherUserId = location?.state?.otherUserId;
+      if (openWith && activeSection !== 'messages') {
+        setActiveSection('messages');
+        navigate(location.pathname, { replace: true, state: { otherUserId: openWith } });
+      } else if (otherUserId && activeSection !== 'messages') {
+        setActiveSection('messages');
+      }
+    } catch (err) {
+      // ignore
+    }
+  }, [location]);
 
   // Navigation items
   const navItems = [

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { 
@@ -600,8 +600,49 @@ const NetworkingHub = () => {
     hasPrev: false
   });
 
-  // Router navigate hook must be at top-level to obey the Rules of Hooks
+  // Router navigate & location hooks must be at top-level to obey the Rules of Hooks
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Helper to check if a user is already connected
+  const isUserConnected = (userId) => {
+    if (!userId) return false;
+    return myConnections.some(conn => {
+      const pid = conn.person?.id || conn.person?._id;
+      return pid && pid.toString() === userId.toString();
+    });
+  };
+
+  // Prompt to send connection request using a non-blocking toast with action
+  const promptSendConnectionRequest = (userId) => {
+    if (!userId) return;
+    const tId = toast.info(
+      (<div>
+        You must connect with this user to message them.
+        <div className="mt-2 flex gap-2">
+          <button
+            onClick={async (e) => {
+              e.stopPropagation();
+              toast.dismiss(tId);
+              await sendConnectionRequest(userId);
+              await fetchConnectionRequests();
+              await fetchMyConnections();
+            }}
+            className="px-3 py-1 bg-blue-600 text-white rounded"
+          >
+            Send Request
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); toast.dismiss(tId); }}
+            className="px-3 py-1 border rounded"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>),
+      { autoClose: false }
+    );
+  };
 
   // Navigation items
   const navItems = [
@@ -2102,7 +2143,27 @@ const UserCard = ({ user, onConnect, onViewProfile }) => {
                 Close
               </button>
               <button 
-                onClick={() => toast.info('Connection feature will be implemented soon')}
+                onClick={async () => {
+                  const recipientId = profile._id || profile.id || profile.userId;
+                  if (!recipientId) {
+                    toast.error('Unable to determine recipient to message');
+                    return;
+                  }
+
+                  if (!isUserConnected(recipientId)) {
+                    promptSendConnectionRequest(recipientId);
+                    return;
+                  }
+
+                  const currentPath = location?.pathname || '';
+                  if (currentPath.startsWith('/dashboard') || currentPath.startsWith('/student-dashboard')) {
+                    navigate(currentPath, { state: { openMessagesWith: recipientId } });
+                    onClose();
+                    return;
+                  }
+                  navigate('/messages', { state: { otherUserId: recipientId } });
+                  onClose();
+                }}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
                 Send Message
@@ -2546,7 +2607,19 @@ const ConnectionCard = ({ connection, onMessage }) => {
               </button>
               <button 
                 onClick={() => {
-                  toast.info('Message feature will be implemented soon');
+                  const authorId = story?.author?._id || story?.author?.id;
+                  if (!authorId) {
+                    toast.error('Unable to determine author to message');
+                    return;
+                  }
+                  const currentPath = location?.pathname || '';
+                  if (currentPath.startsWith('/dashboard') || currentPath.startsWith('/student-dashboard')) {
+                    navigate(currentPath, { state: { openMessagesWith: authorId } });
+                    onClose();
+                    return;
+                  }
+                  navigate('/messages', { state: { otherUserId: authorId } });
+                  onClose();
                 }}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
@@ -2779,7 +2852,16 @@ const ConnectionCard = ({ connection, onMessage }) => {
   // Render Connections
   const renderConnections = () => {
     const handleMessage = (userId) => {
-      // Navigate to the messages page and pass the recipient id via location state
+      // If we're inside a dashboard route, keep the user in the dashboard
+      // and signal the dashboard to open the Messages section with this user.
+      const currentPath = location?.pathname || '';
+      if (currentPath.startsWith('/dashboard') || currentPath.startsWith('/student-dashboard')) {
+        // Push same path but include an indicator for the dashboard to open messages
+        navigate(currentPath, { state: { openMessagesWith: userId } });
+        return;
+      }
+
+      // Otherwise navigate to the standalone messages page
       navigate('/messages', { state: { otherUserId: userId } });
     };
 
