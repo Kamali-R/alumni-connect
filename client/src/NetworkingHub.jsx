@@ -724,6 +724,7 @@ const processUserData = (userArray, pendingRequests = [], myConnections = []) =>
           }
         }));
         setPendingRequests(processedRequests);
+        return processedRequests;
       } else {
         throw new Error(data.message || 'Failed to load connection requests');
       }
@@ -731,6 +732,7 @@ const processUserData = (userArray, pendingRequests = [], myConnections = []) =>
       console.error('❌ Error fetching connection requests:', error);
       toast.error('Failed to load connection requests');
     }
+    return [];
   };
 
   // Fetch my connections
@@ -768,20 +770,10 @@ const fetchMyConnections = async () => {
           graduationYear: getGraduationYear(connection.person)
         }
       }));
-      
+
       console.log('✅ Processed connections:', processedConnections);
       setMyConnections(processedConnections);
-      
-      // Update data with new connection status
-      const updatedAlumni = processUserData(alumniData, pendingRequests, processedConnections);
-      const updatedStudents = processUserData(studentData, pendingRequests, processedConnections);
-      setAlumniData(updatedAlumni);
-      setStudentData(updatedStudents);
-      if (directoryType === 'alumni') {
-        setFilteredData(updatedAlumni);
-      } else {
-        setFilteredData(updatedStudents);
-      }
+      return processedConnections;
     } else {
       throw new Error(data.message || 'Failed to load connections');
     }
@@ -789,9 +781,10 @@ const fetchMyConnections = async () => {
     console.error('❌ Error fetching connections:', error);
     toast.error('Failed to load connections');
   }
+  return [];
 };
   // Enhanced fetchAlumniDirectory
-  const fetchAlumniDirectory = async () => {
+  const fetchAlumniDirectory = async (pendingRequestsArg = pendingRequests, myConnectionsArg = myConnections) => {
   setLoading(true);
   try {
     const queryParams = new URLSearchParams({
@@ -814,8 +807,8 @@ const fetchMyConnections = async () => {
     const data = await response.json();
     
     if (data.success) {
-      // Process with current connection data
-      const processedAlumni = processUserData(data.alumni, pendingRequests, myConnections);
+      // Process with provided (or current) connection data
+      const processedAlumni = processUserData(data.alumni, pendingRequestsArg, myConnectionsArg);
       setAlumniData(processedAlumni);
       if (directoryType === 'alumni') {
         setFilteredData(processedAlumni);
@@ -854,7 +847,7 @@ const ConnectionDebug = () => {
   );
 };
   // Enhanced fetchStudentDirectory
-  const fetchStudentDirectory = async () => {
+  const fetchStudentDirectory = async (pendingRequestsArg = pendingRequests, myConnectionsArg = myConnections) => {
     setLoading(true);
     try {
       const queryParams = new URLSearchParams({
@@ -877,8 +870,8 @@ const ConnectionDebug = () => {
       const data = await response.json();
       
       if (data.success) {
-        // Process with current connection data
-        const processedStudents = processUserData(data.students, pendingRequests, myConnections);
+        // Process with provided (or current) connection data
+        const processedStudents = processUserData(data.students, pendingRequestsArg, myConnectionsArg);
         setStudentData(processedStudents);
         if (directoryType === 'students') {
           setFilteredData(processedStudents);
@@ -3256,7 +3249,7 @@ const ConnectionCard = ({ connection, onMessage }) => {
       console.log(`🔄 Loading section: ${activeSection}`);
 
       // Always load connection data first for proper status display
-      await Promise.all([
+      const [requestsResult, connectionsResult] = await Promise.all([
         fetchConnectionRequests(),
         fetchMyConnections()
       ]);
@@ -3264,9 +3257,9 @@ const ConnectionCard = ({ connection, onMessage }) => {
       // Then load section-specific data
       if (activeSection === 'directory') {
         if (directoryType === 'alumni') {
-          await fetchAlumniDirectory();
+          await fetchAlumniDirectory(requestsResult || pendingRequests, connectionsResult || myConnections);
         } else {
-          await fetchStudentDirectory();
+          await fetchStudentDirectory(requestsResult || pendingRequests, connectionsResult || myConnections);
         }
       } else if (activeSection === 'stories') {
         await fetchSuccessStories();
