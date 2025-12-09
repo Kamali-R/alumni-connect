@@ -268,10 +268,17 @@ export const getMyConnections = async (req, res) => {
 
     console.log(`🤝 Found ${connections.length} connections`);
 
-    // Format the response to show the other person in the connection
-    // In getMyConnections function, update the formattedConnections part:
+    // Filter out connections where either user is missing (deleted from database)
+    const validConnections = connections.filter(connection => {
+      if (!connection.requesterId || !connection.recipientId) {
+        console.warn('⚠️ Skipping connection with missing user reference:', connection._id);
+        return false;
+      }
+      return true;
+    });
 
-const formattedConnections = connections.map(connection => {
+    // Format the response to show the other person in the connection
+const formattedConnections = validConnections.map(connection => {
   const isRequester = connection.requesterId && connection.requesterId._id && connection.requesterId._id.toString() === currentUserId;
   const otherPerson = isRequester ? connection.recipientId : connection.requesterId;
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const AdminDashboard = () => {
@@ -760,151 +760,360 @@ const AdminDashboard = () => {
   );
   
   // Skills & Technology Section
+  const [skillsData, setSkillsData] = useState({
+    summary: { totalSkills: 0, mostPopularSkill: null, totalUsersWithSkills: 0 },
+    skillsList: [],
+    top10Skills: []
+  });
+  const [skillsLoading, setSkillsLoading] = useState(true);
+  const [skillsError, setSkillsError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [sortBy, setSortBy] = useState('popularity'); // popularity or name
+
+  // Test the API and fetch skills overview
+  const testSkillsAPI = async () => {
+    try {
+      console.log('🧪 Testing Skills API endpoint...');
+      const testResponse = await fetch('/api/skills/test');
+      const testData = await testResponse.json();
+      console.log('✅ API Test response:', testData);
+      
+      // Now fetch the actual skills overview
+      fetchSkillsOverview();
+    } catch (error) {
+      console.error('❌ API test failed:', error);
+      setSkillsError('API endpoint not accessible');
+    }
+  };
+
+  // Fetch skills overview
+  useEffect(() => {
+    // First test if the endpoint exists
+    testSkillsAPI();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchSkillsOverview = async () => {
+    try {
+      setSkillsLoading(true);
+      const token = localStorage.getItem('token');
+      
+      console.log('🔍 Fetching skills overview...');
+      console.log('Token available:', !!token);
+      console.log('Token preview:', token ? token.substring(0, 20) + '...' : 'NO TOKEN');
+
+      if (!token) {
+        throw new Error('No authentication token found. Please login again.');
+      }
+
+      const fetchUrl = '/api/skills/overview';
+      console.log('📡 Fetch URL:', fetchUrl);
+
+      const response = await fetch(fetchUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type');
+        let errorMessage = `HTTP Error: ${response.status}`;
+        
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorMessage;
+          } catch (e) {
+            errorMessage = response.statusText || errorMessage;
+          }
+        } else {
+          errorMessage = response.statusText || errorMessage;
+        }
+        
+        // If 401, provide helpful message
+        if (response.status === 401) {
+          errorMessage = 'Authentication required. Please log in as an admin user to access this feature.';
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      console.log('✅ Skills data received:', data);
+      setSkillsData(data);
+      setSkillsError(null);
+    } catch (error) {
+      console.error('❌ Error fetching skills:', error);
+      setSkillsError(error.message);
+    } finally {
+      setSkillsLoading(false);
+    }
+  };
+
+  const handleSearchSkills = async (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        throw new Error('No authentication token found. Please login again.');
+      }
+
+      const response = await fetch(`/api/skills/search?query=${encodeURIComponent(searchQuery)}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type');
+        let errorMessage = `Search failed: ${response.status}`;
+        
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorMessage;
+          } catch (e) {
+            errorMessage = response.statusText || errorMessage;
+          }
+        } else {
+          errorMessage = response.statusText || errorMessage;
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      setSearchResults(data.results || []);
+    } catch (error) {
+      console.error('Error searching skills:', error);
+      alert(`Search error: ${error.message}`);
+      setSearchResults([]);
+    }
+  };
+
+  const getSortedSkillsList = () => {
+    const list = searchResults.length > 0 ? searchResults : skillsData.skillsList;
+    if (sortBy === 'name') {
+      return [...list].sort((a, b) => a.skillName.localeCompare(b.skillName));
+    }
+    return list; // Already sorted by popularity
+  };
+
   const SkillsSection = () => (
     <div className={`content-section p-8 ${fadeAnimation ? 'fade-in' : ''}`}>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Skills & Technology Trends</h1>
-        <p className="text-gray-600">Monitor trending skills and technology demands</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Skills & Technology Overview</h1>
+        <p className="text-gray-600">Insights about skills entered by Students and Alumni during registration</p>
       </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">Trending Skills</h2>
-            <button className="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors flex items-center">
-              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd"></path>
-              </svg>
-              Add Skill
-            </button>
-          </div>
-          
-          <div className="space-y-3">
-            <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-blue-600 font-bold">JS</span>
-                </div>
-                <span className="font-medium text-gray-900">React.js</span>
-              </div>
-              <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full flex items-center">
-                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd"></path>
-                </svg>
-                23%
-              </span>
-            </div>
-            <div className="flex justify-between items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-green-600 font-bold">PY</span>
-                </div>
-                <span className="font-medium text-gray-900">Python</span>
-              </div>
-              <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full flex items-center">
-                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd"></path>
-                </svg>
-                18%
-              </span>
-            </div>
-            <div className="flex justify-between items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-purple-600 font-bold">ML</span>
-                </div>
-                <span className="font-medium text-gray-900">Machine Learning</span>
-              </div>
-              <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full flex items-center">
-                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd"></path>
-                </svg>
-                31%
-              </span>
-            </div>
-            <div className="flex justify-between items-center p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-orange-600 font-bold">CC</span>
-                </div>
-                <span className="font-medium text-gray-900">Cloud Computing</span>
-              </div>
-              <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full flex items-center">
-                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd"></path>
-                </svg>
-                15%
-              </span>
-            </div>
+
+      {skillsError && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
+          <p className="font-semibold">Error loading skills data</p>
+          <p className="text-sm mt-1">{skillsError}</p>
+        </div>
+      )}
+
+      {skillsLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading skills data...</p>
           </div>
         </div>
-        
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Most Requested Skills</h2>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-blue-600 font-bold">JS</span>
+      ) : (
+        <>
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-blue-100 text-sm font-medium">Total Unique Skills</p>
+                  <p className="text-4xl font-bold mt-2">{skillsData.summary.totalSkills}</p>
                 </div>
-                <span className="font-medium text-gray-900">JavaScript</span>
-              </div>
-              <div className="flex items-center">
-                <div className="w-24 bg-gray-200 rounded-full h-2.5 mr-2">
-                  <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: '85%' }}></div>
+                <div className="bg-blue-400 rounded-full p-3">
+                  <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd"></path>
+                  </svg>
                 </div>
-                <span className="text-gray-600 text-sm font-medium">847</span>
-              </div>
-            </div>
-            <div className="flex justify-between items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-green-600 font-bold">PM</span>
-                </div>
-                <span className="font-medium text-gray-900">Project Management</span>
-              </div>
-              <div className="flex items-center">
-                <div className="w-24 bg-gray-200 rounded-full h-2.5 mr-2">
-                  <div className="bg-green-600 h-2.5 rounded-full" style={{ width: '62%' }}></div>
-                </div>
-                <span className="text-gray-600 text-sm font-medium">623</span>
               </div>
             </div>
-            <div className="flex justify-between items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-purple-600 font-bold">DA</span>
+
+            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-green-100 text-sm font-medium">Most Popular Skill</p>
+                  <p className="text-2xl font-bold mt-2">{skillsData.summary.mostPopularSkill?.skillName || 'N/A'}</p>
+                  <p className="text-green-100 text-sm mt-1">{skillsData.summary.mostPopularSkill?.userCount || 0} users</p>
                 </div>
-                <span className="font-medium text-gray-900">Data Analysis</span>
-              </div>
-              <div className="flex items-center">
-                <div className="w-24 bg-gray-200 rounded-full h-2.5 mr-2">
-                  <div className="bg-purple-600 h-2.5 rounded-full" style={{ width: '51%' }}></div>
+                <div className="bg-green-400 rounded-full p-3">
+                  <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                  </svg>
                 </div>
-                <span className="text-gray-600 text-sm font-medium">512</span>
               </div>
             </div>
-            <div className="flex justify-between items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-orange-600 font-bold">UI</span>
+
+            <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-purple-100 text-sm font-medium">Users with Skills</p>
+                  <p className="text-4xl font-bold mt-2">{skillsData.summary.totalUsersWithSkills}</p>
                 </div>
-                <span className="font-medium text-gray-900">UI/UX Design</span>
-              </div>
-              <div className="flex items-center">
-                <div className="w-24 bg-gray-200 rounded-full h-2.5 mr-2">
-                  <div className="bg-orange-600 h-2.5 rounded-full" style={{ width: '40%' }}></div>
+                <div className="bg-purple-400 rounded-full p-3">
+                  <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path>
+                  </svg>
                 </div>
-                <span className="text-gray-600 text-sm font-medium">398</span>
               </div>
             </div>
           </div>
-        </div>
-      </div>
+
+          {/* Search and Sort Controls */}
+          <div className="mb-8 bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Search Skills</h2>
+            <form onSubmit={handleSearchSkills} className="flex gap-4">
+              <div className="flex-1">
+                <input
+                  type="text"
+                  placeholder="Search skills by name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                />
+              </div>
+              <button
+                type="submit"
+                className="bg-blue-700 text-white px-6 py-2 rounded-lg hover:bg-blue-800 transition-colors font-medium"
+              >
+                Search
+              </button>
+              {searchResults.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSearchResults([]);
+                  }}
+                  className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors font-medium"
+                >
+                  Clear
+                </button>
+              )}
+            </form>
+            {searchResults.length > 0 && (
+              <p className="text-sm text-gray-600 mt-2">Found {searchResults.length} results for "{searchQuery}"</p>
+            )}
+          </div>
+
+          {/* Top 10 Skills Chart */}
+          <div className="mb-8 bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">Top 10 Skills by Popularity</h2>
+            <div className="space-y-4">
+              {skillsData.top10Skills.slice(0, 10).map((skill, index) => {
+                const maxUsers = skillsData.top10Skills[0]?.userCount || 1;
+                const percentage = (skill.userCount / maxUsers) * 100;
+                return (
+                  <div key={index} className="flex items-center gap-4">
+                    <div className="w-32 flex-shrink-0">
+                      <p className="font-medium text-gray-900 truncate">{skill.skillName}</p>
+                      <p className="text-sm text-gray-500">{index + 1} of 10</p>
+                    </div>
+                    <div className="flex-1">
+                      <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div
+                          className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-300"
+                          style={{ width: `${percentage}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                    <div className="text-right w-20">
+                      <p className="font-semibold text-gray-900">{skill.userCount}</p>
+                      <p className="text-xs text-gray-500">users</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Skills Table */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">All Skills</h2>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600">Sort by:</label>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                  >
+                    <option value="popularity">Popularity (High to Low)</option>
+                    <option value="name">Name (A to Z)</option>
+                  </select>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600">Total: {getSortedSkillsList().length} skills</p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Skill Name</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Category</th>
+                    <th className="px-6 py-3 text-right text-sm font-semibold text-gray-900">Number of Users</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {getSortedSkillsList().length > 0 ? (
+                    getSortedSkillsList().map((skill, index) => (
+                      <tr key={index} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 text-sm text-gray-900 font-medium">{skill.skillName}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">
+                          <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                            {skill.category || 'Technical'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-right">
+                          <span className="font-semibold text-gray-900">{skill.userCount}</span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="3" className="px-6 py-8 text-center text-gray-500">
+                        No skills found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Info Banner */}
+          <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800">
+              <span className="font-semibold">ℹ️ Note:</span> This page displays read-only insights about skills entered by Students and Alumni. No editing, deletion, or addition of skills by admin is allowed.
+            </p>
+          </div>
+        </>
+      )}
     </div>
-  );
-  
-  // Reports Section
+  );  // Reports Section
   const ReportsSection = () => (
     <div className={`content-section p-8 ${fadeAnimation ? 'fade-in' : ''}`}>
       <div className="mb-8">
