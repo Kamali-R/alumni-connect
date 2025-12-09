@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SkillsSection from './SkillsSection';
+import ReportsSection from './ReportsSection';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -775,6 +776,17 @@ const AdminDashboard = () => {
   // Create ref for search input to prevent focus loss
   const searchInputRef = useRef(null);
 
+  // Reports & Analytics
+  const [reportsData, setReportsData] = useState({
+    summaryCards: { userGrowthPercent: 0, jobApplicationsThisMonth: 0, eventAttendanceRate: 0 },
+    registrationTrend: [],
+    jobPostingTrend: [],
+    platformStats: { dailyActiveUsers: 0, newRegistrations: 0, eventSignups: 0, jobApplications: 0 },
+    meta: { generatedAt: '', totalUsers: 0, totalEvents: 0 }
+  });
+  const [reportsLoading, setReportsLoading] = useState(true);
+  const [reportsError, setReportsError] = useState(null);
+
   // Test the API and fetch skills overview
   const testSkillsAPI = useCallback(async () => {
     try {
@@ -919,144 +931,53 @@ const AdminDashboard = () => {
     return list; // Already sorted by popularity
   };
 
+  const fetchReportsOverview = useCallback(async () => {
+    try {
+      setReportsLoading(true);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found. Please login again.');
+      }
+
+      const response = await fetch('/api/reports/overview', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type');
+        let errorMessage = `HTTP Error: ${response.status}`;
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      setReportsData({
+        summaryCards: data.summaryCards || {},
+        registrationTrend: data.registrationTrend || [],
+        jobPostingTrend: data.jobPostingTrend || [],
+        platformStats: data.platformStats || {},
+        meta: data.meta || {}
+      });
+      setReportsError(null);
+    } catch (error) {
+      console.error('Error fetching reports overview:', error);
+      setReportsError(error.message);
+    } finally {
+      setReportsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchReportsOverview();
+  }, [fetchReportsOverview]);
+
   // Reports Section
-  const ReportsSection = () => (
-    <div className={`content-section p-8 ${fadeAnimation ? 'fade-in' : ''}`}>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Reports & Analytics</h1>
-        <p className="text-gray-600">View platform analytics and generate reports</p>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg transform hover:scale-105 transition-transform">
-          <h3 className="text-lg font-semibold mb-2">User Growth</h3>
-          <p className="text-3xl font-bold">+12.5%</p>
-          <p className="text-blue-100 mt-2">This month</p>
-          <div className="mt-4 h-12 flex items-end">
-            <div className="flex items-end space-x-1 w-full">
-              {[40, 60, 75, 65, 90, 70, 85].map((height, index) => (
-                <div 
-                  key={index} 
-                  className="bg-blue-400 rounded-t w-full" 
-                  style={{ height: `${height}%` }}
-                ></div>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg transform hover:scale-105 transition-transform">
-          <h3 className="text-lg font-semibold mb-2">Job Applications</h3>
-          <p className="text-3xl font-bold">1,247</p>
-          <p className="text-green-100 mt-2">This month</p>
-          <div className="mt-4 h-12 flex items-end">
-            <div className="flex items-end space-x-1 w-full">
-              {[30, 45, 60, 50, 75, 65, 80].map((height, index) => (
-                <div 
-                  key={index} 
-                  className="bg-green-400 rounded-t w-full" 
-                  style={{ height: `${height}%` }}
-                ></div>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg transform hover:scale-105 transition-transform">
-          <h3 className="text-lg font-semibold mb-2">Event Attendance</h3>
-          <p className="text-3xl font-bold">89%</p>
-          <p className="text-purple-100 mt-2">Average rate</p>
-          <div className="mt-4 h-12 flex items-end">
-            <div className="flex items-end space-x-1 w-full">
-              {[70, 75, 80, 85, 90, 85, 95].map((height, index) => (
-                <div 
-                  key={index} 
-                  className="bg-purple-400 rounded-t w-full" 
-                  style={{ height: `${height}%` }}
-                ></div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <h3 className="font-semibold text-gray-900 mb-4">User Registration Trends</h3>
-          <div className="h-64 bg-gray-50 rounded-lg flex items-center justify-center border border-gray-200">
-            <div className="text-center">
-              <svg className="w-16 h-16 mx-auto text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"></path>
-              </svg>
-              <p className="text-gray-500 mt-2">User Registration Chart</p>
-            </div>
-          </div>
-          <div className="mt-4 flex justify-between text-sm text-gray-600">
-            <span>Jan</span>
-            <span>Feb</span>
-            <span>Mar</span>
-            <span>Apr</span>
-            <span>May</span>
-            <span>Jun</span>
-            <span>Jul</span>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <h3 className="font-semibold text-gray-900 mb-4">Job Posting Activity</h3>
-          <div className="h-64 bg-gray-50 rounded-lg flex items-center justify-center border border-gray-200">
-            <div className="text-center">
-              <svg className="w-16 h-16 mx-auto text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"></path>
-              </svg>
-              <p className="text-gray-500 mt-2">Job Posting Chart</p>
-            </div>
-          </div>
-          <div className="mt-4 flex justify-between text-sm text-gray-600">
-            <span>Jan</span>
-            <span>Feb</span>
-            <span>Mar</span>
-            <span>Apr</span>
-            <span>May</span>
-            <span>Jun</span>
-            <span>Jul</span>
-          </div>
-        </div>
-      </div>
-      
-      <div className="mt-8 bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="font-semibold text-gray-900">Platform Usage Statistics</h3>
-          <button className="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors flex items-center">
-            <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd"></path>
-            </svg>
-            Export Report
-          </button>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <p className="text-sm text-blue-700 mb-1">Daily Active Users</p>
-            <p className="text-2xl font-bold text-blue-900">1,248</p>
-            <p className="text-xs text-blue-600 mt-1">↑ 8% from last week</p>
-          </div>
-          <div className="bg-green-50 p-4 rounded-lg">
-            <p className="text-sm text-green-700 mb-1">New Registrations</p>
-            <p className="text-2xl font-bold text-green-900">142</p>
-            <p className="text-xs text-green-600 mt-1">↑ 12% from last week</p>
-          </div>
-          <div className="bg-purple-50 p-4 rounded-lg">
-            <p className="text-sm text-purple-700 mb-1">Event Sign-ups</p>
-            <p className="text-2xl font-bold text-purple-900">89</p>
-            <p className="text-xs text-purple-600 mt-1">↑ 5% from last week</p>
-          </div>
-          <div className="bg-orange-50 p-4 rounded-lg">
-            <p className="text-sm text-orange-700 mb-1">Job Applications</p>
-            <p className="text-2xl font-bold text-orange-900">324</p>
-            <p className="text-xs text-orange-600 mt-1">↑ 18% from last week</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
   
   // Announcements Section
   const AnnouncementsSection = () => (
@@ -1347,7 +1268,15 @@ const AdminDashboard = () => {
           />
         );
       case 'reports':
-        return <ReportsSection />;
+        return (
+          <ReportsSection
+            reportsData={reportsData}
+            reportsLoading={reportsLoading}
+            reportsError={reportsError}
+            onRefresh={fetchReportsOverview}
+            fadeAnimation={fadeAnimation}
+          />
+        );
       case 'notifications':
         return <AnnouncementsSection />;
       case 'security':

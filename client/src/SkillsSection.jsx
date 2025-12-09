@@ -15,7 +15,50 @@ const SkillsSection = memo(({
   getSortedSkillsList,
   searchInputRef,
   fadeAnimation
-}) => (
+}) => {
+  const getCategory = (name = '') => {
+    const n = name.toLowerCase();
+    const softSkills = [
+      'communication',
+      'leadership',
+      'teamwork',
+      'management',
+      'time',
+      'problem',
+      'adaptability',
+      'creativity',
+      'collaboration',
+      'presentation',
+      'writing',
+      'speaking',
+      'interpersonal',
+      'negotiation'
+    ];
+    const webSkills = [
+      'javascript',
+      'vue', 'vue.js',
+      'angular',
+      'react', 'react.js',
+      'frontend',
+      'html', 'css'
+    ];
+
+    if (softSkills.some((k) => n.includes(k))) return 'Soft Skill';
+    if (webSkills.some((k) => n.includes(k))) return 'Web Development';
+    return 'Technical';
+  };
+
+  const formatSkillName = (name = '') => {
+    const n = name.trim();
+    const lower = n.toLowerCase();
+    if (lower === 'nosql') return 'NoSQL';
+    if (lower === 'react' || lower === 'react.js' || lower === 'reactjs') return 'React.js';
+    if (lower === 'angular') return 'Angular';
+    if (lower === 'vue' || lower === 'vue.js' || lower === 'vuejs') return 'Vue.js';
+    return n.charAt(0).toUpperCase() + n.slice(1);
+  };
+
+  return (
   <div className={`content-section p-8 ${fadeAnimation ? 'fade-in' : ''}`}>
     <div className="mb-8">
       <h1 className="text-3xl font-bold text-gray-900 mb-2">Skills & Technology Overview</h1>
@@ -144,7 +187,7 @@ const SkillsSection = memo(({
                 return (
                   <div key={index} className="flex items-center gap-4">
                     <div className="w-32 flex-shrink-0">
-                      <p className="font-medium text-gray-900 truncate">{skill.skillName}</p>
+                      <p className="font-medium text-gray-900 truncate">{formatSkillName(skill.skillName)}</p>
                       {rankInTop5 > 0 ? (
                         <p className="text-sm text-green-600 font-semibold">#{rankInTop5} in Top 5</p>
                       ) : (
@@ -173,7 +216,7 @@ const SkillsSection = memo(({
                 return (
                   <div key={index} className="flex items-center gap-4">
                     <div className="w-32 flex-shrink-0">
-                      <p className="font-medium text-gray-900 truncate">{skill.skillName}</p>
+                      <p className="font-medium text-gray-900 truncate">{formatSkillName(skill.skillName)}</p>
                       <p className="text-sm text-gray-500">#{index + 1} of 5</p>
                     </div>
                     <div className="flex-1">
@@ -228,10 +271,10 @@ const SkillsSection = memo(({
                 {getSortedSkillsList().length > 0 ? (
                   getSortedSkillsList().map((skill, index) => (
                     <tr key={index} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 text-sm text-gray-900 font-medium">{skill.skillName}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900 font-medium">{formatSkillName(skill.skillName)}</td>
                       <td className="px-6 py-4 text-sm text-gray-600">
                         <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                          {skill.category || 'Technical'}
+                          {getCategory(skill.skillName)}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-right">
@@ -260,7 +303,8 @@ const SkillsSection = memo(({
       </>
     )}
   </div>
-));
+  );
+});
 
 SkillsSection.displayName = 'SkillsSection';
 
