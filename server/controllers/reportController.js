@@ -1,6 +1,7 @@
 import User from '../models/User.js';
 import Job from '../models/Job.js';
 import Event from '../models/Events.js';
+import Connection from '../models/Connection.js';
 
 // Helper to get start of month for a given date
 const startOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
@@ -59,11 +60,20 @@ export const getReportsOverview = async (req, res) => {
     const last7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     // Users
-    const [totalUsers, currentRegistrations, prevRegistrations] = await Promise.all([
+    const [totalUsers, currentRegistrations, prevRegistrations, totalConnections] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ createdAt: { $gte: last30 } }),
-      User.countDocuments({ createdAt: { $gte: prev30, $lt: last30 } })
+      User.countDocuments({ createdAt: { $gte: prev30, $lt: last30 } }),
+      Connection.countDocuments()
     ]);
+
+    console.log('📊 Reports Overview Debug:', {
+      totalUsers,
+      currentRegistrations,
+      prevRegistrations,
+      totalConnections,
+      collectionName: Connection.collection.name
+    });
 
     const userGrowthPercent = prevRegistrations === 0
       ? (currentRegistrations > 0 ? 100 : 0)
@@ -121,7 +131,7 @@ export const getReportsOverview = async (req, res) => {
     return res.status(200).json({
       summaryCards: {
         userGrowthPercent,
-        jobApplicationsThisMonth,
+        totalConnections,
         eventAttendanceRate
       },
       registrationTrend,

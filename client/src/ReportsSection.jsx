@@ -64,8 +64,8 @@ const ReportsSection = memo(({ reportsData, reportsLoading, reportsError, onRefr
               <p className="text-3xl font-bold mt-2">{summary.userGrowthPercent ?? 0}%</p>
             </div>
             <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-6 text-white shadow">
-              <p className="text-green-100 text-sm font-medium">Job Applications (this month)</p>
-              <p className="text-3xl font-bold mt-2">{summary.jobApplicationsThisMonth ?? 0}</p>
+              <p className="text-green-100 text-sm font-medium">Total Connections</p>
+              <p className="text-3xl font-bold mt-2">{summary.totalConnections ?? 0}</p>
             </div>
             <div className="bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow">
               <p className="text-purple-100 text-sm font-medium">Event Attendance Rate</p>
