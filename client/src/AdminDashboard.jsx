@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SkillsSection from './SkillsSection';
 import ReportsSection from './ReportsSection';
+import SecuritySection from './SecuritySection';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -9,6 +10,33 @@ const AdminDashboard = () => {
   const [fadeAnimation, setFadeAnimation] = useState(false);
   const [userName] = useState('John Doe');
   const [userRole] = useState('System Administrator');
+  const [notification, setNotification] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
+
+  // Notification handler
+  const showNotification = useCallback((message, type = 'success', duration = 3000) => {
+    setNotification({ message, type });
+    if (duration > 0) {
+      const timer = setTimeout(() => setNotification(null), duration);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  // Confirmation dialog handler
+  const showConfirmDialog = useCallback((title, message, onConfirm, onCancel) => {
+    setConfirmDialog({
+      title,
+      message,
+      onConfirm: () => {
+        onConfirm();
+        setConfirmDialog(null);
+      },
+      onCancel: () => {
+        if (onCancel) onCancel();
+        setConfirmDialog(null);
+      }
+    });
+  }, []);
   
   const [announcements, setAnnouncements] = useState([
     { 
@@ -154,19 +182,23 @@ const AdminDashboard = () => {
         </svg>
       ), 
       action: () => {
-        // Show confirmation dialog
-        if (window.confirm("Are you sure you want to logout?")) {
-          // Clear authentication data from localStorage
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          localStorage.removeItem('profileCompleted');
-          
-          // Show success message
-          alert("Logged out successfully!");
-          
-          // Redirect to login page
-          navigate('/login');
-        }
+        // Show custom confirmation dialog
+        showConfirmDialog(
+          "Confirm Logout",
+          "Are you sure you want to logout?",
+          () => {
+            // Clear authentication data from localStorage
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            localStorage.removeItem('profileCompleted');
+            
+            // Show success notification
+            showNotification("Logged out successfully!", 'success', 2000);
+            
+            // Redirect to login page after notification
+            setTimeout(() => navigate('/login'), 2000);
+          }
+        );
       }
     },
   ];
@@ -339,7 +371,7 @@ const AdminDashboard = () => {
     e.preventDefault();
     
     if (!announcementForm.subject.trim() || !announcementForm.message.trim()) {
-      window.alert("Please fill in both subject and message fields.");
+      showNotification("Please fill in both subject and message fields.", 'error');
       return;
     }
     
@@ -351,14 +383,10 @@ const AdminDashboard = () => {
     
     setAnnouncements(prev => [newAnnouncement, ...prev]);
     
-    // Reset form
-    setAnnouncementForm({
-      subject: '',
-      message: '',
-      audience: 'All Users'
-    });
+    // Show success notification
+    showNotification("Announcement sent successfully!", 'success');
     
-    window.alert("Announcement sent successfully!");
+    // Reset form
   };
   
   const handleApproveEvent = (eventId) => {
@@ -375,7 +403,7 @@ const AdminDashboard = () => {
       }]
     }));
     
-    window.alert(`Event "${eventToApprove.title}" has been approved!`);
+    showNotification(`Event "${eventToApprove.title}" has been approved!`, 'success');
   };
   
   const handleRejectEvent = (eventId) => {
@@ -388,7 +416,7 @@ const AdminDashboard = () => {
         pending: prev.pending.filter(event => event.id !== eventId)
       }));
       
-      window.alert(`Event "${eventToReject.title}" has been rejected.`);
+      showNotification(`Event "${eventToReject.title}" has been rejected.`, 'success');
     }
   };
   
@@ -407,7 +435,7 @@ const AdminDashboard = () => {
         )
       }));
       
-      window.alert('Event updated successfully!');
+      showNotification('Event updated successfully!', 'success');
     }
   };
   
@@ -592,7 +620,7 @@ const AdminDashboard = () => {
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">Recruiter</span>
+
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Active</span>
@@ -787,6 +815,19 @@ const AdminDashboard = () => {
   const [reportsLoading, setReportsLoading] = useState(true);
   const [reportsError, setReportsError] = useState(null);
 
+  // Security Overview
+  const [securityData, setSecurityData] = useState({
+    otpVerification: { status: 'Enabled', percentage: 0, totalVerified: 0, totalUsers: 0 },
+    passwordSecurity: { status: 'Active', allUsersProtected: true, hashingAlgorithm: 'bcrypt' },
+    userRoles: { totalRoles: 0, breakdown: {} },
+    verifiedAccounts: { total: 0, percentage: 0, unverified: 0 },
+    loginActivity: { lastLogin: null, failedAttempts: 0, recentLogins: 0, uniqueDevices: 0, uniqueIPs: 0 },
+    dataProtection: { passwordHashing: 'Enabled', databaseValidation: 'Active', tokenSessionTimeout: '30 mins' },
+    securityScore: 0
+  });
+  const [securityLoading, setSecurityLoading] = useState(true);
+  const [securityError, setSecurityError] = useState(null);
+
   // Test the API and fetch skills overview
   const testSkillsAPI = useCallback(async () => {
     try {
@@ -918,7 +959,7 @@ const AdminDashboard = () => {
       setSearchResults(data.results || []);
     } catch (error) {
       console.error('Error searching skills:', error);
-      alert(`Search error: ${error.message}`);
+      showNotification(`Search error: ${error.message}`, 'error');
       setSearchResults([]);
     }
   }, [searchQuery]);
@@ -977,6 +1018,55 @@ const AdminDashboard = () => {
     fetchReportsOverview();
   }, [fetchReportsOverview]);
 
+  // Fetch security overview
+  const fetchSecurityOverview = useCallback(async () => {
+    try {
+      setSecurityLoading(true);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found. Please login again.');
+      }
+
+      const response = await fetch('/api/security/overview', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type');
+        let errorMessage = `HTTP Error: ${response.status}`;
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      setSecurityData({
+        otpVerification: data.otpVerification || {},
+        passwordSecurity: data.passwordSecurity || {},
+        userRoles: data.userRoles || {},
+        verifiedAccounts: data.verifiedAccounts || {},
+        loginActivity: data.loginActivity || {},
+        dataProtection: data.dataProtection || {},
+        securityScore: data.securityScore || 0
+      });
+      setSecurityError(null);
+    } catch (error) {
+      console.error('Error fetching security overview:', error);
+      setSecurityError(error.message);
+    } finally {
+      setSecurityLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSecurityOverview();
+  }, [fetchSecurityOverview]);
+
   // Reports Section
   
   // Announcements Section
@@ -1024,7 +1114,7 @@ const AdminDashboard = () => {
                 <option value="All Users">All Users</option>
                 <option value="Alumni Only">Alumni Only</option>
                 <option value="Students Only">Students Only</option>
-                <option value="Recruiters Only">Recruiters Only</option>
+
               </select>
             </div>
             <button type="submit" className="w-full bg-blue-700 text-white px-6 py-3 rounded-lg hover:bg-blue-800 transition-colors flex items-center justify-center">
@@ -1068,7 +1158,7 @@ const AdminDashboard = () => {
   );
   
   // Security Section
-  const SecuritySection = () => (
+  const OldSecuritySection = () => (
     <div className={`content-section p-8 ${fadeAnimation ? 'fade-in' : ''}`}>
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Security</h1>
@@ -1280,7 +1370,14 @@ const AdminDashboard = () => {
       case 'notifications':
         return <AnnouncementsSection />;
       case 'security':
-        return <SecuritySection />;
+        return (
+          <SecuritySection
+            securityData={securityData}
+            securityLoading={securityLoading}
+            securityError={securityError}
+            onRefresh={fetchSecurityOverview}
+          />
+        );
       default:
         return <DashboardSection />;
     }
@@ -1338,6 +1435,59 @@ const AdminDashboard = () => {
       
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Notification Toast */}
+        {notification && (
+          <div className={`fixed top-4 right-4 px-6 py-3 rounded-lg text-white font-medium shadow-lg z-50 animate-in fade-in slide-in-from-top-2 ${
+            notification.type === 'success' 
+              ? 'bg-green-500' 
+              : notification.type === 'error' 
+              ? 'bg-red-500' 
+              : 'bg-blue-500'
+          }`}>
+            <div className="flex items-center gap-2">
+              {notification.type === 'success' && (
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
+                </svg>
+              )}
+              {notification.type === 'error' && (
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path>
+                </svg>
+              )}
+              {notification.message}
+            </div>
+          </div>
+        )}
+        
+        {/* Confirmation Dialog Modal */}
+        {confirmDialog && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-sm w-full mx-4 transform transition-all">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">{confirmDialog.title}</h3>
+              </div>
+              <div className="px-6 py-4">
+                <p className="text-gray-600">{confirmDialog.message}</p>
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                <button
+                  onClick={confirmDialog.onCancel}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDialog.onConfirm}
+                  className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg font-medium transition-colors"
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto">
           {renderSection()}
