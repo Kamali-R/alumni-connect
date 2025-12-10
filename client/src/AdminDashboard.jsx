@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import SkillsSection from './SkillsSection';
+import ReportsSection from './ReportsSection';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -760,288 +762,222 @@ const AdminDashboard = () => {
   );
   
   // Skills & Technology Section
-  const SkillsSection = () => (
-    <div className={`content-section p-8 ${fadeAnimation ? 'fade-in' : ''}`}>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Skills & Technology Trends</h1>
-        <p className="text-gray-600">Monitor trending skills and technology demands</p>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">Trending Skills</h2>
-            <button className="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors flex items-center">
-              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd"></path>
-              </svg>
-              Add Skill
-            </button>
-          </div>
-          
-          <div className="space-y-3">
-            <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-blue-600 font-bold">JS</span>
-                </div>
-                <span className="font-medium text-gray-900">React.js</span>
-              </div>
-              <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full flex items-center">
-                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd"></path>
-                </svg>
-                23%
-              </span>
-            </div>
-            <div className="flex justify-between items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-green-600 font-bold">PY</span>
-                </div>
-                <span className="font-medium text-gray-900">Python</span>
-              </div>
-              <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full flex items-center">
-                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd"></path>
-                </svg>
-                18%
-              </span>
-            </div>
-            <div className="flex justify-between items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-purple-600 font-bold">ML</span>
-                </div>
-                <span className="font-medium text-gray-900">Machine Learning</span>
-              </div>
-              <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full flex items-center">
-                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd"></path>
-                </svg>
-                31%
-              </span>
-            </div>
-            <div className="flex justify-between items-center p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-orange-600 font-bold">CC</span>
-                </div>
-                <span className="font-medium text-gray-900">Cloud Computing</span>
-              </div>
-              <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full flex items-center">
-                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd"></path>
-                </svg>
-                15%
-              </span>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Most Requested Skills</h2>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-blue-600 font-bold">JS</span>
-                </div>
-                <span className="font-medium text-gray-900">JavaScript</span>
-              </div>
-              <div className="flex items-center">
-                <div className="w-24 bg-gray-200 rounded-full h-2.5 mr-2">
-                  <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: '85%' }}></div>
-                </div>
-                <span className="text-gray-600 text-sm font-medium">847</span>
-              </div>
-            </div>
-            <div className="flex justify-between items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-green-600 font-bold">PM</span>
-                </div>
-                <span className="font-medium text-gray-900">Project Management</span>
-              </div>
-              <div className="flex items-center">
-                <div className="w-24 bg-gray-200 rounded-full h-2.5 mr-2">
-                  <div className="bg-green-600 h-2.5 rounded-full" style={{ width: '62%' }}></div>
-                </div>
-                <span className="text-gray-600 text-sm font-medium">623</span>
-              </div>
-            </div>
-            <div className="flex justify-between items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-purple-600 font-bold">DA</span>
-                </div>
-                <span className="font-medium text-gray-900">Data Analysis</span>
-              </div>
-              <div className="flex items-center">
-                <div className="w-24 bg-gray-200 rounded-full h-2.5 mr-2">
-                  <div className="bg-purple-600 h-2.5 rounded-full" style={{ width: '51%' }}></div>
-                </div>
-                <span className="text-gray-600 text-sm font-medium">512</span>
-              </div>
-            </div>
-            <div className="flex justify-between items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-orange-600 font-bold">UI</span>
-                </div>
-                <span className="font-medium text-gray-900">UI/UX Design</span>
-              </div>
-              <div className="flex items-center">
-                <div className="w-24 bg-gray-200 rounded-full h-2.5 mr-2">
-                  <div className="bg-orange-600 h-2.5 rounded-full" style={{ width: '40%' }}></div>
-                </div>
-                <span className="text-gray-600 text-sm font-medium">398</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  const [skillsData, setSkillsData] = useState({
+    summary: { totalSkills: 0, mostPopularSkill: null, totalUsersWithSkills: 0 },
+    skillsList: [],
+    top10Skills: []
+  });
+  const [skillsLoading, setSkillsLoading] = useState(true);
+  const [skillsError, setSkillsError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [sortBy, setSortBy] = useState('popularity'); // popularity or name
   
-  // Reports Section
-  const ReportsSection = () => (
-    <div className={`content-section p-8 ${fadeAnimation ? 'fade-in' : ''}`}>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Reports & Analytics</h1>
-        <p className="text-gray-600">View platform analytics and generate reports</p>
-      </div>
+  // Create ref for search input to prevent focus loss
+  const searchInputRef = useRef(null);
+
+  // Reports & Analytics
+  const [reportsData, setReportsData] = useState({
+    summaryCards: { userGrowthPercent: 0, jobApplicationsThisMonth: 0, eventAttendanceRate: 0 },
+    registrationTrend: [],
+    jobPostingTrend: [],
+    platformStats: { dailyActiveUsers: 0, newRegistrations: 0, eventSignups: 0, jobApplications: 0 },
+    meta: { generatedAt: '', totalUsers: 0, totalEvents: 0 }
+  });
+  const [reportsLoading, setReportsLoading] = useState(true);
+  const [reportsError, setReportsError] = useState(null);
+
+  // Test the API and fetch skills overview
+  const testSkillsAPI = useCallback(async () => {
+    try {
+      console.log('🧪 Testing Skills API endpoint...');
+      const testResponse = await fetch('/api/skills/test');
+      const testData = await testResponse.json();
+      console.log('✅ API Test response:', testData);
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg transform hover:scale-105 transition-transform">
-          <h3 className="text-lg font-semibold mb-2">User Growth</h3>
-          <p className="text-3xl font-bold">+12.5%</p>
-          <p className="text-blue-100 mt-2">This month</p>
-          <div className="mt-4 h-12 flex items-end">
-            <div className="flex items-end space-x-1 w-full">
-              {[40, 60, 75, 65, 90, 70, 85].map((height, index) => (
-                <div 
-                  key={index} 
-                  className="bg-blue-400 rounded-t w-full" 
-                  style={{ height: `${height}%` }}
-                ></div>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg transform hover:scale-105 transition-transform">
-          <h3 className="text-lg font-semibold mb-2">Job Applications</h3>
-          <p className="text-3xl font-bold">1,247</p>
-          <p className="text-green-100 mt-2">This month</p>
-          <div className="mt-4 h-12 flex items-end">
-            <div className="flex items-end space-x-1 w-full">
-              {[30, 45, 60, 50, 75, 65, 80].map((height, index) => (
-                <div 
-                  key={index} 
-                  className="bg-green-400 rounded-t w-full" 
-                  style={{ height: `${height}%` }}
-                ></div>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg transform hover:scale-105 transition-transform">
-          <h3 className="text-lg font-semibold mb-2">Event Attendance</h3>
-          <p className="text-3xl font-bold">89%</p>
-          <p className="text-purple-100 mt-2">Average rate</p>
-          <div className="mt-4 h-12 flex items-end">
-            <div className="flex items-end space-x-1 w-full">
-              {[70, 75, 80, 85, 90, 85, 95].map((height, index) => (
-                <div 
-                  key={index} 
-                  className="bg-purple-400 rounded-t w-full" 
-                  style={{ height: `${height}%` }}
-                ></div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+      // Now fetch the actual skills overview
+      fetchSkillsOverview();
+    } catch (error) {
+      console.error('❌ API test failed:', error);
+      setSkillsError('API endpoint not accessible');
+    }
+  }, []);
+
+  // Fetch skills overview
+  useEffect(() => {
+    // First test if the endpoint exists
+    testSkillsAPI();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchSkillsOverview = useCallback(async () => {
+    try {
+      setSkillsLoading(true);
+      const token = localStorage.getItem('token');
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <h3 className="font-semibold text-gray-900 mb-4">User Registration Trends</h3>
-          <div className="h-64 bg-gray-50 rounded-lg flex items-center justify-center border border-gray-200">
-            <div className="text-center">
-              <svg className="w-16 h-16 mx-auto text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"></path>
-              </svg>
-              <p className="text-gray-500 mt-2">User Registration Chart</p>
-            </div>
-          </div>
-          <div className="mt-4 flex justify-between text-sm text-gray-600">
-            <span>Jan</span>
-            <span>Feb</span>
-            <span>Mar</span>
-            <span>Apr</span>
-            <span>May</span>
-            <span>Jun</span>
-            <span>Jul</span>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <h3 className="font-semibold text-gray-900 mb-4">Job Posting Activity</h3>
-          <div className="h-64 bg-gray-50 rounded-lg flex items-center justify-center border border-gray-200">
-            <div className="text-center">
-              <svg className="w-16 h-16 mx-auto text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"></path>
-              </svg>
-              <p className="text-gray-500 mt-2">Job Posting Chart</p>
-            </div>
-          </div>
-          <div className="mt-4 flex justify-between text-sm text-gray-600">
-            <span>Jan</span>
-            <span>Feb</span>
-            <span>Mar</span>
-            <span>Apr</span>
-            <span>May</span>
-            <span>Jun</span>
-            <span>Jul</span>
-          </div>
-        </div>
-      </div>
-      
-      <div className="mt-8 bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="font-semibold text-gray-900">Platform Usage Statistics</h3>
-          <button className="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors flex items-center">
-            <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd"></path>
-            </svg>
-            Export Report
-          </button>
-        </div>
+      console.log('🔍 Fetching skills overview...');
+      console.log('Token available:', !!token);
+      console.log('Token preview:', token ? token.substring(0, 20) + '...' : 'NO TOKEN');
+
+      if (!token) {
+        throw new Error('No authentication token found. Please login again.');
+      }
+
+      const fetchUrl = '/api/skills/overview';
+      console.log('📡 Fetch URL:', fetchUrl);
+
+      const response = await fetch(fetchUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type');
+        let errorMessage = `HTTP Error: ${response.status}`;
         
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <p className="text-sm text-blue-700 mb-1">Daily Active Users</p>
-            <p className="text-2xl font-bold text-blue-900">1,248</p>
-            <p className="text-xs text-blue-600 mt-1">↑ 8% from last week</p>
-          </div>
-          <div className="bg-green-50 p-4 rounded-lg">
-            <p className="text-sm text-green-700 mb-1">New Registrations</p>
-            <p className="text-2xl font-bold text-green-900">142</p>
-            <p className="text-xs text-green-600 mt-1">↑ 12% from last week</p>
-          </div>
-          <div className="bg-purple-50 p-4 rounded-lg">
-            <p className="text-sm text-purple-700 mb-1">Event Sign-ups</p>
-            <p className="text-2xl font-bold text-purple-900">89</p>
-            <p className="text-xs text-purple-600 mt-1">↑ 5% from last week</p>
-          </div>
-          <div className="bg-orange-50 p-4 rounded-lg">
-            <p className="text-sm text-orange-700 mb-1">Job Applications</p>
-            <p className="text-2xl font-bold text-orange-900">324</p>
-            <p className="text-xs text-orange-600 mt-1">↑ 18% from last week</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorMessage;
+          } catch (e) {
+            errorMessage = response.statusText || errorMessage;
+          }
+        } else {
+          errorMessage = response.statusText || errorMessage;
+        }
+        
+        // If 401, provide helpful message
+        if (response.status === 401) {
+          errorMessage = 'Authentication required. Please log in as an admin user to access this feature.';
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      console.log('✅ Skills data received:', data);
+      setSkillsData(data);
+      setSkillsError(null);
+    } catch (error) {
+      console.error('❌ Error fetching skills:', error);
+      setSkillsError(error.message);
+    } finally {
+      setSkillsLoading(false);
+    }
+  }, []);
+
+  const handleSearchSkills = useCallback(async (e) => {
+    if (e) {
+      e.preventDefault();
+    }
+    const trimmedQuery = searchQuery.trim();
+    
+    if (!trimmedQuery) {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        throw new Error('No authentication token found. Please login again.');
+      }
+
+      const response = await fetch(`/api/skills/search?query=${encodeURIComponent(trimmedQuery)}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type');
+        let errorMessage = `Search failed: ${response.status}`;
+        
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorMessage;
+          } catch (e) {
+            errorMessage = response.statusText || errorMessage;
+          }
+        } else {
+          errorMessage = response.statusText || errorMessage;
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      setSearchResults(data.results || []);
+    } catch (error) {
+      console.error('Error searching skills:', error);
+      alert(`Search error: ${error.message}`);
+      setSearchResults([]);
+    }
+  }, [searchQuery]);
+
+  const getSortedSkillsList = () => {
+    const list = searchResults.length > 0 ? searchResults : skillsData.skillsList;
+    if (sortBy === 'name') {
+      return [...list].sort((a, b) => a.skillName.localeCompare(b.skillName));
+    }
+    return list; // Already sorted by popularity
+  };
+
+  const fetchReportsOverview = useCallback(async () => {
+    try {
+      setReportsLoading(true);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found. Please login again.');
+      }
+
+      const response = await fetch('/api/reports/overview', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type');
+        let errorMessage = `HTTP Error: ${response.status}`;
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      setReportsData({
+        summaryCards: data.summaryCards || {},
+        registrationTrend: data.registrationTrend || [],
+        jobPostingTrend: data.jobPostingTrend || [],
+        platformStats: data.platformStats || {},
+        meta: data.meta || {}
+      });
+      setReportsError(null);
+    } catch (error) {
+      console.error('Error fetching reports overview:', error);
+      setReportsError(error.message);
+    } finally {
+      setReportsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchReportsOverview();
+  }, [fetchReportsOverview]);
+
+  // Reports Section
   
   // Announcements Section
   const AnnouncementsSection = () => (
@@ -1314,9 +1250,33 @@ const AdminDashboard = () => {
       case 'events':
         return <EventManagementSection />;
       case 'skills':
-        return <SkillsSection />;
+        return (
+          <SkillsSection
+            skillsData={skillsData}
+            skillsLoading={skillsLoading}
+            skillsError={skillsError}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            searchResults={searchResults}
+            setSearchResults={setSearchResults}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+            handleSearchSkills={handleSearchSkills}
+            getSortedSkillsList={getSortedSkillsList}
+            searchInputRef={searchInputRef}
+            fadeAnimation={fadeAnimation}
+          />
+        );
       case 'reports':
-        return <ReportsSection />;
+        return (
+          <ReportsSection
+            reportsData={reportsData}
+            reportsLoading={reportsLoading}
+            reportsError={reportsError}
+            onRefresh={fetchReportsOverview}
+            fadeAnimation={fadeAnimation}
+          />
+        );
       case 'notifications':
         return <AnnouncementsSection />;
       case 'security':
