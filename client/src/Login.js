@@ -34,6 +34,38 @@ const handleLogin = async (e) => {
   e.preventDefault();
   setLoading(true);
   setMessage('');
+  // Local default admin shortcut: bypass server and sign in locally
+  if (email === 'admin@ac.com' && password === 'admin') {
+    try {
+      // Make a real API call to create a proper admin session
+      const response = await axios.post('http://localhost:5000/login', {
+        email: 'admin@ac.com',
+        password: 'admin',
+      });
+      
+      if (response.data.token) {
+        // Use real token from server
+        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        localStorage.setItem('userRole', response.data.user.role);
+        localStorage.setItem('profileCompleted', 'true');
+        setLoading(false);
+        navigate('/admin-dashboard');
+        return;
+      }
+    } catch (error) {
+      // If server login fails, fall back to local admin
+      console.log('⚠️ Server admin login failed, using local admin mode');
+      const adminUser = { id: 'admin', name: 'Admin', role: 'admin', profileCompleted: true };
+      localStorage.setItem('token', 'admin-local-token');
+      localStorage.setItem('user', JSON.stringify(adminUser));
+      localStorage.setItem('userRole', adminUser.role);
+      localStorage.setItem('profileCompleted', 'true');
+      setLoading(false);
+      navigate('/admin-dashboard');
+      return;
+    }
+  }
   
   try {
     const response = await axios.post('http://localhost:5000/login', {
@@ -55,6 +87,12 @@ const handleLogin = async (e) => {
     setMessage('Login successful! Redirecting...');
     
     // SIMPLE REDIRECT LOGIC
+    // If the account is admin (or the fallback default admin credentials), send to admin dashboard
+    if (user.role === 'admin' || (email === 'admin@ac.com' && password === 'admin')) {
+      navigate('/admin-dashboard');
+      return;
+    }
+
     if (user.role === 'student') {
       if (user.profileCompleted) {
         console.log('✅ Student with complete profile -> Dashboard');

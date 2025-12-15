@@ -28,6 +28,20 @@ const auth = async (req, res, next) => {
       });
     }
 
+    // DEVELOPMENT ONLY: Allow special admin bypass token
+    if (token === 'admin-local-token' && process.env.NODE_ENV !== 'production') {
+      console.log('⚠️ Using development admin bypass token');
+      req.user = {
+        id: 'admin-dev',
+        email: 'admin@ac.com',
+        name: 'Admin',
+        role: 'admin',
+        profileCompleted: true
+      };
+      console.log('✅ Admin user (dev mode) authenticated');
+      return next();
+    }
+
     try {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);

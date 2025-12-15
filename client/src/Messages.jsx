@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import io from 'socket.io-client';
@@ -1785,6 +1786,18 @@ const Messages = () => {
       setLoading(false);
     }
   };
+
+  // If navigated with an otherUserId in location.state, open that conversation
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (location?.state?.otherUserId) {
+      const otherUserId = location.state.otherUserId;
+      // Clear the state so repeated navigations don't re-open
+      navigate(location.pathname, { replace: true, state: {} });
+      fetchConversation(otherUserId).catch(err => console.error('Failed to open conversation from nav', err));
+    }
+  }, [location?.state?.otherUserId]);
 
   // Mark conversation as read
   const markAsRead = async (conversationId) => {

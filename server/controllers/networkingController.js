@@ -161,10 +161,16 @@ export const getConnectionRequests = async (req, res) => {
     // Format the response
     const formattedRequests = pendingRequests.map(request => {
       const requester = request.requesterId;
-      
-      // Determine which profile to use based on role
-      const userProfile = requester.role === 'alumni' ? 
-        requester.alumniProfile : requester.studentProfile;
+
+      // Defensive: if requester was populated as null/deleted, skip this request
+      if (!requester) {
+        console.warn('⚠️ Skipping pending request with missing requester:', request._id);
+        return null;
+      }
+
+      // Determine which profile to use based on role (guard role)
+      const role = requester?.role || request.requesterRole || 'unknown';
+      const userProfile = role === 'alumni' ? requester?.alumniProfile : requester?.studentProfile;
 
       // Enhanced graduation year resolution
       const graduationYear = userProfile?.academicInfo?.graduationYear ||
@@ -180,9 +186,9 @@ export const getConnectionRequests = async (req, res) => {
         id: request._id,
         person: {
           id: requester._id,
-          name: requester.name,
-          email: requester.email,
-          role: requester.role,
+          name: requester.name || 'Unknown User',
+          email: requester.email || null,
+          role: role,
           graduationYear: graduationYear,
           profileImageUrl: profileImageUrl,
           // Include both profiles for compatibility
@@ -193,7 +199,7 @@ export const getConnectionRequests = async (req, res) => {
         status: request.status,
         requesterRole: request.requesterRole
       };
-    });
+    }).filter(r => r !== null);
 
     res.status(200).json({
       success: true,
@@ -262,10 +268,17 @@ export const getMyConnections = async (req, res) => {
 
     console.log(`🤝 Found ${connections.length} connections`);
 
-    // Format the response to show the other person in the connection
-    // In getMyConnections function, update the formattedConnections part:
+    // Filter out connections where either user is missing (deleted from database)
+    const validConnections = connections.filter(connection => {
+      if (!connection.requesterId || !connection.recipientId) {
+        console.warn('⚠️ Skipping connection with missing user reference:', connection._id);
+        return false;
+      }
+      return true;
+    });
 
-const formattedConnections = connections.map(connection => {
+    // Format the response to show the other person in the connection
+const formattedConnections = validConnections.map(connection => {
   const isRequester = connection.requesterId && connection.requesterId._id && connection.requesterId._id.toString() === currentUserId;
   const otherPerson = isRequester ? connection.recipientId : connection.requesterId;
 
@@ -275,8 +288,8 @@ const formattedConnections = connections.map(connection => {
   }
 
   // Enhanced role detection for connections
-  let userRole = otherPerson.role;
-  
+  let userRole = otherPerson?.role;
+
   // If role is not set in user model, use connection roles
   if (!userRole) {
     userRole = isRequester ? connection.recipientRole : connection.requesterRole;

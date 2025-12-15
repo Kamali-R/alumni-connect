@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef, memo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { 
@@ -579,6 +580,10 @@ const AlumniDirectory = () => {
     hasNext: false,
     hasPrev: false
   });
+
+  // Router hooks for navigation and reading location state
+  const navigate = useNavigate();
+  const location = useLocation();
   const [storyLoading, setStoryLoading] = useState(false);
 
   const [discussions, setDiscussions] = useState([]);
@@ -691,7 +696,7 @@ const processUserData = (userArray, pendingRequests = [], myConnections = []) =>
   });
 };
   // Fetch alumni directory from backend
-  const fetchAlumniDirectory = async () => {
+  const fetchAlumniDirectory = async (pendingRequestsArg = pendingRequests, myConnectionsArg = myConnections) => {
   setLoading(true);
   try {
     const queryParams = new URLSearchParams({
@@ -714,8 +719,8 @@ const processUserData = (userArray, pendingRequests = [], myConnections = []) =>
     const data = await response.json();
     
     if (data.success) {
-      // Process with current connection data
-      const processedAlumni = processUserData(data.alumni, pendingRequests, myConnections);
+      // Process with provided (or current) connection data
+      const processedAlumni = processUserData(data.alumni, pendingRequestsArg, myConnectionsArg);
       setAlumniData(processedAlumni);
       if (directoryType === 'alumni') {
         setFilteredData(processedAlumni);
@@ -755,7 +760,7 @@ const ConnectionDebug = () => {
   );
 };
   // Fetch student directory from backend
-  const fetchStudentDirectory = async () => {
+  const fetchStudentDirectory = async (pendingRequestsArg = pendingRequests, myConnectionsArg = myConnections) => {
     setLoading(true);
     try {
       const queryParams = new URLSearchParams({
@@ -777,8 +782,8 @@ const ConnectionDebug = () => {
 
       const data = await response.json();
       
-      if (data.success) {
-        const processedStudents = processUserData(data.students);
+        if (data.success) {
+        const processedStudents = processUserData(data.students, pendingRequestsArg, myConnectionsArg);
         setStudentData(processedStudents);
         if (directoryType === 'students') {
           setFilteredData(processedStudents);
@@ -846,23 +851,11 @@ const ConnectionDebug = () => {
             graduationYear: getGraduationYear(request.person)
           }
         }));
-        
+
         console.log('✅ Processed connection requests:', processedRequests);
         setPendingRequests(processedRequests);
-        
-        // Update data with new connection status
-        if (alumniData.length > 0 || studentData.length > 0) {
-          const updatedAlumni = processUserData(alumniData, processedRequests, myConnections);
-          const updatedStudents = processUserData(studentData, processedRequests, myConnections);
-          setAlumniData(updatedAlumni);
-          setStudentData(updatedStudents);
-          
-          if (directoryType === 'alumni') {
-            setFilteredData(updatedAlumni);
-          } else {
-            setFilteredData(updatedStudents);
-          }
-        }
+        // Return processed requests so callers can use freshest data immediately
+        return processedRequests;
       } else {
         throw new Error(data.message || 'Failed to load connection requests');
       }
@@ -870,6 +863,7 @@ const ConnectionDebug = () => {
       console.error('❌ Error fetching connection requests:', error);
       toast.error('Failed to load connection requests');
     }
+    return [];
   };
 
   // Enhanced fetchMyConnections function
@@ -907,20 +901,11 @@ const fetchMyConnections = async () => {
           graduationYear: getGraduationYear(connection.person)
         }
       }));
-      
+
       console.log('✅ Processed connections:', processedConnections);
       setMyConnections(processedConnections);
-      
-      // Update data with new connection status
-      const updatedAlumni = processUserData(alumniData, pendingRequests, processedConnections);
-      const updatedStudents = processUserData(studentData, pendingRequests, processedConnections);
-      setAlumniData(updatedAlumni);
-      setStudentData(updatedStudents);
-      if (directoryType === 'alumni') {
-        setFilteredData(updatedAlumni);
-      } else {
-        setFilteredData(updatedStudents);
-      }
+      // Return processed connections so callers can use freshest data immediately
+      return processedConnections;
     } else {
       throw new Error(data.message || 'Failed to load connections');
     }
@@ -928,6 +913,7 @@ const fetchMyConnections = async () => {
     console.error('❌ Error fetching connections:', error);
     toast.error('Failed to load connections');
   }
+  return [];
 };
 
   // Fixed fetchSuccessStories function
@@ -1739,7 +1725,28 @@ const fetchMyConnections = async () => {
                 Close
               </button>
               <button 
-                onClick={() => toast.info('Connection feature will be implemented soon')}
+                onClick={async () => {
+                  const recipientId = profile._id || profile.id || profile.userId;
+                  if (!recipientId) {
+                    toast.error('Unable to determine recipient to message');
+                    return;
+                  }
+
+                  // If not connected, prompt to send a connection request instead
+                  if (!isUserConnected(recipientId)) {
+                    promptSendConnectionRequest(recipientId);
+                    return;
+                  }
+
+                  const currentPath = location?.pathname || '';
+                  if (currentPath.startsWith('/dashboard') || currentPath.startsWith('/student-dashboard')) {
+                    navigate(currentPath, { state: { openMessagesWith: recipientId } });
+                    onClose();
+                    return;
+                  }
+                  navigate('/messages', { state: { otherUserId: recipientId } });
+                  onClose();
+                }}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
                 Send Message
@@ -2182,8 +2189,26 @@ const ConnectionCard = ({ connection, onMessage }) => {
                 Close
               </button>
               <button 
-                onClick={() => {
-                  toast.info('Messaging feature will be implemented soon');
+                onClick={async () => {
+                  const authorId = story?.author?._id || story?.author?.id;
+                  if (!authorId) {
+                    toast.error('Unable to determine author to message');
+                    return;
+                  }
+
+                  if (!isUserConnected(authorId)) {
+                    promptSendConnectionRequest(authorId);
+                    return;
+                  }
+
+                  const currentPath = location?.pathname || '';
+                  if (currentPath.startsWith('/dashboard') || currentPath.startsWith('/student-dashboard')) {
+                    navigate(currentPath, { state: { openMessagesWith: authorId } });
+                    onClose();
+                    return;
+                  }
+                  navigate('/messages', { state: { otherUserId: authorId } });
+                  onClose();
                 }}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
@@ -2376,6 +2401,46 @@ const sendConnectionRequest = async (userId) => {
       setStudentData(prev => prev.map(updateStatus));
       setFilteredData(prev => prev.map(updateStatus));
     }
+  };
+
+  // Helper to check if a user is already connected
+  const isUserConnected = (userId) => {
+    if (!userId) return false;
+    return myConnections.some(conn => {
+      const pid = conn.person?.id || conn.person?._id;
+      return pid && pid.toString() === userId.toString();
+    });
+  };
+
+  // Prompt to send connection request using a non-blocking toast with action
+  const promptSendConnectionRequest = (userId) => {
+    if (!userId) return;
+    const tId = toast.info(
+      (<div>
+        You must connect with this user to message them.
+        <div className="mt-2 flex gap-2">
+          <button
+            onClick={async (e) => {
+              e.stopPropagation();
+              toast.dismiss(tId);
+              await sendConnectionRequest(userId);
+              await fetchConnectionRequests();
+              await fetchMyConnections();
+            }}
+            className="px-3 py-1 bg-blue-600 text-white rounded"
+          >
+            Send Request
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); toast.dismiss(tId); }}
+            className="px-3 py-1 border rounded"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>),
+      { autoClose: false }
+    );
   };
 
   // Accept connection request
@@ -2748,8 +2813,14 @@ const handleViewProfile = async (userId, userRole) => {
 
   // Render Connections
   const renderConnections = () => {
+
     const handleMessage = (userId) => {
-      toast.info(`Messaging feature for user ${userId} will be implemented soon`);
+      const currentPath = location?.pathname || '';
+      if (currentPath.startsWith('/dashboard') || currentPath.startsWith('/student-dashboard')) {
+        navigate(currentPath, { state: { openMessagesWith: userId } });
+        return;
+      }
+      navigate('/messages', { state: { otherUserId: userId } });
     };
 
     return (
@@ -3137,7 +3208,7 @@ const handleViewProfile = async (userId, userRole) => {
       console.log(`🔄 Loading section: ${activeSection}`);
 
       // Always load connection data first for proper status display
-      await Promise.all([
+      const [requestsResult, connectionsResult] = await Promise.all([
         fetchConnectionRequests(),
         fetchMyConnections()
       ]);
@@ -3145,9 +3216,9 @@ const handleViewProfile = async (userId, userRole) => {
       // Then load section-specific data
       if (activeSection === 'directory') {
         if (directoryType === 'alumni') {
-          await fetchAlumniDirectory();
+          await fetchAlumniDirectory(requestsResult || pendingRequests, connectionsResult || myConnections);
         } else {
-          await fetchStudentDirectory();
+          await fetchStudentDirectory(requestsResult || pendingRequests, connectionsResult || myConnections);
         }
       } else if (activeSection === 'stories') {
         await fetchSuccessStories();

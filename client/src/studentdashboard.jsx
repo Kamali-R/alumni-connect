@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import StudentProfileDisplay from './studentprofiledisplay';
 import AlumniProfilePage from './profile';
 import AlumniDirectory from './alumnidirectory';
@@ -88,6 +88,24 @@ const StudentDashboard = () => {
 
   checkAuthenticationAndFetchProfile();
 }, [navigate]);
+
+  // If navigation state requests opening messages (from NetworkingHub), handle it
+  const location = useLocation();
+  useEffect(() => {
+    try {
+      const openWith = location?.state?.openMessagesWith;
+      const otherUserId = location?.state?.otherUserId;
+      if (openWith && activeSection !== 'messages') {
+        setActiveSection('messages');
+        // replace state to ensure StudentMessages reads `otherUserId`
+        navigate(location.pathname, { replace: true, state: { otherUserId: openWith } });
+      } else if (otherUserId && activeSection !== 'messages') {
+        setActiveSection('messages');
+      }
+    } catch (err) {
+      // ignore
+    }
+  }, [location]);
 
   // Navigation items
   const navItems = [
