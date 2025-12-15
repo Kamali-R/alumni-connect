@@ -118,83 +118,80 @@ const InternHub = () => {
     }
   };
 
-  // Fetch applied jobs
   // Fetch applied jobs - UPDATED VERSION
-const fetchAppliedJobs = async () => {
-  try {
-    setLoading(true);
-    const token = localStorage.getItem('token');
-    const response = await axios.get(`${API_BASE_URL}/jobs/applied-jobs`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    });
-    
-    setAppliedJobs(response.data);
-    
-    // ✅ ADD THIS: Extract job IDs and store in a Set for quick lookup
-    const appliedIds = new Set(response.data.map(app => app.jobId._id));
-    setAppliedJobIds(appliedIds);
-    
-  } catch (error) {
-    console.error('Error fetching applied jobs:', error);
-    setError('Failed to fetch applied jobs.');
-  } finally {
-    setLoading(false);
-  }
-};
-
-  // Apply to job
-  // In studentinternship.jsx - Update the applyToJob function
-// Apply to job - UPDATED VERSION
-const applyToJob = async (jobId, coverLetter = '') => {
-  try {
-    setLoading(true);
-    const token = localStorage.getItem('token');
-    
-    console.log('Applying to job:', jobId);
-    
-    const response = await axios.post(
-      `${API_BASE_URL}/jobs/${jobId}/apply`,
-      { coverLetter },
-      {
+  const fetchAppliedJobs = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/jobs/applied-jobs`, {
         headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${token}`
         }
-      }
-    );
-    
-    console.log('Application response:', response.data);
-    
-    setSuccessMessage('Application submitted successfully!');
-    setTimeout(() => setSuccessMessage(''), 3000);
-    
-    // ✅ ADD THIS: Immediately update the applied jobs state
-    setAppliedJobIds(prev => new Set([...prev, jobId]));
-    
-    // Refresh applied jobs list
-    fetchAppliedJobs();
-    
-  } catch (error) {
-    console.error('Error applying to job:', error);
-    console.error('Error details:', error.response?.data);
-    
-    if (error.response?.status === 404) {
-      setError('Job not found. It may have been removed.');
-    } else if (error.response?.status === 400) {
-      setError(error.response.data.message);
-    } else if (error.response?.data?.message) {
-      setError(error.response.data.message);
-    } else if (error.code === 'NETWORK_ERROR') {
-      setError('Network error. Please check your connection.');
-    } else {
-      setError('Failed to apply to job. Please try again.');
+      });
+      
+      setAppliedJobs(response.data);
+      
+      // ✅ ADD THIS: Extract job IDs and store in a Set for quick lookup
+      const appliedIds = new Set(response.data.map(app => app.jobId._id));
+      setAppliedJobIds(appliedIds);
+      
+    } catch (error) {
+      console.error('Error fetching applied jobs:', error);
+      setError('Failed to fetch applied jobs.');
+    } finally {
+      setLoading(false);
     }
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
+  // Apply to job - UPDATED VERSION
+  const applyToJob = async (jobId, coverLetter = '') => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      
+      console.log('Applying to job:', jobId);
+      
+      const response = await axios.post(
+        `${API_BASE_URL}/jobs/${jobId}/apply`,
+        { coverLetter },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      console.log('Application response:', response.data);
+      
+      setSuccessMessage('Application submitted successfully!');
+      setTimeout(() => setSuccessMessage(''), 3000);
+      
+      // ✅ ADD THIS: Immediately update the applied jobs state
+      setAppliedJobIds(prev => new Set([...prev, jobId]));
+      
+      // Refresh applied jobs list
+      fetchAppliedJobs();
+      
+    } catch (error) {
+      console.error('Error applying to job:', error);
+      console.error('Error details:', error.response?.data);
+      
+      if (error.response?.status === 404) {
+        setError('Job not found. It may have been removed.');
+      } else if (error.response?.status === 400) {
+        setError(error.response.data.message);
+      } else if (error.response?.data?.message) {
+        setError(error.response.data.message);
+      } else if (error.code === 'NETWORK_ERROR') {
+        setError('Network error. Please check your connection.');
+      } else {
+        setError('Failed to apply to job. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Helper functions for data transformation
   const getWorkModeFromLocation = (location) => {
@@ -370,39 +367,6 @@ const applyToJob = async (jobId, coverLetter = '') => {
       return true;
     });
   };
-
-  // Add this function to studentinternship.jsx for testing
-const testAPI = async () => {
-  try {
-    const token = localStorage.getItem('token');
-    console.log('Token exists:', !!token);
-    
-    // Test if jobs endpoint works
-    const jobsResponse = await axios.get(`${API_BASE_URL}/jobs`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    console.log('Jobs API works:', jobsResponse.data);
-    
-    // Test if apply endpoint exists (this will fail but show the error)
-    const testJobId = '123'; // dummy ID
-    try {
-      const applyResponse = await axios.post(
-        `${API_BASE_URL}/jobs/${testJobId}/apply`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      console.log('Apply API works:', applyResponse.data);
-    } catch (applyError) {
-      console.log('Apply API test error (expected):', applyError.response?.data);
-    }
-    
-  } catch (error) {
-    console.error('API test failed:', error);
-  }
-};
-
-// Call this temporarily to test
-// testAPI();
 
   // Search internships
   const searchInternships = () => {
@@ -824,19 +788,19 @@ const testAPI = async () => {
                           Posted: {new Date(internship.datePosted).toLocaleDateString()}
                         </span>
                         <button
-  onClick={() => applyToJob(internship.id)}
-  className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-    appliedJobIds.has(internship.id)
-      ? 'bg-green-600 text-white cursor-not-allowed'
-      : loading 
-        ? 'bg-gray-400 text-white cursor-wait'
-        : 'bg-blue-600 hover:bg-blue-700 text-white'
-  }`}
-  disabled={appliedJobIds.has(internship.id) || loading}
->
-  {loading ? '🔄 Applying...' : 
-   appliedJobIds.has(internship.id) ? '✅ Applied' : 'Apply Now'}
-</button>
+                          onClick={() => applyToJob(internship.id)}
+                          className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                            appliedJobIds.has(internship.id)
+                              ? 'bg-green-600 text-white cursor-not-allowed'
+                              : loading 
+                                ? 'bg-gray-400 text-white cursor-wait'
+                                : 'bg-blue-600 hover:bg-blue-700 text-white'
+                          }`}
+                          disabled={appliedJobIds.has(internship.id) || loading}
+                        >
+                          {loading ? '🔄 Applying...' : 
+                          appliedJobIds.has(internship.id) ? '✅ Applied' : 'Apply Now'}
+                        </button>
                       </div>
                     </div>
                   ))}
