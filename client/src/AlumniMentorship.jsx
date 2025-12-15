@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { mentorshipAPI } from './api';
 
 const AlumniMentorshipPlatform = () => {
   const [activeSection, setActiveSection] = useState('find-mentor');
@@ -7,68 +8,23 @@ const AlumniMentorshipPlatform = () => {
   const [modalContent, setModalContent] = useState({ title: '', message: '' });
   const [requestedMentors, setRequestedMentors] = useState([]);
   const [isMentor, setIsMentor] = useState(false);
-  const [requests, setRequests] = useState([
-    {
-      id: 1,
-      name: 'Emily Smith',
-      initials: 'ES',
-      graduationYear: 'Class of 2025',
-      major: 'Computer Science',
-      interests: ['Product Management', 'Career Transition'],
-      message: "Hi! I'm a junior studying Computer Science and I'm really interested in transitioning into product management after graduation. I'd love to learn from your experience at Google and get advice on making this career switch.",
-      color: 'from-indigo-500 to-purple-600'
-    },
-    {
-      id: 2,
-      name: 'David Lee',
-      initials: 'DL',
-      graduationYear: 'Class of 2024',
-      major: 'Business Administration',
-      interests: ['Finance', 'Investment Banking'],
-      message: "I'm graduating next year and really want to break into investment banking. Your background at Goldman Sachs is exactly what I'm looking for. Would you be willing to share insights about the industry and application process?",
-      color: 'from-teal-500 to-blue-600'
-    },
-    {
-      id: 3,
-      name: 'Maria Johnson',
-      initials: 'MJ',
-      graduationYear: 'Class of 2026',
-      major: 'Marketing',
-      interests: ['Digital Marketing', 'Brand Strategy'],
-      message: "I'm passionate about digital marketing and brand development. Your work at Nike is inspiring! I'd love to learn about campaign strategies and how to build a successful marketing career.",
-      color: 'from-pink-500 to-rose-600'
-    }
-  ]);
-  const [myMentorships, setMyMentorships] = useState({
-    asMentee: [
-      {
-        id: 1,
-        name: 'Sarah Johnson',
-        initials: 'SJ',
-        expertise: 'Product Strategy',
-        nextSession: 'Dec 15, 2024',
-        color: 'from-blue-500 to-purple-600'
-      },
-      {
-        id: 2,
-        name: 'Michael Chen',
-        initials: 'MC',
-        expertise: 'Investment Strategy',
-        nextSession: 'Dec 18, 2024',
-        color: 'from-green-500 to-teal-600'
-      }
-    ],
-    asMentor: [
-      {
-        id: 1,
-        name: 'John Davis',
-        initials: 'JD',
-        expertise: 'Career Transition',
-        nextSession: 'Dec 20, 2024',
-        color: 'from-orange-500 to-red-600'
-      }
-    ]
+  const [requests, setRequests] = useState([]);
+  const [myMentorships, setMyMentorships] = useState({ asMentee: [], asMentor: [] });
+
+  // Form state for Become a Mentor
+  const [mentorForm, setMentorForm] = useState({
+    name: '',
+    graduationYear: '',
+    position: '',
+    company: '',
+    expertise: [],
+    bio: '',
+    availability: '1-2 hours per month',
+    industry: '',
+    location: ''
   });
+
+  // Mentors list will be declared later (uses local `allMentors` fallback)
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -321,58 +277,89 @@ const AlumniMentorshipPlatform = () => {
     { id: 'my-mentorships', label: 'My Mentorships', icon: '📋' },
     { id: 'requests', label: 'Requests', icon: '📨' }
   ];
-  const handleConnectMentor = (mentorId) => {
-    setRequestedMentors([...requestedMentors, mentorId]);
-  };
-  const handleMentorApplication = (e) => {
-    e.preventDefault();
-    setIsMentor(true);
-    setModalContent({
-      title: 'You are now a Mentor!',
-      message: 'Thank you for becoming a mentor. Your profile will be visible to students seeking mentorship.'
-    });
-    setShowModal(true);
-  };
-  const handleRequest = (action, studentName, requestId) => {
-    if (action === 'accept') {
-      // Find the request to accept
-      const requestToAccept = requests.find(req => req.id === requestId);
-      if (requestToAccept) {
-        // Remove from pending requests
-        setRequests(requests.filter(req => req.id !== requestId));
-        
-        // Add to mentor's mentee list
-        const newMentee = {
-          id: Date.now(), // Generate unique ID
-          name: requestToAccept.name,
-          initials: requestToAccept.initials,
-          expertise: requestToAccept.interests[0], // Use first interest as expertise
-          nextSession: 'To be scheduled',
-          color: requestToAccept.color
-        };
-        
-        setMyMentorships({
-          ...myMentorships,
-          asMentor: [...myMentorships.asMentor, newMentee]
-        });
-        
-        setModalContent({
-          title: 'Request Accepted!',
-          message: `${studentName} has been added to your mentorship list.`
-        });
-        setShowModal(true);
-      }
-    } else if (action === 'decline') {
-      // Remove from pending requests
-      setRequests(requests.filter(req => req.id !== requestId));
-      
-      setModalContent({
-        title: 'Request Declined',
-        message: `You have declined ${studentName}'s mentorship request.`
-      });
-      setShowModal(true);
+  const handleConnectMentor = async (mentorId) => {
+    try {
+      await mentorshipAPI.requestMentor(mentorId, { message: '' });
+      setRequestedMentors(prev => [...prev, mentorId]);
+      await fetchRequests();
+    } catch (err) {
+      console.error('Request mentor failed:', err?.response?.data || err.message || err);
     }
   };
+
+  const handleMentorApplication = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        name: mentorForm.name,
+        position: mentorForm.position,
+        company: mentorForm.company,
+        bio: mentorForm.bio,
+        expertise: mentorForm.expertise,
+        availability: mentorForm.availability,
+        industry: mentorForm.industry,
+        location: mentorForm.location
+      };
+
+      const res = await mentorshipAPI.becomeMentor(payload);
+      if (res.data && res.data.success) {
+        setIsMentor(true);
+        setModalContent({ title: 'You are now a Mentor!', message: 'Thank you for becoming a mentor. Your profile will be visible to students seeking mentorship.' });
+        setShowModal(true);
+        await fetchMentors();
+      }
+    } catch (err) {
+      console.error('Become mentor failed:', err?.response?.data || err.message || err);
+    }
+  };
+
+  const handleRequest = async (action, studentName, requestId) => {
+    try {
+      await mentorshipAPI.respondToRequest(requestId, action);
+      await fetchRequests();
+      await fetchMyMentorships();
+    } catch (err) {
+      console.error('Respond to request failed:', err?.response?.data || err.message || err);
+    }
+  };
+
+  // Fetch helpers
+  const fetchMentors = async () => {
+    try {
+      const res = await mentorshipAPI.getMentors();
+      setMentors(res.data.data || allMentors);
+    } catch (err) {
+      console.error('Failed to fetch mentors:', err?.response?.data || err.message || err);
+      setMentors(allMentors);
+    }
+  };
+
+  const fetchRequests = async () => {
+    try {
+      const res = await mentorshipAPI.getRequests();
+      const data = res.data || {};
+      setRequests(data.incoming || []);
+    } catch (err) {
+      console.error('Failed to fetch requests:', err?.response?.data || err.message || err);
+    }
+  };
+
+  const fetchMyMentorships = async () => {
+    try {
+      const res = await mentorshipAPI.getMyMentorships();
+      const d = res.data || {};
+      setMyMentorships({ asMentee: d.asMentee || [], asMentor: d.asMentor || [] });
+    } catch (err) {
+      console.error('Failed to fetch my mentorships:', err?.response?.data || err.message || err);
+    }
+  };
+
+  // Initial data load
+  useEffect(() => {
+    fetchMentors();
+    fetchRequests();
+    fetchMyMentorships();
+  }, []);
   const renderFindMentor = () => (
     <div>
       <h2 className="text-2xl font-bold text-gray-800 mb-4">Find Your Perfect Mentor</h2>
@@ -569,6 +556,9 @@ const AlumniMentorshipPlatform = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
                   <input 
                     type="text" 
+                    name="name"
+                    value={mentorForm.name}
+                    onChange={(e) => setMentorForm(prev => ({ ...prev, name: e.target.value }))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
                     placeholder="Your full name"
                     required
@@ -578,6 +568,9 @@ const AlumniMentorshipPlatform = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Graduation Year</label>
                   <input 
                     type="text" 
+                    name="graduationYear"
+                    value={mentorForm.graduationYear}
+                    onChange={(e) => setMentorForm(prev => ({ ...prev, graduationYear: e.target.value }))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
                     placeholder="e.g., 2015"
                     required
@@ -589,6 +582,9 @@ const AlumniMentorshipPlatform = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Current Position</label>
                   <input 
                     type="text" 
+                    name="position"
+                    value={mentorForm.position}
+                    onChange={(e) => setMentorForm(prev => ({ ...prev, position: e.target.value }))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
                     placeholder="Your current job title"
                     required
@@ -598,6 +594,9 @@ const AlumniMentorshipPlatform = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Company</label>
                   <input 
                     type="text" 
+                    name="company"
+                    value={mentorForm.company}
+                    onChange={(e) => setMentorForm(prev => ({ ...prev, company: e.target.value }))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
                     placeholder="Current company"
                     required
@@ -609,7 +608,15 @@ const AlumniMentorshipPlatform = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {['Technology', 'Finance', 'Marketing', 'Healthcare', 'Leadership', 'Entrepreneurship', 'Consulting', 'Other'].map((area, index) => (
                     <label key={index} className="flex items-center">
-                      <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                      <input
+                        type="checkbox"
+                        checked={mentorForm.expertise.includes(area)}
+                        onChange={() => setMentorForm(prev => ({
+                          ...prev,
+                          expertise: prev.expertise.includes(area) ? prev.expertise.filter(e => e !== area) : [...prev.expertise, area]
+                        }))}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
                       <span className="ml-2 text-sm">{area}</span>
                     </label>
                   ))}
@@ -619,6 +626,9 @@ const AlumniMentorshipPlatform = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Bio & Experience</label>
                 <textarea 
                   rows="4" 
+                  name="bio"
+                  value={mentorForm.bio}
+                  onChange={(e) => setMentorForm(prev => ({ ...prev, bio: e.target.value }))}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
                   placeholder="Tell us about your professional journey and what you can offer as a mentor..."
                   required
@@ -626,7 +636,13 @@ const AlumniMentorshipPlatform = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Availability</label>
-                <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
+                <select
+                  name="availability"
+                  value={mentorForm.availability}
+                  onChange={(e) => setMentorForm(prev => ({ ...prev, availability: e.target.value }))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                >
                   <option>1-2 hours per month</option>
                   <option>3-4 hours per month</option>
                   <option>5+ hours per month</option>

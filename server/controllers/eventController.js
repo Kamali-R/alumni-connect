@@ -49,7 +49,7 @@ export const getEvents = async (req, res) => {
     const events = await Event.find(filter)
       .populate('postedBy', 'name email')
       .populate('attendees', 'name email')
-      .sort({ date: 1 });
+      .sort({ createdAt: -1 });
     
     // Add isUserAttending flag for each event if user is authenticated
     const eventsWithAttendanceStatus = events.map(event => {
