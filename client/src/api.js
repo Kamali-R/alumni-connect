@@ -82,6 +82,15 @@ export const eventsAPI = {
   getUserEventsById: (userId) => api.get(`/events/user/${userId}`),
 };
 
+// Applications API
+export const applicationsAPI = {
+  apply: (applicationData) => api.post('/applications', applicationData),
+  getMyApplications: () => api.get('/applications/my-applications')
+};
+
+// Cancel application
+export const cancelApplication = (eventId) => api.delete(`/applications/${eventId}`);
+
 // Job API - ADD THIS TO YOUR EXISTING api.js
 // In api.js - Add these to your existing jobAPI
 export const jobAPI = {
@@ -121,6 +130,16 @@ export const jobAPI = {
 export const testAPI = {
   test: () => api.get('/test'),
   health: () => api.get('/health'),
+};
+
+// Mentorship API
+export const mentorshipAPI = {
+  getMentors: () => api.get('/mentorship/mentors'),
+  becomeMentor: (profile) => api.post('/mentorship/mentors', profile),
+  requestMentor: (mentorId, body = {}) => api.post(`/mentorship/mentors/${mentorId}/request`, body),
+  getRequests: () => api.get('/mentorship/requests'),
+  respondToRequest: (requestId, action) => api.patch(`/mentorship/requests/${requestId}`, { action }),
+  getMyMentorships: () => api.get('/mentorship/my')
 };
 
 

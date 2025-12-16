@@ -365,10 +365,22 @@ export const getConnectedAlumni = async (req, res) => {
     const connectedAlumni = await Promise.all(
       connections.map(async (connection) => {
         try {
+          // Check if both requesterId and recipientId exist
+          if (!connection.requesterId || !connection.recipientId) {
+            console.warn(`⚠️ Skipping connection ${connection._id}: Missing user reference`);
+            return null;
+          }
+
           const otherUser = 
             connection.requesterId._id.toString() === currentUserId.toString()
               ? connection.recipientId
               : connection.requesterId;
+
+          // Validate otherUser exists
+          if (!otherUser || !otherUser._id) {
+            console.warn(`⚠️ Skipping connection ${connection._id}: Invalid otherUser`);
+            return null;
+          }
 
           // Get alumni profile
           const alumniProfile = await Alumni.findOne({ userId: otherUser._id })

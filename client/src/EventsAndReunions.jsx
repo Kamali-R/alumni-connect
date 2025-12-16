@@ -12,7 +12,8 @@ const EventsAndReunions = () => {
     startDate: '',
     endDate: '',
     location: '',
-    mode: '' // 'online' | 'offline' | '' for all
+    mode: '', // 'online' | 'offline' | '' for all
+    audience: '' // 'alumni' | 'student' | '' for all
   });
   const [formData, setFormData] = useState({
     title: '',
@@ -24,6 +25,7 @@ const EventsAndReunions = () => {
     // new fields for online/offline events
     mode: 'offline',
     eventLink: '',
+    audience: '',
     description: ''
   });
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -117,7 +119,8 @@ const EventsAndReunions = () => {
       startDate: '',
       endDate: '',
       location: '',
-      mode: ''
+      mode: '',
+      audience: ''
     });
   };
 
@@ -460,6 +463,9 @@ const EventsAndReunions = () => {
               <span className={`${event.mode === 'online' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-800'} px-2 py-1 rounded-full text-xs font-medium`}>
                 {event.mode === 'online' ? 'Online' : 'Offline'}
               </span>
+              <span className={`${event.audience === 'student' ? 'bg-indigo-50 text-indigo-800' : event.audience === 'alumni' ? 'bg-yellow-50 text-yellow-800' : 'bg-gray-100 text-gray-800'} px-2 py-1 rounded-full text-xs font-medium`}>
+                {event.audience === 'student' ? 'For: Students' : event.audience === 'alumni' ? 'For: Alumni' : 'For: All'}
+              </span>
               <span>{formatDate(event.date)}</span>
               <span>{formatTime(event.time)}</span>
               {isPastEvent && (
@@ -657,6 +663,19 @@ const EventsAndReunions = () => {
                       <option value="offline">Offline</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">Event Audience</label>
+                    <select
+                      name="audience"
+                      value={filters.audience}
+                      onChange={handleFilterChange}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
+                    >
+                      <option value="">All Audiences</option>
+                      <option value="alumni">Alumni</option>
+                      <option value="student">Students</option>
+                    </select>
+                  </div>
                 </div>
                 
                 <div className="flex justify-between items-center mt-4">
@@ -743,6 +762,23 @@ const EventsAndReunions = () => {
                   <option value="other">Other</option>
                 </select>
               </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Event Audience <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    name="audience"
+                    value={formData.audience}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
+                  >
+                    <option value="">Select audience</option>
+                    <option value="alumni">Alumni</option>
+                    <option value="student">Students</option>
+                  </select>
+                </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
