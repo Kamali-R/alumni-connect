@@ -170,18 +170,29 @@ if (!MONGO_URI) {
 }
 
 mongoose
-  .connect(MONGO_URI)
+  .connect(MONGO_URI, {
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+  })
   .then(() => {
     console.log('✅ MongoDB Connected');
   })
   .catch((err) => {
-    console.error('❌ MongoDB connection failed:', err.message);
-    process.exit(1);
+    console.warn('⚠️ MongoDB connection failed:', err.message);
+    console.warn('⚠️ Server will still start but database features may not work');
   });
 
 // After MongoDB connection
 mongoose.connection.on('connected', () => {
   console.log('✅ MongoDB Connected');
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.warn('⚠️ MongoDB Disconnected');
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('❌ MongoDB Error:', err.message);
 });
 
 // Create HTTP server

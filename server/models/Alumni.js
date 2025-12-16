@@ -122,7 +122,7 @@ const AlumniSchema = new mongoose.Schema({
 });
 
 // Add indexes for better query performance
-AlumniSchema.index({ userId: 1 });
+// Note: userId already has unique index from schema definition
 AlumniSchema.index({ 'personalInfo.personalEmail': 1 });
 AlumniSchema.index({ 'academicInfo.collegeEmail': 1 });
 
