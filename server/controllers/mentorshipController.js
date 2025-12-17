@@ -1,9 +1,13 @@
 import Mentor from '../models/Mentor.js';
 import MentorshipRequest from '../models/MentorshipRequest.js';
 import User from '../models/User.js';
+import Alumni from '../models/Alumni.js';
+import MentorProfile from '../models/MentorProfile.js';
+import Mentorship from '../models/Mentorship.js';
+import { getIo } from '../utils/socket.js';
 
-// GET /api/mentorship/mentors
-export const getMentors = async (req, res) => {
+// GET /api/mentorship/mentors (simple version)
+export const getSimpleMentors = async (req, res) => {
   try {
     const mentors = await Mentor.find().populate('user', 'name email');
     res.status(200).json({ success: true, count: mentors.length, data: mentors });
@@ -13,8 +17,8 @@ export const getMentors = async (req, res) => {
   }
 };
 
-// POST /api/mentorship/mentors - create or update mentor profile
-export const becomeMentor = async (req, res) => {
+// POST /api/mentorship/mentors - create or update mentor profile (simple version for backward compatibility)
+export const createSimpleMentorProfile = async (req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ success: false, message: 'Auth required' });
@@ -144,8 +148,8 @@ export const respondToRequest = async (req, res) => {
   }
 };
 
-// GET /api/mentorship/my
-export const getMyMentorships = async (req, res) => {
+// GET /api/mentorship/my (simple version)
+export const getSimpleMyMentorships = async (req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ success: false, message: 'Auth required' });
@@ -164,11 +168,6 @@ export const getMyMentorships = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
-import Mentorship from '../models/Mentorship.js';
-import MentorProfile from '../models/MentorProfile.js';
-import User from '../models/User.js';
-import Alumni from '../models/Alumni.js';
-import { getIo } from '../utils/socket.js';
 
 // Helper to build a frontend-friendly mentor object
 const buildMentorDto = (mentor, user = {}, alumni = {}) => {

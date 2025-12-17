@@ -4,6 +4,177 @@ import SkillsSection from './SkillsSection';
 import ReportsSection from './ReportsSection';
 import SecuritySection from './SecuritySection';
 
+// Announcements Section Component - Moved outside to prevent re-mounting
+const AnnouncementsSection = ({ announcements, announcementForm, onAnnouncementChange, onSendAnnouncement, fadeAnimation }) => {
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
+  
+  // Function to truncate text to first 2 lines
+  const truncateToTwoLines = (text = '', lines = 2) => {
+    const safe = typeof text === 'string' ? text : String(text || '');
+    const textLines = safe.split('\n');
+    if (textLines.length > lines) {
+      return textLines.slice(0, lines).join('\n') + '...';
+    }
+    return safe;
+  };
+
+  return (
+    <div className={`content-section p-8 ${fadeAnimation ? 'fade-in' : ''}`}>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Announcements</h1>
+        <p className="text-gray-600">Send announcements to platform users</p>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Send Announcement</h2>
+          <form onSubmit={onSendAnnouncement} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Subject</label>
+              <input 
+                type="text" 
+                name="subject"
+                value={announcementForm.subject}
+                onChange={onAnnouncementChange}
+                placeholder="Enter announcement subject" 
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Message</label>
+              <textarea 
+                name="message"
+                value={announcementForm.message}
+                onChange={onAnnouncementChange}
+                rows="4" 
+                placeholder="Enter your announcement message" 
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Send To</label>
+              <select 
+                name="audience"
+                value={announcementForm.audience}
+                onChange={onAnnouncementChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="All Users">All Users</option>
+                <option value="Alumni Only">Alumni Only</option>
+                <option value="Students Only">Students Only</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+              <select 
+                name="category"
+                value={announcementForm.category}
+                onChange={onAnnouncementChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="Announcements">Announcements</option>
+                <option value="Academic">Academic</option>
+                <option value="Events">Events</option>
+                <option value="General">General</option>
+              </select>
+            </div>
+            <button type="submit" className="w-full bg-blue-700 text-white px-6 py-3 rounded-lg hover:bg-blue-800 transition-colors flex items-center justify-center">
+              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"></path>
+              </svg>
+              Send Announcement
+            </button>
+          </form>
+        </div>
+        
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Recent Announcements</h2>
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {announcements.length > 0 ? (
+              announcements.map((announcement, index) => (
+                <div key={index} className="p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <div className="font-medium text-gray-900">{announcement.subject}</div>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">{announcement.category || 'General'}</span>
+                      </div>
+                      <div className="text-sm text-gray-600 mt-2 line-clamp-2">{truncateToTwoLines(announcement.message || '')}</div>
+                      <div className="text-sm text-gray-600 mt-2">Sent to {announcement.audience.toLowerCase()}</div>
+                    </div>
+                    <div className="text-xs text-gray-500 bg-white px-2 py-1 rounded ml-4 whitespace-nowrap">
+                      {announcement.timestamp}
+                    </div>
+                  </div>
+                  <div className="mt-3 flex justify-end">
+                    <button onClick={() => setSelectedAnnouncement(announcement)} className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center">
+                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"></path>
+                        <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"></path>
+                      </svg>
+                      View Details
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p>No announcements yet. Create one using the form on the left.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Modal for viewing full announcement details */}
+      {selectedAnnouncement && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
+              <h2 className="text-2xl font-bold text-gray-900">{selectedAnnouncement.subject}</h2>
+              <button 
+                onClick={() => setSelectedAnnouncement(null)}
+                className="text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">
+                  <span className="font-semibold">Category:</span> {selectedAnnouncement.category || 'General'}
+                </p>
+                <p className="text-sm text-gray-600 mb-2">
+                  <span className="font-semibold">Audience:</span> {selectedAnnouncement.audience}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <span className="font-semibold">Posted:</span> {selectedAnnouncement.timestamp}
+                </p>
+              </div>
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Message</h3>
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 whitespace-pre-wrap text-gray-700 leading-relaxed">
+                  {selectedAnnouncement.message || 'No message provided.'}
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end">
+                <button 
+                  onClick={() => setSelectedAnnouncement(null)}
+                  className="bg-blue-700 text-white px-6 py-2 rounded-lg hover:bg-blue-800 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -41,11 +212,15 @@ const AdminDashboard = () => {
   const [announcements, setAnnouncements] = useState([
     { 
       subject: 'Platform Maintenance Notice', 
+      message: 'We will perform scheduled maintenance on Friday 10 PM.\nExpect brief downtime during the update window.',
+      category: 'Announcements',
       audience: 'All Users', 
       timestamp: '2 days ago' 
     },
     { 
       subject: 'New Feature Announcement', 
+      message: 'We have launched the new mentoring portal!\nExplore matches and book sessions from your dashboard.',
+      category: 'Announcements',
       audience: 'All Users', 
       timestamp: '1 week ago' 
     }
@@ -54,7 +229,8 @@ const AdminDashboard = () => {
   const [announcementForm, setAnnouncementForm] = useState({
     subject: '',
     message: '',
-    audience: 'All Users'
+    audience: 'All Users',
+    category: 'General'
   });
   
   const [events, setEvents] = useState({
@@ -377,7 +553,9 @@ const AdminDashboard = () => {
     
     const newAnnouncement = {
       subject: announcementForm.subject,
+      message: announcementForm.message,
       audience: announcementForm.audience,
+      category: announcementForm.category,
       timestamp: 'Just now'
     };
     
@@ -387,6 +565,12 @@ const AdminDashboard = () => {
     showNotification("Announcement sent successfully!", 'success');
     
     // Reset form
+    setAnnouncementForm({
+      subject: '',
+      message: '',
+      audience: 'All Users',
+      category: 'General'
+    });
   };
   
   const handleApproveEvent = (eventId) => {
@@ -1066,96 +1250,6 @@ const AdminDashboard = () => {
   useEffect(() => {
     fetchSecurityOverview();
   }, [fetchSecurityOverview]);
-
-  // Reports Section
-  
-  // Announcements Section
-  const AnnouncementsSection = () => (
-    <div className={`content-section p-8 ${fadeAnimation ? 'fade-in' : ''}`}>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Announcements</h1>
-        <p className="text-gray-600">Send announcements to platform users</p>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Send Announcement</h2>
-          <form onSubmit={handleSendAnnouncement} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Subject</label>
-              <input 
-                type="text" 
-                name="subject"
-                value={announcementForm.subject}
-                onChange={handleAnnouncementChange}
-                placeholder="Enter announcement subject" 
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Message</label>
-              <textarea 
-                name="message"
-                value={announcementForm.message}
-                onChange={handleAnnouncementChange}
-                rows="4" 
-                placeholder="Enter your announcement message" 
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Send To</label>
-              <select 
-                name="audience"
-                value={announcementForm.audience}
-                onChange={handleAnnouncementChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="All Users">All Users</option>
-                <option value="Alumni Only">Alumni Only</option>
-                <option value="Students Only">Students Only</option>
-
-              </select>
-            </div>
-            <button type="submit" className="w-full bg-blue-700 text-white px-6 py-3 rounded-lg hover:bg-blue-800 transition-colors flex items-center justify-center">
-              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"></path>
-              </svg>
-              Send Announcement
-            </button>
-          </form>
-        </div>
-        
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Recent Announcements</h2>
-          <div className="space-y-4">
-            {announcements.map((announcement, index) => (
-              <div key={index} className="p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="font-medium text-gray-900">{announcement.subject}</div>
-                    <div className="text-sm text-gray-600 mt-1">Sent to {announcement.audience.toLowerCase()}</div>
-                  </div>
-                  <div className="text-xs text-gray-500 bg-white px-2 py-1 rounded">
-                    {announcement.timestamp}
-                  </div>
-                </div>
-                <div className="mt-3 flex justify-end">
-                  <button className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center">
-                    <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"></path>
-                      <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"></path>
-                    </svg>
-                    View Details
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
   
   // Security Section
   const OldSecuritySection = () => (
@@ -1368,7 +1462,15 @@ const AdminDashboard = () => {
           />
         );
       case 'notifications':
-        return <AnnouncementsSection />;
+        return (
+          <AnnouncementsSection 
+            announcements={announcements}
+            announcementForm={announcementForm}
+            onAnnouncementChange={handleAnnouncementChange}
+            onSendAnnouncement={handleSendAnnouncement}
+            fadeAnimation={fadeAnimation}
+          />
+        );
       case 'security':
         return (
           <SecuritySection

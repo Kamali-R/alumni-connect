@@ -1718,6 +1718,93 @@ const handleSubmitAchievement = async (e) => {
   </div>
 )}
 
+      {/* News Full Story Modal */}
+      {showNewsModal && selectedNews && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="modal-backdrop fixed inset-0 bg-black bg-opacity-50 backdrop-filter backdrop-blur-sm" 
+            onClick={handleCloseNewsModal}
+          ></div>
+          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto relative z-10">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-gray-900">{selectedNews.title}</h3>
+                <button 
+                  onClick={handleCloseNewsModal} 
+                  className="text-gray-400 hover:text-gray-600 text-3xl transition-colors"
+                >
+                  ×
+                </button>
+              </div>
+              
+              {/* News Details */}
+              <div className="mb-6 flex items-center justify-between text-sm text-gray-500">
+                <span className="flex items-center">
+                  <span className="mr-2">📅</span>
+                  {selectedNews.time}
+                </span>
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  selectedNews.category === 'events' ? 'bg-purple-100 text-purple-700' :
+                  selectedNews.category === 'academic' ? 'bg-blue-100 text-blue-700' :
+                  selectedNews.category === 'placement' ? 'bg-green-100 text-green-700' :
+                  'bg-gray-100 text-gray-700'
+                }`}>
+                  {selectedNews.category}
+                </span>
+              </div>
+              
+              {/* Full Story Content */}
+              <div className="prose max-w-none">
+                <div className="text-gray-700 whitespace-pre-line leading-relaxed">
+                  {selectedNews.fullStory}
+                </div>
+              </div>
+              
+              {/* Details Section */}
+              {selectedNews.details && (
+                <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                  <h4 className="font-semibold text-gray-900 mb-3">Event Details</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {Object.entries(selectedNews.details).map(([key, value]) => (
+                      <div key={key} className="flex items-start">
+                        <span className="text-2xl mr-2">
+                          {key === 'attendees' && '👥'}
+                          {key === 'date' && '📅'}
+                          {key === 'venue' && '📍'}
+                          {key === 'books' && '📚'}
+                          {key === 'feature' && '✨'}
+                          {key === 'capacity' && '👥'}
+                          {key === 'companies' && '🏢'}
+                          {key === 'placements' && '📊'}
+                          {key === 'package' && '💰'}
+                          {key === 'awards' && '🏆'}
+                          {key === 'participants' && '👥'}
+                          {key === 'winners' && '🥇'}
+                        </span>
+                        <div>
+                          <div className="text-xs text-gray-500 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</div>
+                          <div className="font-medium text-gray-900">{value}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Close Button */}
+              <div className="mt-6 flex justify-end">
+                <button 
+                  onClick={handleCloseNewsModal}
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx>{`
         .news-card, .achievement-card { 
           transition: all 0.3s ease; 
