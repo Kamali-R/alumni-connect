@@ -535,6 +535,28 @@ const AdminDashboard = () => {
   ];
   
   // Rest of the methods remain the same
+  // Fetch announcements on component mount
+  useEffect(() => {
+    const fetchAnnouncements = async () => {
+      try {
+        const response = await fetch('/api/announcements/all');
+        if (response.ok) {
+          const data = await response.json();
+          // Transform to include timestamp for display
+          const formatted = data.map(ann => ({
+            ...ann,
+            timestamp: new Date(ann.createdAt).toLocaleDateString()
+          }));
+          setAnnouncements(formatted);
+        }
+      } catch (error) {
+        console.error('Error fetching announcements:', error);
+        // Keep default announcements if fetch fails
+      }
+    };
+    fetchAnnouncements();
+  }, []);
+  
   const handleAnnouncementChange = (e) => {
     const { name, value } = e.target;
     setAnnouncementForm(prev => ({
@@ -543,7 +565,7 @@ const AdminDashboard = () => {
     }));
   };
   
-  const handleSendAnnouncement = (e) => {
+  const handleSendAnnouncement = async (e) => {
     e.preventDefault();
     
     if (!announcementForm.subject.trim() || !announcementForm.message.trim()) {
@@ -551,26 +573,43 @@ const AdminDashboard = () => {
       return;
     }
     
-    const newAnnouncement = {
-      subject: announcementForm.subject,
-      message: announcementForm.message,
-      audience: announcementForm.audience,
-      category: announcementForm.category,
-      timestamp: 'Just now'
-    };
-    
-    setAnnouncements(prev => [newAnnouncement, ...prev]);
-    
-    // Show success notification
-    showNotification("Announcement sent successfully!", 'success');
-    
-    // Reset form
-    setAnnouncementForm({
-      subject: '',
-      message: '',
-      audience: 'All Users',
-      category: 'General'
-    });
+    try {
+      const response = await fetch('/api/announcements/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          subject: announcementForm.subject,
+          message: announcementForm.message,
+          audience: announcementForm.audience,
+          category: announcementForm.category
+        })
+      });
+
+      if (response.ok) {
+        const newAnnouncement = await response.json();
+        const formatted = {
+          ...newAnnouncement,
+          timestamp: new Date(newAnnouncement.createdAt).toLocaleDateString()
+        };
+        setAnnouncements(prev => [formatted, ...prev]);
+        showNotification("Announcement sent successfully!", 'success');
+        
+        // Reset form
+        setAnnouncementForm({
+          subject: '',
+          message: '',
+          audience: 'All Users',
+          category: 'General'
+        });
+      } else {
+        showNotification("Failed to send announcement", 'error');
+      }
+    } catch (error) {
+      console.error('Error sending announcement:', error);
+      showNotification("Error sending announcement", 'error');
+    }
   };
   
   const handleApproveEvent = (eventId) => {

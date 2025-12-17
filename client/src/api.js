@@ -142,6 +142,13 @@ export const mentorshipAPI = {
   getMyMentorships: () => api.get('/mentorship/my')
 };
 
-
+// Announcements API
+export const announcementsAPI = {
+  getAll: () => api.get('/announcements/all'),
+  getStudentAnnouncements: () => api.get('/announcements/student/announcements'),
+  getAlumniAnnouncements: () => api.get('/announcements/alumni/announcements'),
+  create: (announcementData) => api.post('/announcements/create', announcementData),
+  delete: (id) => api.delete(`/announcements/${id}`),
+};
 
 export default api;

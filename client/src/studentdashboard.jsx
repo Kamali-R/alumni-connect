@@ -514,7 +514,7 @@ const StudentDashboard = () => {
           {activeSection === 'alumni-directory' && <AlumniDirectory />}
           
           {/* Other Sections (Placeholders) */}
-          {activeSection !== 'dashboard' && activeSection !== 'profile' && activeSection !== 'internships' && activeSection !== 'messages' && activeSection !== 'events' && activeSection !== 'alumni-directory' && (
+          {activeSection !== 'dashboard' && activeSection !== 'profile' && activeSection !== 'internships' && activeSection !== 'messages' && activeSection !== 'events' && activeSection !== 'news' && activeSection !== 'alumni-directory' && (
             <div className="content-section">
               <h1 className="text-3xl font-bold text-gray-900 mb-6">
                 {navItems.find(item => item.id === activeSection)?.label}

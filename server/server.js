@@ -32,6 +32,7 @@ import mentorshipRoutes from './routes/mentorshipRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import securityRoutes from './routes/securityRoutes.js';
+import announcementRoutes from './routes/announcementRoutes.js';
 
 // Load Google OAuth config
 import './config/googleAuth.js';
@@ -115,6 +116,7 @@ app.use('/api/mentorship', mentorshipRoutes);
 app.use('/api', adminRoutes);
 app.use('/api', reportRoutes);
 app.use('/api', securityRoutes);
+app.use('/api/announcements', announcementRoutes);
 // ✅ Root Route
 app.get('/', (req, res) => {
   res.json({
