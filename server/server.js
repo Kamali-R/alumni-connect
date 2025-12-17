@@ -112,10 +112,9 @@ app.use('/api/applications', applicationRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/mentorship', mentorshipRoutes);
-
-app.use('/api', adminRoutes);
-app.use('/api', reportRoutes);
-app.use('/api', securityRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/admin', reportRoutes);
+app.use('/api/admin', securityRoutes);
 app.use('/api/announcements', announcementRoutes);
 // ✅ Root Route
 app.get('/', (req, res) => {

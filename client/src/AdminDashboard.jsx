@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import SkillsSection from './SkillsSection';
 import ReportsSection from './ReportsSection';
 import SecuritySection from './SecuritySection';
+import { achievementsAPI } from './api';
 
 // Announcements Section Component - Moved outside to prevent re-mounting
 const AnnouncementsSection = ({ announcements, announcementForm, onAnnouncementChange, onSendAnnouncement, fadeAnimation }) => {
@@ -175,6 +176,74 @@ const AnnouncementsSection = ({ announcements, announcementForm, onAnnouncementC
   );
 };
 
+// Achievements Section Component
+const AchievementsSection = ({ achievements, loading, error }) => {
+  return (
+    <div className="content-section p-8">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Achievements</h1>
+          <p className="text-gray-600">All student and alumni achievements</p>
+        </div>
+      </div>
+
+      {loading && (
+        <div className="flex items-center justify-center py-12 text-gray-600">Loading achievements...</div>
+      )}
+
+      {error && (
+        <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 text-red-700 border border-red-200">
+          {error}
+        </div>
+      )}
+
+      {!loading && achievements.length === 0 && !error && (
+        <div className="text-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
+          <div className="text-5xl mb-3">🏆</div>
+          <p className="text-gray-600">No achievements found.</p>
+        </div>
+      )}
+
+      {!loading && achievements.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {achievements.map((item) => (
+            <div key={item._id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col gap-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs text-gray-500 flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded-full ${
+                      item.userProfile?.role === 'student' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+                    }`}>
+                      {item.userProfile?.role === 'student' ? '🎓 Student' : '👨‍🎓 Alumni'}
+                    </span>
+                    <span>{item.userProfile?.name || 'User'}</span>
+                  </p>
+                  <h3 className="text-lg font-semibold text-gray-900 leading-tight mt-1">{item.title}</h3>
+                  <p className="text-sm text-gray-600 mt-1 line-clamp-3">{item.description}</p>
+                </div>
+                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                  {item.achievementDate ? new Date(item.achievementDate).toLocaleDateString() : ''}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span className={`px-2 py-1 rounded-full ${
+                  item.category === 'academic' ? 'bg-blue-50 text-blue-700' :
+                  item.category === 'placement' ? 'bg-green-50 text-green-700' :
+                  'bg-purple-50 text-purple-700'
+                }`}>
+                  {item.category || 'general'}
+                </span>
+                <span className="bg-yellow-50 text-yellow-700 px-2 py-1 rounded">👏 {item.congratulations?.count || 0}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -232,6 +301,10 @@ const AdminDashboard = () => {
     audience: 'All Users',
     category: 'General'
   });
+
+  const [adminAchievements, setAdminAchievements] = useState([]);
+  const [achievementsLoading, setAchievementsLoading] = useState(false);
+  const [achievementsError, setAchievementsError] = useState(null);
   
   const [events, setEvents] = useState({
     pending: [
@@ -339,6 +412,15 @@ const AdminDashboard = () => {
           <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"></path>
         </svg>
       ) 
+    },
+    { 
+      id: 'achievements',
+      label: 'Achievements',
+      icon: (
+        <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.176 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+        </svg>
+      )
     },
     { 
       id: 'security', 
@@ -556,6 +638,56 @@ const AdminDashboard = () => {
     };
     fetchAnnouncements();
   }, []);
+
+  // Load achievements for admin view
+  const fetchAchievements = useCallback(async () => {
+    try {
+      setAchievementsLoading(true);
+      setAchievementsError(null);
+      
+      // Auto-migrate roles silently in background (only when a token exists)
+      try {
+        const token = localStorage.getItem('token');
+        if (token) {
+          const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+          await fetch('http://localhost:5000/api/admin/migrate-achievement-roles', {
+            method: 'POST',
+            headers: {
+              'Authorization': authHeader,
+              'Content-Type': 'application/json'
+            }
+          });
+          console.log('✅ Role migration completed in background');
+        } else {
+          console.warn('⚠️ Skipping role migration: no auth token available');
+        }
+      } catch (migrationErr) {
+        console.warn('Role migration failed silently:', migrationErr);
+      }
+      
+      const response = await achievementsAPI.getAll();
+      const data = response.data?.data || response.data || [];
+      setAdminAchievements(data);
+    } catch (err) {
+      console.error('Error fetching achievements:', err);
+      setAchievementsError('Failed to load achievements');
+    } finally {
+      setAchievementsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAchievements();
+  }, [fetchAchievements]);
+
+  // Auto-refresh achievements periodically so admin list stays current without manual refresh
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      fetchAchievements();
+    }, 60000); // refresh every 60 seconds
+
+    return () => clearInterval(intervalId);
+  }, [fetchAchievements]);
   
   const handleAnnouncementChange = (e) => {
     const { name, value } = e.target;
@@ -1055,7 +1187,7 @@ const AdminDashboard = () => {
   const testSkillsAPI = useCallback(async () => {
     try {
       console.log('🧪 Testing Skills API endpoint...');
-      const testResponse = await fetch('/api/skills/test');
+      const testResponse = await fetch('/api/admin/skills/test');
       const testData = await testResponse.json();
       console.log('✅ API Test response:', testData);
       
@@ -1087,7 +1219,7 @@ const AdminDashboard = () => {
         throw new Error('No authentication token found. Please login again.');
       }
 
-      const fetchUrl = '/api/skills/overview';
+      const fetchUrl = '/api/admin/skills/overview';
       console.log('📡 Fetch URL:', fetchUrl);
 
       const response = await fetch(fetchUrl, {
@@ -1153,7 +1285,7 @@ const AdminDashboard = () => {
         throw new Error('No authentication token found. Please login again.');
       }
 
-      const response = await fetch(`/api/skills/search?query=${encodeURIComponent(trimmedQuery)}`, {
+      const response = await fetch(`/api/admin/skills/search?query=${encodeURIComponent(trimmedQuery)}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -1203,7 +1335,7 @@ const AdminDashboard = () => {
         throw new Error('No authentication token found. Please login again.');
       }
 
-      const response = await fetch('/api/reports/overview', {
+      const response = await fetch('/api/admin/reports/overview', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -1250,7 +1382,7 @@ const AdminDashboard = () => {
         throw new Error('No authentication token found. Please login again.');
       }
 
-      const response = await fetch('/api/security/overview', {
+      const response = await fetch('/api/admin/security/overview', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -1517,6 +1649,14 @@ const AdminDashboard = () => {
             securityLoading={securityLoading}
             securityError={securityError}
             onRefresh={fetchSecurityOverview}
+          />
+        );
+      case 'achievements':
+        return (
+          <AchievementsSection
+            achievements={adminAchievements}
+            loading={achievementsLoading}
+            error={achievementsError}
           />
         );
       default:

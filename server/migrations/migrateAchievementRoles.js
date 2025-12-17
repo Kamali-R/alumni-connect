@@ -1,30 +1,20 @@
-import express from 'express';
-import { getSkillsOverview, searchSkills } from '../controllers/adminController.js';
-import auth from '../middleware/authMiddleware.js';
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
 import Achievement from '../models/Achievement.js';
 
-const router = express.Router();
+dotenv.config();
 
-// Test endpoint (no auth required)
-router.get('/skills/test', (req, res) => {
-  console.log('📋 Skills test endpoint hit');
-  res.status(200).json({
-    success: true,
-    message: 'Skills API is working',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Get skills and technologies overview
-router.get('/skills/overview', auth, getSkillsOverview);
-
-// Search skills
-router.get('/skills/search', auth, searchSkills);
-
-// Migrate achievement roles (populate missing role fields)
-router.post('/migrate-achievement-roles', auth, async (req, res) => {
+async function migrateAchievementRoles() {
   try {
     console.log('🔄 Starting achievement roles migration...');
+    
+    // Connect to MongoDB
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/alumni-connect', {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    
+    console.log('✅ Connected to MongoDB');
     
     // Find all achievements without role or with undefined role
     const achievementsWithoutRole = await Achievement.find({
@@ -37,9 +27,14 @@ router.post('/migrate-achievement-roles', auth, async (req, res) => {
     
     console.log(`📊 Found ${achievementsWithoutRole.length} achievements without role`);
     
+    if (achievementsWithoutRole.length === 0) {
+      console.log('✅ All achievements already have roles!');
+      await mongoose.connection.close();
+      return;
+    }
+    
     let updatedCount = 0;
     let errorCount = 0;
-    const updates = [];
     
     // Update each achievement
     for (const achievement of achievementsWithoutRole) {
@@ -62,41 +57,30 @@ router.post('/migrate-achievement-roles', auth, async (req, res) => {
         await Achievement.findByIdAndUpdate(
           achievement._id,
           { $set: { 'userProfile.role': role } },
-          { new: true, runValidators: false }
+          { new: true, runValidators: false } // Skip validators to avoid issues
         );
         
-        updates.push({
-          name: achievement.userProfile?.name || 'Unknown',
-          role: role
-        });
+        console.log(`✅ Updated: ${achievement.userProfile?.name || 'Unknown'} → ${role}`);
         updatedCount++;
         
       } catch (err) {
-        console.error(`❌ Error updating achievement:`, err.message);
+        console.error(`❌ Error updating achievement ${achievement._id}:`, err.message);
         errorCount++;
       }
     }
     
-    console.log(`✅ Migration completed: ${updatedCount} updated, ${errorCount} errors`);
+    console.log(`\n📈 Migration Summary:`);
+    console.log(`   Updated: ${updatedCount}`);
+    console.log(`   Errors: ${errorCount}`);
+    console.log(`   Total: ${updatedCount + errorCount}`);
     
-    res.json({
-      success: true,
-      message: `Migration completed: ${updatedCount} achievements updated, ${errorCount} errors`,
-      data: {
-        updated: updatedCount,
-        errors: errorCount,
-        details: updates
-      }
-    });
+    await mongoose.connection.close();
+    console.log('✅ Migration completed and connection closed');
     
   } catch (error) {
     console.error('❌ Migration failed:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Migration failed',
-      error: error.message
-    });
+    process.exit(1);
   }
-});
+}
 
-export default router;
+migrateAchievementRoles();
