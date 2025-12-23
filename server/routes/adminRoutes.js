@@ -1,5 +1,5 @@
 import express from 'express';
-import { getSkillsOverview, searchSkills } from '../controllers/adminController.js';
+import { getSkillsOverview, searchSkills, getDashboardStats } from '../controllers/adminController.js';
 import auth from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -13,6 +13,9 @@ router.get('/skills/test', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// Get dashboard stats
+router.get('/dashboard/stats', auth, getDashboardStats);
 
 // Get skills and technologies overview
 router.get('/skills/overview', auth, getSkillsOverview);

@@ -37,54 +37,56 @@ router.get('/auth/google', (req, res, next) => {
   prompt: 'select_account'
 }));
 
-router.get('/auth/google/callback',
-  passport.authenticate('google', {
-    session: false,
-    failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=google_auth_failed`
-  }),
-  async (req, res) => {
+router.get('/auth/google/callback', (req, res, next) => {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  passport.authenticate('google', { session: false }, async (err, user, info) => {
     try {
-      console.log('Google callback reached');
-      console.log('User from passport:', req.user ? req.user.email : 'No user');
-      
-      if (!req.user) {
-        console.error('No user from Google authentication');
-        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=authentication_failed`);
+      if (err) {
+        console.error('Google callback error:', err);
+        return res.redirect(`${frontendUrl}/login?error=auth_failed`);
       }
-      
-      // Generate JWT token with all necessary user data
+
+      // If signup is needed, redirect to Register with prefilled params
+      if (!user && info && info.needsSignup) {
+        const tempToken = jwt.sign(
+          {
+            provider: 'google',
+            email: info.email,
+            name: info.name,
+            googleId: info.googleId
+          },
+          process.env.JWT_SECRET,
+          { expiresIn: '15m' }
+        );
+        const url = `${frontendUrl}/Register?error=not_found&from=google&email=${encodeURIComponent(info.email)}&name=${encodeURIComponent(info.name)}&token=${encodeURIComponent(tempToken)}`;
+        console.log('Redirecting unregistered Google user to signup:', url);
+        return res.redirect(url);
+      }
+
+      if (!user) {
+        console.error('No user from Google authentication and no signup info.');
+        return res.redirect(`${frontendUrl}/login?error=authentication_failed`);
+      }
+
+      // Existing user: issue app token
       const tokenPayload = {
-        id: req.user._id,
-        email: req.user.email,
-        role: req.user.role || 'alumni',
-        name: req.user.name,
-        profileCompleted: req.user.profileCompleted || false
+        id: user._id,
+        email: user.email,
+        role: user.role || 'alumni',
+        name: user.name,
+        profileCompleted: user.profileCompleted || false
       };
-      
-      console.log('Token payload:', tokenPayload);
-      
-      const token = jwt.sign(
-        tokenPayload,
-        process.env.JWT_SECRET,
-        { expiresIn: '7d' }
-      );
-      
-      console.log('Generated token for user:', req.user.email);
-      
-      // Redirect to frontend with token
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+      const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '7d' });
       const redirectUrl = `${frontendUrl}/auth/google/callback?token=${token}&success=true`;
-      
-      console.log('Redirecting to:', redirectUrl);
-      res.redirect(redirectUrl);
-      
-    } catch (error) {
-      console.error('Google callback error:', error);
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-      res.redirect(`${frontendUrl}/login?error=auth_failed`);
+      console.log('Redirecting existing Google user to:', redirectUrl);
+      return res.redirect(redirectUrl);
+    } catch (e) {
+      console.error('Google callback handler exception:', e);
+      return res.redirect(`${frontendUrl}/login?error=auth_failed`);
     }
-  }
-);
+  })(req, res, next);
+});
 
 // Protected route to get user data
 router.get('/user', auth, async (req, res) => {

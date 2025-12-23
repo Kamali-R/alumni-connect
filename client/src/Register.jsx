@@ -18,12 +18,21 @@ const Register = ({setUserData}) => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const error = params.get('error');
+    const from = params.get('from');
+    const name = params.get('name');
+    const email = params.get('email');
     if (error === 'not_found') {
       setMessage({
         text: 'No account found for this Google email. Please complete your signup.',
         type: 'error',
       });
     }
+    // Prefill name/email if provided (e.g., from Google)
+    setForm(prev => ({
+      ...prev,
+      name: name || prev.name,
+      email: email || prev.email,
+    }));
     
     // Check if role is passed in location state (from homepage buttons)
     if (location.state?.role) {
