@@ -562,8 +562,11 @@ export const getAlumniDirectory = async (req, res) => {
       {
         $unwind: {
           path: '$alumniProfile',
-          preserveNullAndEmptyArrays: true
+          preserveNullAndEmptyArrays: false // require an alumni profile
         }
+      },
+      {
+        $match: { 'alumniProfile.status': 'complete' } // only completed profiles
       }
     ];
 

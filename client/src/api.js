@@ -132,6 +132,10 @@ export const testAPI = {
   health: () => api.get('/health'),
 };
 
+// Admin Dashboard API
+export const dashboardAPI = {
+  getStats: () => api.get('/admin/dashboard/stats'),
+};
 // Mentorship API
 export const mentorshipAPI = {
   getMentors: () => api.get('/mentorship/mentors'),
