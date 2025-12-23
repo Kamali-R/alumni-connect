@@ -3,6 +3,7 @@
   "dependencies": {
     "axios": "^1.12.2",
     "bcryptjs": "^3.0.2",
+    "type": "module",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express-session": "^1.18.2",
@@ -17,5 +18,23 @@
     "nodemon": "^3.1.10",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.11"
-  }
+  },
+  "name": "alumni-connect",
+  "version": "1.0.0",
+  "description": "🎓 Alumni Connect A web application to connect students and alumni through a verified registration system with email OTP authentication and secure login. ⚙️ Technologies Used - Node.js & Express.js - MongoDB & Mongoose - Nodemailer (for OTP emails) - dotenv (for environment variables) - bcryptjs (for secure password hashing) - jsonwebtoken (for login security) - Postman (for API testing) 🚀 How to Run This Project (Backend Setup) **Step 1:** Clone the Repository     git clone https://github.com/Kamali-R/alumni-connect.git",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kamali-R/alumni-connect.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Kamali-R/alumni-connect/issues"
+  },
+  "homepage": "https://github.com/Kamali-R/alumni-connect#readme"
 }

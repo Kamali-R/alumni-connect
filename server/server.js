@@ -111,6 +111,7 @@ app.use('/api/applications', applicationRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/mentorship', mentorshipRoutes);
+
 app.use('/api', adminRoutes);
 app.use('/api', reportRoutes);
 app.use('/api', securityRoutes);

@@ -136,6 +136,16 @@ export const testAPI = {
 export const dashboardAPI = {
   getStats: () => api.get('/admin/dashboard/stats'),
 };
+// Mentorship API
+export const mentorshipAPI = {
+  getMentors: () => api.get('/mentorship/mentors'),
+  becomeMentor: (profile) => api.post('/mentorship/mentors', profile),
+  requestMentor: (mentorId, body = {}) => api.post(`/mentorship/mentors/${mentorId}/request`, body),
+  getRequests: () => api.get('/mentorship/requests'),
+  respondToRequest: (requestId, action) => api.patch(`/mentorship/requests/${requestId}`, { action }),
+  getMyMentorships: () => api.get('/mentorship/my')
+};
+
 
 
 export default api;
