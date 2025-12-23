@@ -6,7 +6,6 @@ import NetworkingHub from './NetworkingHub';
 import NewsAndAchievements from './NewsAndAchievements';
 import EventsAndReunions from './EventsAndReunions';
 import Messages from './Messages';
-import AlumniMentorshipPlatform from './AlumniMentorship';
 const AlumniConnectDashboard = () => {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -204,11 +203,6 @@ const AlumniConnectDashboard = () => {
           <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"></path>
         </svg>
       ) },
-    { id: 'mentorship', label: 'Mentorship Program', icon: (
-        <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3z"></path>
-        </svg>
-      ) },
     { id: 'messages', label: 'Messages', icon: (
         <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
           <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"></path>
@@ -293,17 +287,6 @@ const AlumniConnectDashboard = () => {
       title: 'Event Reminder',
       time: '5 hours ago',
       description: 'Annual Alumni Gala is scheduled for next Saturday. Don\'t forget to RSVP!'
-    },
-    {
-      icon: (
-        <svg className="w-5 h-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"></path>
-        </svg>
-      ),
-      bgColor: 'bg-indigo-100',
-      title: 'Mentorship Opportunity',
-      time: '1 day ago',
-      description: 'Sarah Johnson (Class of 2015) is offering mentorship for recent graduates.'
     },
     {
       icon: (
@@ -577,13 +560,6 @@ const AlumniConnectDashboard = () => {
           {activeSection === 'jobs' && (
             <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
               <AlumniJobDashboard />
-            </div>
-          )}
-
-          {/* Mentorship Section */}
-          {activeSection === 'mentorship' && (
-            <div className={`content-section ${fadeAnimation ? 'fade-in' : ''}`}>
-              <AlumniMentorshipPlatform />
             </div>
           )}
 
