@@ -1,5 +1,5 @@
 import express from 'express';
-import { getSkillsOverview, searchSkills } from '../controllers/adminController.js';
+import { getSkillsOverview, searchSkills, getEventsForAdmin } from '../controllers/adminController.js';
 import auth from '../middleware/authMiddleware.js';
 import Achievement from '../models/Achievement.js';
 
@@ -98,5 +98,8 @@ router.post('/migrate-achievement-roles', auth, async (req, res) => {
     });
   }
 });
+
+// Get all events categorized for admin dashboard
+router.get('/events', auth, getEventsForAdmin);
 
 export default router;

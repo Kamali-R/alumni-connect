@@ -307,55 +307,11 @@ const AdminDashboard = () => {
   const [achievementsError, setAchievementsError] = useState(null);
   
   const [events, setEvents] = useState({
-    pending: [
-      {
-        id: 1,
-        title: 'Alumni Startup Pitch Night',
-        submitter: 'Sarah Johnson (Class of 2018)',
-        date: 'March 25, 2024 • 6:30 PM',
-        location: 'Innovation Hub, Downtown',
-        description: 'An evening where alumni entrepreneurs can pitch their startups to fellow alumni and potential investors.'
-      },
-      {
-        id: 2,
-        title: 'Photography Workshop',
-        submitter: 'Mike Chen (Class of 2015)',
-        date: 'April 8, 2024 • 2:00 PM',
-        location: 'University Art Building',
-        description: 'Learn professional photography techniques from alumni working in the creative industry.'
-      }
-    ],
-    approved: [
-      {
-        id: 3,
-        title: 'Alumni Networking Night',
-        date: 'March 15, 2024 • 7:00 PM',
-        location: 'Downtown Conference Center',
-        registered: 45
-      },
-      {
-        id: 4,
-        title: 'Career Fair 2024',
-        date: 'April 2, 2024 • 10:00 AM',
-        location: 'University Campus',
-        registered: 128
-      }
-    ],
-    past: [
-      {
-        id: 5,
-        title: 'Tech Talk: AI in Industry',
-        date: 'February 20, 2024',
-        attended: 67
-      },
-      {
-        id: 6,
-        title: 'Alumni Reunion',
-        date: 'January 15, 2024',
-        attended: 203
-      }
-    ]
+    upcoming: [],
+    past: []
   });
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState(null);
   
   // Navigation items
   const navItems = [
@@ -743,16 +699,65 @@ const AdminDashboard = () => {
       showNotification("Error sending announcement", 'error');
     }
   };
+
+  // Fetch events for admin dashboard
+  const fetchEventsForAdmin = useCallback(async () => {
+    try {
+      setEventsLoading(true);
+      setEventsError(null);
+      
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setEventsError('Not authenticated');
+        return;
+      }
+
+      const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      const response = await fetch('http://localhost:5000/api/admin/events', {
+        method: 'GET',
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch events');
+      }
+
+      const result = await response.json();
+      if (result.success && result.data) {
+        setEvents({
+          upcoming: result.data.upcoming || [],
+          past: result.data.past || []
+        });
+        console.log('✅ Events loaded:', {
+          upcoming: result.data.upcoming?.length || 0,
+          past: result.data.past?.length || 0
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error fetching events:', error);
+      setEventsError('Failed to load events');
+    } finally {
+      setEventsLoading(false);
+    }
+  }, []);
+
+  // Load events on component mount
+  useEffect(() => {
+    fetchEventsForAdmin();
+  }, [fetchEventsForAdmin]);
   
   const handleApproveEvent = (eventId) => {
-    const eventToApprove = events.pending.find(event => event.id === eventId);
+    const eventToApprove = events.pending?.find(event => event.id === eventId);
     if (!eventToApprove) return;
     
     // Move from pending to approved
     setEvents(prev => ({
       ...prev,
-      pending: prev.pending.filter(event => event.id !== eventId),
-      approved: [...prev.approved, {
+      pending: prev.pending?.filter(event => event.id !== eventId) || [],
+      approved: [...(prev.approved || []), {
         ...eventToApprove,
         registered: 0 // Initialize with 0 registrations
       }]
@@ -995,154 +1000,231 @@ const AdminDashboard = () => {
   );
   
   // EventManagementSection with updated styling
-  const EventManagementSection = () => (
-    <div className={`content-section p-8 ${fadeAnimation ? 'fade-in' : ''}`}>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Event Management</h1>
-        <p className="text-gray-600">Manage all events on the platform</p>
-      </div>
-      
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-          <h2 className="text-xl font-semibold text-gray-900">All Events</h2>
-          <button className="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors flex items-center">
-            <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd"></path>
-            </svg>
-            Create Event
-          </button>
+  const EventManagementSection = () => {
+    // Format date for display
+    const formatEventDate = (date, time) => {
+      const eventDate = new Date(date);
+      const options = { year: 'numeric', month: 'short', day: 'numeric' };
+      const formattedDate = eventDate.toLocaleDateString('en-US', options);
+      return time ? `${formattedDate} • ${time}` : formattedDate;
+    };
+
+    return (
+      <div className={`content-section p-8 ${fadeAnimation ? 'fade-in' : ''}`}>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Event Management</h1>
+          <p className="text-gray-600">Manage all events on the platform - automatically categorized by date</p>
         </div>
         
-        {/* Pending Approval Events */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">Events Pending Approval</h3>
-            <span className="bg-orange-100 text-orange-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-              {events.pending.length} pending
-            </span>
+        {eventsLoading ? (
+          <div className="flex items-center justify-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-700 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading events...</p>
+            </div>
           </div>
-          <div className="space-y-4">
-            {events.pending.map(event => (
-              <div key={event.id} className="border border-orange-200 bg-orange-50 rounded-lg p-4 hover:shadow-md transition-shadow">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="font-medium text-gray-900">{event.title}</h4>
-                    <p className="text-gray-600 text-sm mt-1">Submitted by: {event.submitter}</p>
-                    <div className="flex items-center mt-2 text-sm text-gray-600">
-                      <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"></path>
-                      </svg>
-                      {event.date}
-                    </div>
-                    <div className="flex items-center mt-1 text-sm text-gray-600">
-                      <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"></path>
-                      </svg>
-                      {event.location}
-                    </div>
-                    <p className="text-gray-700 text-sm mt-2">{event.description}</p>
-                  </div>
-                  <div className="flex space-x-2">
-                    <button 
-                      onClick={() => handleApproveEvent(event.id)}
-                      className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-green-700 transition-colors flex items-center"
-                    >
-                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
-                      </svg>
-                      Approve
-                    </button>
-                    <button 
-                      onClick={() => handleRejectEvent(event.id)}
-                      className="bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-red-700 transition-colors flex items-center"
-                    >
-                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path>
-                      </svg>
-                      Reject
-                    </button>
-                    <button 
-                      onClick={() => handleEditEvent(event.id)}
-                      className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-700 transition-colors flex items-center"
-                    >
-                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path>
-                      </svg>
-                      Edit
-                    </button>
-                  </div>
-                </div>
+        ) : eventsError ? (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-red-700">
+            <p className="font-semibold">Error loading events</p>
+            <p className="text-sm mt-1">{eventsError}</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">All Events</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  {events.upcoming.length} upcoming • {events.past.length} past
+                </p>
               </div>
-            ))}
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">Approved Upcoming Events</h3>
-              <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                {events.approved.length} approved
-              </span>
+              <button className="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors flex items-center">
+                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd"></path>
+                </svg>
+                Create Event
+              </button>
             </div>
-            <div className="space-y-3">
-              {events.approved.map(event => (
-                <div key={event.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                  <h4 className="font-medium text-gray-900">{event.title}</h4>
-                  <div className="flex items-center mt-2 text-sm text-gray-600">
-                    <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"></path>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
+              {/* Upcoming Events */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-gray-900 flex items-center">
+                    <svg className="w-5 h-5 mr-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"></path>
                     </svg>
-                    {event.date}
-                  </div>
-                  <div className="flex items-center mt-1 text-sm text-gray-600">
-                    <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"></path>
-                    </svg>
-                    {event.location}
-                  </div>
-                  <div className="flex items-center mt-2">
-                    <svg className="w-4 h-4 mr-1.5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path>
-                    </svg>
-                    <span className="text-blue-600 text-sm font-medium">{event.registered} registered</span>
-                  </div>
+                    Upcoming Events
+                  </h3>
+                  <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                    {events.upcoming.length} scheduled
+                  </span>
                 </div>
-              ))}
-            </div>
-          </div>
-          
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">Past Events</h3>
-              <span className="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                {events.past.length} completed
-              </span>
-            </div>
-            <div className="space-y-3">
-              {events.past.map(event => (
-                <div key={event.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50 hover:shadow-md transition-shadow">
-                  <h4 className="font-medium text-gray-900">{event.title}</h4>
-                  <div className="flex items-center mt-2 text-sm text-gray-600">
-                    <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"></path>
+                
+                {events.upcoming.length === 0 ? (
+                  <div className="border border-gray-200 rounded-lg p-8 text-center bg-gray-50">
+                    <svg className="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    {event.date}
+                    <p className="text-gray-600">No upcoming events</p>
                   </div>
-                  <div className="flex items-center mt-2">
-                    <svg className="w-4 h-4 mr-1.5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
+                ) : (
+                  <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                    {events.upcoming.map(event => (
+                      <div key={event.id} className="border border-green-200 bg-green-50 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="font-medium text-gray-900">{event.title}</h4>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            event.mode === 'online' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                          }`}>
+                            {event.mode === 'online' ? '🌐 Online' : '📍 In-Person'}
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-1 text-sm text-gray-600">
+                          <div className="flex items-center">
+                            <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"></path>
+                            </svg>
+                            {formatEventDate(event.date, event.time)}
+                          </div>
+                          
+                          <div className="flex items-center">
+                            <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"></path>
+                            </svg>
+                            {event.mode === 'online' && event.eventLink ? (
+                              <a href={event.eventLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                {event.eventLink.substring(0, 40)}...
+                              </a>
+                            ) : (
+                              event.location
+                            )}
+                          </div>
+                          
+                          {event.postedBy && (
+                            <div className="flex items-center text-xs">
+                              <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"></path>
+                              </svg>
+                              Posted by: {event.postedBy.name} ({event.postedBy.role})
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-green-200">
+                          <div className="flex items-center">
+                            <svg className="w-4 h-4 mr-1.5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path>
+                            </svg>
+                            <span className="text-blue-600 text-sm font-medium">{event.attendance || 0} registered</span>
+                          </div>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            event.audience === 'all' ? 'bg-gray-100 text-gray-700' :
+                            event.audience === 'student' ? 'bg-green-100 text-green-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>
+                            {event.audience === 'all' ? '👥 All' : event.audience === 'student' ? '🎓 Students' : '👨‍🎓 Alumni'}
+                          </span>
+                        </div>
+                        
+                        {event.description && (
+                          <p className="text-xs text-gray-600 mt-2 line-clamp-2">{event.description}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              {/* Past Events */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-gray-900 flex items-center">
+                    <svg className="w-5 h-5 mr-2 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"></path>
                     </svg>
-                    <span className="text-green-600 text-sm font-medium">{event.attended} attended</span>
-                  </div>
+                    Past Events
+                  </h3>
+                  <span className="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                    {events.past.length} completed
+                  </span>
                 </div>
-              ))}
+                
+                {events.past.length === 0 ? (
+                  <div className="border border-gray-200 rounded-lg p-8 text-center bg-gray-50">
+                    <svg className="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-gray-600">No past events</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                    {events.past.map(event => (
+                      <div key={event.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50 hover:shadow-md transition-shadow">
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="font-medium text-gray-900">{event.title}</h4>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            event.mode === 'online' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                          }`}>
+                            {event.mode === 'online' ? '🌐 Online' : '📍 In-Person'}
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-1 text-sm text-gray-600">
+                          <div className="flex items-center">
+                            <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"></path>
+                            </svg>
+                            {formatEventDate(event.date, event.time)}
+                          </div>
+                          
+                          <div className="flex items-center">
+                            <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"></path>
+                            </svg>
+                            {event.location}
+                          </div>
+                          
+                          {event.postedBy && (
+                            <div className="flex items-center text-xs">
+                              <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"></path>
+                              </svg>
+                              Posted by: {event.postedBy.name} ({event.postedBy.role})
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200">
+                          <div className="flex items-center">
+                            <svg className="w-4 h-4 mr-1.5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
+                            </svg>
+                            <span className="text-green-600 text-sm font-medium">{event.attendance || 0} attended</span>
+                          </div>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            event.audience === 'all' ? 'bg-gray-100 text-gray-700' :
+                            event.audience === 'student' ? 'bg-green-100 text-green-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>
+                            {event.audience === 'all' ? '👥 All' : event.audience === 'student' ? '🎓 Students' : '👨‍🎓 Alumni'}
+                          </span>
+                        </div>
+                        
+                        {event.description && (
+                          <p className="text-xs text-gray-600 mt-2 line-clamp-2">{event.description}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  };
   
   // Skills & Technology Section
   const [skillsData, setSkillsData] = useState({
