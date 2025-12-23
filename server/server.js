@@ -28,7 +28,6 @@ import newsAndAchievementsRoutes from './routes/NewsAndAchievementsRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 import studentRoutes from './routes/studentRoutes.js';
 import NewsAndAchievementsRoutes from './routes/NewsAndAchievementsRoutes.js';
-import mentorshipRoutes from './routes/mentorshipRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import securityRoutes from './routes/securityRoutes.js';
@@ -110,7 +109,6 @@ app.use('/api', newsAndAchievementsRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/student', studentRoutes);
-app.use('/api/mentorship', mentorshipRoutes);
 
 app.use('/api', adminRoutes);
 app.use('/api', reportRoutes);
