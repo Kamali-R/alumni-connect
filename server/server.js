@@ -101,13 +101,11 @@ app.use('/api', protectedRoutes);
 app.use('/api', contactRoutes);
 app.use('/api', alumniRoutes);
 app.use('/api/events', eventRoutes);
-app.use('/api', NewsAndAchievementsRoutes); // ✅ Add this line
+app.use('/api', NewsAndAchievementsRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api', networkingRoutes);
 app.use('/api', successStoryRoutes);
 app.use('/api', discussionRoutes);
-app.use('/api/events', eventRoutes);
-app.use('/api', newsAndAchievementsRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/student', studentRoutes);

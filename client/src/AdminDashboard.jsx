@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import SkillsSection from './SkillsSection';
 import ReportsSection from './ReportsSection';
 import SecuritySection from './SecuritySection';
-import { achievementsAPI } from './api';
+import { achievementsAPI, dashboardAPI } from './api';
 
 // Announcements Section Component - Moved outside to prevent re-mounting
 const AnnouncementsSection = ({ announcements, announcementForm, onAnnouncementChange, onSendAnnouncement, fadeAnimation }) => {
@@ -252,6 +252,42 @@ const AdminDashboard = () => {
   const [userRole] = useState('System Administrator');
   const [notification, setNotification] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
+
+  // Real-time dashboard stats state
+  const [dashboardStats, setDashboardStats] = useState({
+    totalUsers: 0,
+    activeJobs: 0,
+    pendingEvents: 0,
+    systemHealth: '98%'
+  });
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  // Fetch dashboard stats
+  const fetchDashboardStats = useCallback(async () => {
+    try {
+      const response = await dashboardAPI.getStats();
+      if (response.data.success) {
+        setDashboardStats(response.data.stats);
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
+  // Set up auto-refresh every 30 seconds
+  useEffect(() => {
+    // Fetch stats immediately on mount
+    fetchDashboardStats();
+
+    // Set up interval for auto-refresh
+    const interval = setInterval(() => {
+      fetchDashboardStats();
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [fetchDashboardStats]);
 
   // Notification handler
   const showNotification = useCallback((message, type = 'success', duration = 3000) => {
@@ -524,11 +560,11 @@ const AdminDashboard = () => {
     else if (label === 'View Reports') setActiveSection('reports');
   };
   
-  // Stat cards data
+  // Stat cards data - now uses real data from backend
   const statCards = [
     { 
       title: 'Total Users', 
-      value: '2,847', 
+      value: dashboardStats.totalUsers.toString().padStart(4, '0'),
       icon: (
         <svg className="w-8 h-8 text-blue-700" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
@@ -539,7 +575,7 @@ const AdminDashboard = () => {
     },
     { 
       title: 'Active Jobs', 
-      value: '156', 
+      value: dashboardStats.activeJobs.toString().padStart(4, '0'),
       icon: (
         <svg className="w-8 h-8 text-blue-700" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/>
@@ -550,7 +586,7 @@ const AdminDashboard = () => {
     },
     { 
       title: 'Pending Events', 
-      value: '3', 
+      value: dashboardStats.pendingEvents.toString().padStart(4, '0'),
       icon: (
         <svg className="w-8 h-8 text-blue-700" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"></path>
@@ -561,7 +597,7 @@ const AdminDashboard = () => {
     },
     { 
       title: 'System Health', 
-      value: '98%', 
+      value: dashboardStats.systemHealth,
       icon: (
         <svg className="w-8 h-8 text-blue-700" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd"></path>
