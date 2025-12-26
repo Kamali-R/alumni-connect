@@ -307,3 +307,82 @@ export const searchSkills = async (req, res) => {
     });
   }
 };
+
+/**
+ * Get all events categorized as upcoming and past
+ */
+export const getEventsForAdmin = async (req, res) => {
+  try {
+    console.log('📅 Fetching events for admin dashboard...');
+    
+    const Event = (await import('../models/Events.js')).default;
+    
+    // Get current date at start of day for accurate comparison
+    const currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0);
+    
+    // Fetch all events with creator information
+    const allEvents = await Event.find({})
+      .populate('postedBy', 'name email role')
+      .populate('attendees', 'name email')
+      .sort({ date: -1 }); // Sort by date descending (newest first)
+    
+    // Separate into upcoming and past events based on event date
+    const upcomingEvents = [];
+    const pastEvents = [];
+    
+    allEvents.forEach(event => {
+      const eventDate = new Date(event.date);
+      eventDate.setHours(0, 0, 0, 0);
+      
+      const eventData = {
+        id: event._id,
+        title: event.title,
+        type: event.type,
+        date: event.date,
+        time: event.time,
+        location: event.location,
+        mode: event.mode || 'offline',
+        eventLink: event.eventLink || '',
+        audience: event.audience || 'all',
+        description: event.description,
+        rsvpInfo: event.rsvpInfo,
+        attendance: event.attendance || 0,
+        attendees: event.attendees || [],
+        postedBy: event.postedBy ? {
+          id: event.postedBy._id,
+          name: event.postedBy.name,
+          email: event.postedBy.email,
+          role: event.postedBy.role
+        } : null,
+        createdAt: event.createdAt,
+        updatedAt: event.updatedAt
+      };
+      
+      if (eventDate >= currentDate) {
+        upcomingEvents.push(eventData);
+      } else {
+        pastEvents.push(eventData);
+      }
+    });
+    
+    console.log(`✅ Events categorized: ${upcomingEvents.length} upcoming, ${pastEvents.length} past`);
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        upcoming: upcomingEvents,
+        past: pastEvents,
+        total: allEvents.length
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fetching events for admin:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching events',
+      error: error.message
+    });
+  }
+};

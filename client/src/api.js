@@ -137,4 +137,13 @@ export const dashboardAPI = {
   getStats: () => api.get('/admin/dashboard/stats'),
 };
 
+// Announcements API
+export const announcementsAPI = {
+  getAll: () => api.get('/announcements/all'),
+  getStudentAnnouncements: () => api.get('/announcements/student/announcements'),
+  getAlumniAnnouncements: () => api.get('/announcements/alumni/announcements'),
+  create: (announcementData) => api.post('/announcements/create', announcementData),
+  delete: (id) => api.delete(`/announcements/${id}`),
+};
+
 export default api;

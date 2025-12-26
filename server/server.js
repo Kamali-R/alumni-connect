@@ -28,9 +28,11 @@ import newsAndAchievementsRoutes from './routes/NewsAndAchievementsRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 import studentRoutes from './routes/studentRoutes.js';
 import NewsAndAchievementsRoutes from './routes/NewsAndAchievementsRoutes.js';
+import mentorshipRoutes from './routes/mentorshipRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import securityRoutes from './routes/securityRoutes.js';
+import announcementRoutes from './routes/announcementRoutes.js';
 
 // Load Google OAuth config
 import './config/googleAuth.js';
@@ -99,20 +101,19 @@ app.use('/api', protectedRoutes);
 app.use('/api', contactRoutes);
 app.use('/api', alumniRoutes);
 app.use('/api/events', eventRoutes);
-app.use('/api', NewsAndAchievementsRoutes); // ✅ Add this line
+app.use('/api', NewsAndAchievementsRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api', networkingRoutes);
 app.use('/api', successStoryRoutes);
 app.use('/api', discussionRoutes);
-app.use('/api/events', eventRoutes);
-app.use('/api', newsAndAchievementsRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/student', studentRoutes);
-
-app.use('/api', adminRoutes);
-app.use('/api', reportRoutes);
-app.use('/api', securityRoutes);
+app.use('/api/mentorship', mentorshipRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/admin', reportRoutes);
+app.use('/api/admin', securityRoutes);
+app.use('/api/announcements', announcementRoutes);
 // ✅ Root Route
 app.get('/', (req, res) => {
   res.json({
