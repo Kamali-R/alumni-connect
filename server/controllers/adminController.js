@@ -349,6 +349,8 @@ export const getEventsForAdmin = async (req, res) => {
         rsvpInfo: event.rsvpInfo,
         attendance: event.attendance || 0,
         attendees: event.attendees || [],
+        status: event.status || 'pending',
+        rejectionReason: event.rejectionReason || '',
         postedBy: event.postedBy ? {
           id: event.postedBy._id,
           name: event.postedBy.name,
@@ -358,6 +360,11 @@ export const getEventsForAdmin = async (req, res) => {
         createdAt: event.createdAt,
         updatedAt: event.updatedAt
       };
+      
+      // Skip rejected events - they should be fetched via the rejected events endpoint
+      if (event.status === 'rejected') {
+        return;
+      }
       
       if (eventDate >= currentDate) {
         upcomingEvents.push(eventData);

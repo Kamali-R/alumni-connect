@@ -6,7 +6,11 @@ import {
   updateEvent,
   deleteEvent,
   toggleAttendance,
-  getUserEvents
+  getUserEvents,
+  getPendingEvents,
+  getRejectedEvents,
+  approveEvent,
+  rejectEvent
 } from '../controllers/eventController.js';
 import auth from '../middleware/authMiddleware.js';
 
@@ -45,6 +49,19 @@ router.route('/')
 // Add the my-events route BEFORE the :id routes
 router.route('/my-events')
   .get(auth, getUserEvents); // Requires auth
+
+// Admin routes - pending events management
+router.route('/admin/pending')
+  .get(auth, getPendingEvents); // Requires auth (admin check in middleware)
+
+router.route('/admin/rejected')
+  .get(auth, getRejectedEvents); // Requires auth (admin check in middleware)
+
+router.route('/:id/approve')
+  .patch(auth, approveEvent); // Requires auth (admin check in middleware)
+
+router.route('/:id/reject')
+  .patch(auth, rejectEvent); // Requires auth (admin check in middleware)
 
 router.route('/:id')
   .get(optionalAuth, getEvent) // Can work with or without auth
