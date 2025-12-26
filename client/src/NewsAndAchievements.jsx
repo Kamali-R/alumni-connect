@@ -3,7 +3,7 @@ import { newsAPI, achievementsAPI, testAPI, announcementsAPI } from './api';
 
 const NewsAndAchievements = () => {
   // State management
-  const [activeTab, setActiveTab] = useState('news');
+  const [activeTab, setActiveTab] = useState('achievements');
   const [showAchievementModal, setShowAchievementModal] = useState(false);
   const [showNewsModal, setShowNewsModal] = useState(false);
   const [selectedNews, setSelectedNews] = useState(null);
@@ -1147,21 +1147,6 @@ const handleSubmitAchievement = async (e) => {
           <div className="flex items-center justify-between py-3">
             <div className="flex space-x-1">
               <button 
-                onClick={() => handleTabChange('news')}
-                className={`px-6 py-2 rounded-lg text-sm font-medium flex items-center transition-colors ${
-                  activeTab === 'news' 
-                    ? 'bg-blue-600 text-white shadow-lg' 
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                📰 Campus News
-                <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
-                  activeTab === 'news' ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-600'
-                }`}>
-                  {newsItems.length}
-                </span>
-              </button>
-              <button 
                 onClick={() => handleTabChange('achievements')}
                 className={`px-6 py-2 rounded-lg text-sm font-medium flex items-center transition-colors ${
                   activeTab === 'achievements' 
@@ -1218,78 +1203,8 @@ const handleSubmitAchievement = async (e) => {
         </div>
       </nav>
 
-      {/* Admin Notice for News */}
-      {activeTab === 'news' && (
-        <div className="max-w-7xl mx-auto px-4 pt-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-            <div className="flex items-center">
-              <span className="text-blue-500 text-lg mr-2">ℹ️</span>
-              <p className="text-blue-800 text-sm">
-                <strong>Note:</strong> News updates are managed by campus administration. 
-                To share updates, please contact the admin office.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-      
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-6">
-        {/* News Section */}
-        {activeTab === 'news' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {newsItems.map((news) => (
-              <div key={news._id} className="news-card bg-white rounded-xl shadow-md overflow-hidden border border-gray-100 hover:shadow-lg transition-all duration-300">
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <span className={`text-xs font-medium px-3 py-1 rounded-full ${getNewsCategoryColor(news.category)}`}>
-                      {newsCategoryEmojis[news.category]} {news.category.toUpperCase()}
-                    </span>
-                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{news.time}</span>
-                  </div>
-                  
-                  <h3 className="text-lg font-bold text-gray-900 mb-3 leading-tight">{news.title}</h3>
-                  
-                  <p className="text-gray-600 text-sm mb-4 leading-relaxed line-clamp-3">
-                    {news.description}
-                  </p>
-                  
-                  <div className="space-y-2 mb-4">
-                    {news.details && Object.entries(news.details).map(([key, value]) => (
-                      <div key={key} className="flex items-center text-xs text-gray-500">
-                        <span className="mr-2">
-                          {key === 'attendees' && '👥'}
-                          {key === 'date' && '📅'}
-                          {key === 'venue' && '🏛️'}
-                          {key === 'books' && '📚'}
-                          {key === 'feature' && '💡'}
-                          {key === 'capacity' && '👥'}
-                          {key === 'companies' && '🏢'}
-                          {key === 'opportunities' && '💼'}
-                          {key === 'deadline' && '⏰'}
-                          {key === 'initiative' && '🌱'}
-                          {key === 'goal' && '🎯'}
-                          {key === 'projects' && '📋'}
-                          {key === 'network' && '🌍'}
-                          {key === 'mentors' && '👨‍🏫'}
-                          {key === 'domains' && '📊'}
-                        </span>
-                        <span className="font-medium">{value}</span>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <button 
-                    onClick={() => handleReadFullStory(news)}
-                    className="w-full bg-blue-50 hover:bg-blue-100 text-blue-600 text-sm font-medium py-2 rounded-lg transition-colors flex items-center justify-center"
-                  >
-                    Read Full Story →
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
         
 {/* All Achievements Section */}
 {activeTab === 'achievements' && (
