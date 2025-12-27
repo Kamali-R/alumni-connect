@@ -5,6 +5,142 @@ import ReportsSection from './ReportsSection';
 import SecuritySection from './SecuritySection';
 import { achievementsAPI, dashboardAPI } from './api';
 
+// Admin Event Form Component - Simple form without memo to prevent focus issues
+const AdminEventForm = ({ formData, onSubmit, onFieldChange }) => {
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">Post an Event (Admin)</h3>
+      <form onSubmit={onSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Event Title <span className="text-red-500">*</span></label>
+            <input 
+              type="text" 
+              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" 
+              value={formData.title} 
+              onChange={(e) => onFieldChange('title', e.target.value)}
+              required 
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Event Type <span className="text-red-500">*</span></label>
+            <select 
+              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" 
+              value={formData.type} 
+              onChange={(e) => onFieldChange('type', e.target.value)}
+              required
+            >
+              <option value="">Select event type</option>
+              <option value="networking">Networking Event</option>
+              <option value="reunion">Class Reunion</option>
+              <option value="gala">Gala/Formal Event</option>
+              <option value="workshop">Workshop/Seminar</option>
+              <option value="social">Social Gathering</option>
+              <option value="fundraiser">Fundraiser</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Event Audience <span className="text-red-500">*</span></label>
+            <select 
+              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" 
+              value={formData.audience} 
+              onChange={(e) => onFieldChange('audience', e.target.value)}
+              required
+            >
+              <option value="">Select audience</option>
+              <option value="alumni">Alumni</option>
+              <option value="student">Students</option>
+              <option value="all">All</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Event Date <span className="text-red-500">*</span></label>
+            <input 
+              type="date" 
+              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" 
+              value={formData.date} 
+              onChange={(e) => onFieldChange('date', e.target.value)}
+              required 
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Event Time <span className="text-red-500">*</span></label>
+            <input 
+              type="time" 
+              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" 
+              value={formData.time} 
+              onChange={(e) => onFieldChange('time', e.target.value)}
+              required 
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Event Location <span className="text-red-500">*</span></label>
+            <input 
+              type="text" 
+              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" 
+              placeholder="Enter venue address or location" 
+              value={formData.location} 
+              onChange={(e) => onFieldChange('location', e.target.value)}
+              required 
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Event Mode</label>
+            <select 
+              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" 
+              value={formData.mode} 
+              onChange={(e) => onFieldChange('mode', e.target.value)}
+            >
+              <option value="offline">Offline (In-person)</option>
+              <option value="online">Online</option>
+            </select>
+          </div>
+          {formData.mode === 'online' && (
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">RSVP Link or Meeting Link</label>
+              <input 
+                type="url" 
+                className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" 
+                placeholder="https://example.com/meeting-link" 
+                value={formData.eventLink} 
+                onChange={(e) => onFieldChange('eventLink', e.target.value)}
+                required 
+              />
+            </div>
+          )}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">RSVP Link or Contact Info (Optional)</label>
+            <input 
+              type="text" 
+              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" 
+              placeholder="RSVP link or contact email" 
+              value={formData.rsvpInfo} 
+              onChange={(e) => onFieldChange('rsvpInfo', e.target.value)}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Event Description <span className="text-red-500">*</span></label>
+            <textarea 
+              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 resize-none" 
+              rows={4} 
+              placeholder="Provide details about the event, agenda, dress code, and any other relevant information..." 
+              value={formData.description} 
+              onChange={(e) => onFieldChange('description', e.target.value)}
+              required 
+            />
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <button type="submit" className="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors">
+            Post Event
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
 // Announcements Section Component - Moved outside to prevent re-mounting
 const AnnouncementsSection = ({ announcements, announcementForm, onAnnouncementChange, onSendAnnouncement, fadeAnimation }) => {
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
@@ -346,6 +482,8 @@ const AdminDashboard = () => {
     upcoming: [],
     past: []
   });
+  const [pendingEvents, setPendingEvents] = useState([]);
+  const [rejectedEvents, setRejectedEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [eventsError, setEventsError] = useState(null);
   
@@ -742,14 +880,20 @@ const AdminDashboard = () => {
       setEventsLoading(true);
       setEventsError(null);
       
-      const token = localStorage.getItem('token');
+      // Use development token in dev mode, or get from localStorage
+      let token = localStorage.getItem('token');
+      if (!token && process.env.NODE_ENV === 'development') {
+        token = 'admin-local-token'; // Development bypass token
+      }
+      
       if (!token) {
-        setEventsError('Not authenticated');
+        setEventsError('Not authenticated - please login');
+        setEventsLoading(false);
         return;
       }
 
       const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
-      const response = await fetch('http://localhost:5000/api/admin/events', {
+      const response = await fetch('/api/admin/events', {
         method: 'GET',
         headers: {
           'Authorization': authHeader,
@@ -758,23 +902,32 @@ const AdminDashboard = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch events');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Error response:', response.status, errorData);
+        throw new Error(errorData.message || 'Failed to fetch events');
       }
 
       const result = await response.json();
       if (result.success && result.data) {
+        // Filter out rejected events from upcoming and past
+        const upcomingFiltered = (result.data.upcoming || []).filter(event => event.status !== 'rejected');
+        const pastFiltered = (result.data.past || []).filter(event => event.status !== 'rejected');
+        
         setEvents({
-          upcoming: result.data.upcoming || [],
-          past: result.data.past || []
+          upcoming: upcomingFiltered,
+          past: pastFiltered
         });
         console.log('✅ Events loaded:', {
-          upcoming: result.data.upcoming?.length || 0,
-          past: result.data.past?.length || 0
+          upcoming: upcomingFiltered.length,
+          past: pastFiltered.length,
+          rejected: rejectedEvents.length
         });
+      } else {
+        setEvents({ upcoming: [], past: [] });
       }
     } catch (error) {
       console.error('❌ Error fetching events:', error);
-      setEventsError('Failed to load events');
+      setEventsError('Failed to load events: ' + error.message);
     } finally {
       setEventsLoading(false);
     }
@@ -783,41 +936,139 @@ const AdminDashboard = () => {
   // Load events on component mount
   useEffect(() => {
     fetchEventsForAdmin();
+    fetchPendingEvents();
+    fetchRejectedEvents();
   }, [fetchEventsForAdmin]);
+
+  const fetchRejectedEvents = useCallback(async () => {
+    try {
+      let token = localStorage.getItem('token');
+      if (!token && process.env.NODE_ENV === 'development') {
+        token = 'admin-local-token';
+      }
+      if (!token) {
+        console.warn('No token found for rejected events fetch');
+        return;
+      }
+
+      const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      const response = await fetch('/api/events/admin/rejected', {
+        method: 'GET',
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          setRejectedEvents(result.data);
+          console.log('✅ Rejected events loaded:', result.data.length);
+        }
+      } else {
+        const errorData = await response.json();
+        console.error('❌ Failed to fetch rejected events:', response.status, errorData);
+        setRejectedEvents([]);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching rejected events:', error);
+      setRejectedEvents([]);
+    }
+  }, []);
+
+  const fetchPendingEvents = useCallback(async () => {
+    try {
+      let token = localStorage.getItem('token');
+      if (!token && process.env.NODE_ENV === 'development') {
+        token = 'admin-local-token';
+      }
+      if (!token) return;
+
+      const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      const response = await fetch('/api/events/admin/pending', {
+        method: 'GET',
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          setPendingEvents(result.data);
+          console.log('✅ Pending events loaded:', result.data.length);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching pending events:', error);
+    }
+  }, []);
   
-  const handleApproveEvent = (eventId) => {
-    const eventToApprove = events.pending?.find(event => event.id === eventId);
-    if (!eventToApprove) return;
-    
-    // Move from pending to approved
-    setEvents(prev => ({
-      ...prev,
-      pending: prev.pending?.filter(event => event.id !== eventId) || [],
-      approved: [...(prev.approved || []), {
-        ...eventToApprove,
-        registered: 0 // Initialize with 0 registrations
-      }]
-    }));
-    
-    showNotification(`Event "${eventToApprove.title}" has been approved!`, 'success');
+  const handleApproveEvent = async (eventId) => {
+    try {
+      let token = localStorage.getItem('token');
+      if (!token && process.env.NODE_ENV === 'development') {
+        token = 'admin-local-token';
+      }
+      const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      
+      const response = await fetch(`/api/events/${eventId}/approve`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        showNotification('Event approved successfully!', 'success');
+        fetchPendingEvents();
+        fetchEventsForAdmin();
+      } else {
+        showNotification('Failed to approve event', 'error');
+      }
+    } catch (error) {
+      console.error('Error approving event:', error);
+      showNotification('Error approving event', 'error');
+    }
   };
   
-  const handleRejectEvent = (eventId) => {
-    const eventToReject = events.pending.find(event => event.id === eventId);
-    if (!eventToReject) return;
+  const handleRejectEvent = async (eventId) => {
+    const reason = window.prompt('Enter rejection reason (optional):');
+    if (reason === null) return; // User cancelled
     
-    if (window.confirm(`Are you sure you want to reject "${eventToReject.title}"?`)) {
-      setEvents(prev => ({
-        ...prev,
-        pending: prev.pending.filter(event => event.id !== eventId)
-      }));
+    try {
+      let token = localStorage.getItem('token');
+      if (!token && process.env.NODE_ENV === 'development') {
+        token = 'admin-local-token';
+      }
+      const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
       
-      showNotification(`Event "${eventToReject.title}" has been rejected.`, 'success');
+      const response = await fetch(`/api/events/${eventId}/reject`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ reason: reason || 'Event rejected by admin' })
+      });
+
+      if (response.ok) {
+        showNotification('Event rejected successfully!', 'success');
+        fetchPendingEvents();
+      } else {
+        showNotification('Failed to reject event', 'error');
+      }
+    } catch (error) {
+      console.error('Error rejecting event:', error);
+      showNotification('Error rejecting event', 'error');
     }
   };
   
   const handleEditEvent = (eventId) => {
-    const eventToEdit = events.pending.find(event => event.id === eventId);
+    const eventToEdit = events.pending?.find(event => event.id === eventId);
     if (!eventToEdit) return;
     
     const newTitle = window.prompt('Edit event title:', eventToEdit.title);
@@ -1049,8 +1300,99 @@ const AdminDashboard = () => {
       <div className={`content-section p-8 ${fadeAnimation ? 'fade-in' : ''}`}>
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Event Management</h1>
-          <p className="text-gray-600">Manage all events on the platform - automatically categorized by date</p>
+          <p className="text-gray-600">Manage all events on the platform - approve pending events, view categorized events</p>
         </div>
+        
+        {/* Pending Events Alert */}
+        {pendingEvents.length > 0 && (
+          <div className="mb-6 bg-orange-50 border border-orange-200 rounded-xl p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <svg className="w-6 h-6 text-orange-600 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.487 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <div>
+                  <h3 className="font-semibold text-orange-900">⏳ Pending Events Awaiting Approval</h3>
+                  <p className="text-sm text-orange-700">{pendingEvents.length} new event{pendingEvents.length !== 1 ? 's' : ''} submitted for review</p>
+                </div>
+              </div>
+              <span className="bg-orange-200 text-orange-900 text-lg font-bold px-3 py-1 rounded-full">{pendingEvents.length}</span>
+            </div>
+          </div>
+        )}
+        
+        {/* Pending Events Section */}
+        {pendingEvents.length > 0 && (
+          <div className="mb-8 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Pending Events for Approval</h2>
+            </div>
+            <div className="grid grid-cols-1 gap-4 p-6">
+              {pendingEvents.map(event => (
+                <div key={event._id} className="border-2 border-orange-200 bg-orange-50 rounded-lg p-4 hover:shadow-md transition-all">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h4 className="font-semibold text-gray-900 text-lg">{event.title}</h4>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs px-2 py-1 rounded-full bg-orange-200 text-orange-800 font-medium">⏳ Pending Review</span>
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          event.mode === 'online' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                        }`}>
+                          {event.mode === 'online' ? '🌐 Online' : '📍 In-Person'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <p className="text-gray-600 text-sm mb-3">{event.description}</p>
+                  
+                  <div className="grid grid-cols-2 gap-3 text-sm text-gray-600 mb-4">
+                    <div className="flex items-center">
+                      <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                      </svg>
+                      {formatEventDate(event.date, event.time)}
+                    </div>
+                    <div className="flex items-center">
+                      <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                      </svg>
+                      {event.location}
+                    </div>
+                  </div>
+                  
+                  {event.postedBy && (
+                    <div className="text-xs text-gray-600 mb-4 p-2 bg-white rounded border border-gray-200">
+                      <strong>Posted by:</strong> {event.postedBy.name} ({event.postedBy.email})
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => handleApproveEvent(event._id)}
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center"
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      Approve
+                    </button>
+                    <button 
+                      onClick={() => handleRejectEvent(event._id)}
+                      className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center"
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         
         {eventsLoading ? (
           <div className="flex items-center justify-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
@@ -1070,18 +1412,31 @@ const AdminDashboard = () => {
               <div>
                 <h2 className="text-xl font-semibold text-gray-900">All Events</h2>
                 <p className="text-sm text-gray-600 mt-1">
-                  {events.upcoming.length} upcoming • {events.past.length} past
+                  {events.upcoming.length} upcoming • {events.past.length} past • {rejectedEvents.length} rejected
                 </p>
               </div>
-              <button className="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors flex items-center">
+              <button
+                type="button"
+                onClick={() => setShowAdminCreateEvent(prev => !prev)}
+                className="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors flex items-center"
+              >
                 <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd"></path>
                 </svg>
-                Create Event
+                {showAdminCreateEvent ? 'Close' : 'Create Event'}
               </button>
             </div>
+            {showAdminCreateEvent && (
+              <div className="px-6 pb-6">
+                <AdminEventForm 
+                  formData={adminEventForm}
+                  onSubmit={handleAdminCreateEvent}
+                  onFieldChange={handleAdminEventFormChange}
+                />
+              </div>
+            )}
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6">
               {/* Upcoming Events */}
               <div>
                 <div className="flex items-center justify-between mb-4">
@@ -1255,11 +1610,146 @@ const AdminDashboard = () => {
                   </div>
                 )}
               </div>
+              
+              {/* Rejected Events */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-gray-900 flex items-center">
+                    <svg className="w-5 h-5 mr-2 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path>
+                    </svg>
+                    Rejected Events
+                  </h3>
+                  <span className="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                    {rejectedEvents.length} declined
+                  </span>
+                </div>
+                
+                {rejectedEvents.length === 0 ? (
+                  <div className="border border-gray-200 rounded-lg p-8 text-center bg-gray-50">
+                    <svg className="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <p className="text-gray-600">No rejected events</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                    {rejectedEvents.map(event => (
+                      <div key={event._id} className="border-2 border-red-200 rounded-lg p-4 bg-red-50 hover:shadow-md transition-shadow">
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="font-medium text-gray-900">{event.title}</h4>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            event.mode === 'online' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                          }`}>
+                            {event.mode === 'online' ? '🌐 Online' : '📍 In-Person'}
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-1 text-sm text-gray-600">
+                          <div className="flex items-center">
+                            <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"></path>
+                            </svg>
+                            {formatEventDate(event.date, event.time)}
+                          </div>
+                          
+                          <div className="flex items-center">
+                            <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"></path>
+                            </svg>
+                            {event.location}
+                          </div>
+                          
+                          {event.postedBy && (
+                            <div className="flex items-center text-xs">
+                              <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"></path>
+                              </svg>
+                              Posted by: {event.postedBy.name} ({event.postedBy.role || 'user'})
+                            </div>
+                          )}
+                        </div>
+                        
+                        {event.rejectionReason && (
+                          <div className="mt-3 bg-white border border-red-300 rounded-lg p-2">
+                            <p className="text-xs text-red-700"><strong>Reason:</strong> {event.rejectionReason}</p>
+                          </div>
+                        )}
+                        
+                        <span className={`inline-block mt-2 text-xs px-2 py-0.5 rounded-full ${
+                          event.audience === 'all' ? 'bg-gray-100 text-gray-700' :
+                          event.audience === 'student' ? 'bg-green-100 text-green-700' :
+                          'bg-blue-100 text-blue-700'
+                        }`}>
+                          {event.audience === 'all' ? '👥 All' : event.audience === 'student' ? '🎓 Students' : '👨‍🎓 Alumni'}
+                        </span>
+                        
+                        {event.description && (
+                          <p className="text-xs text-gray-600 mt-2 line-clamp-2">{event.description}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
       </div>
     );
+  };
+  // Admin Create Event state & handler
+  const [showAdminCreateEvent, setShowAdminCreateEvent] = useState(false);
+  const [adminEventForm, setAdminEventForm] = useState({
+    title: '', type: '', audience: '', date: '', time: '', location: '', mode: 'offline', eventLink: '', rsvpInfo: '', description: ''
+  });
+
+  // Stable handler for form field changes - takes field name and value directly
+  const handleAdminEventFormChange = useCallback((field, value) => {
+    setAdminEventForm(prev => ({ ...prev, [field]: value }));
+  }, []);
+
+  const handleAdminCreateEvent = async (e) => {
+    e.preventDefault();
+    try {
+      let token = localStorage.getItem('token');
+      if (!token && process.env.NODE_ENV === 'development') {
+        token = 'admin-local-token';
+      }
+      if (!token) return;
+      if (adminEventForm.mode === 'online' && (!adminEventForm.eventLink || adminEventForm.eventLink.trim() === '')) {
+        alert('Online events must include a meeting/link URL');
+        return;
+      }
+      const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      const response = await fetch('/api/events', {
+        method: 'POST',
+        headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+        body: JSON.stringify(adminEventForm)
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        console.error('Failed to create event:', result);
+        alert(result.message || 'Failed to create event');
+        return;
+      }
+      const newEvent = result.data;
+      // Place into upcoming/past based on date
+      const eventDate = new Date(newEvent.date); eventDate.setHours(0,0,0,0);
+      const today = new Date(); today.setHours(0,0,0,0);
+      setEvents(prev => ({
+        upcoming: eventDate >= today ? [newEvent, ...(prev.upcoming||[])] : prev.upcoming,
+        past: eventDate < today ? [newEvent, ...(prev.past||[])] : prev.past
+      }));
+      // Refresh rejected (should be unaffected since admin-created is accepted), and pending
+      fetchPendingEvents();
+      fetchRejectedEvents();
+      setShowAdminCreateEvent(false);
+      setAdminEventForm({ title: '', type: '', audience: '', date: '', time: '', location: '', mode: 'offline', eventLink: '', rsvpInfo: '', description: '' });
+    } catch (err) {
+      console.error('Admin create event error:', err);
+      alert('Server error creating event');
+    }
   };
   
   // Skills & Technology Section
