@@ -5,6 +5,142 @@ import ReportsSection from './ReportsSection';
 import SecuritySection from './SecuritySection';
 import { achievementsAPI, dashboardAPI } from './api';
 
+// Admin Event Form Component - Simple form without memo to prevent focus issues
+const AdminEventForm = ({ formData, onSubmit, onFieldChange }) => {
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">Post an Event (Admin)</h3>
+      <form onSubmit={onSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Event Title <span className="text-red-500">*</span></label>
+            <input 
+              type="text" 
+              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" 
+              value={formData.title} 
+              onChange={(e) => onFieldChange('title', e.target.value)}
+              required 
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Event Type <span className="text-red-500">*</span></label>
+            <select 
+              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" 
+              value={formData.type} 
+              onChange={(e) => onFieldChange('type', e.target.value)}
+              required
+            >
+              <option value="">Select event type</option>
+              <option value="networking">Networking Event</option>
+              <option value="reunion">Class Reunion</option>
+              <option value="gala">Gala/Formal Event</option>
+              <option value="workshop">Workshop/Seminar</option>
+              <option value="social">Social Gathering</option>
+              <option value="fundraiser">Fundraiser</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Event Audience <span className="text-red-500">*</span></label>
+            <select 
+              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" 
+              value={formData.audience} 
+              onChange={(e) => onFieldChange('audience', e.target.value)}
+              required
+            >
+              <option value="">Select audience</option>
+              <option value="alumni">Alumni</option>
+              <option value="student">Students</option>
+              <option value="all">All</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Event Date <span className="text-red-500">*</span></label>
+            <input 
+              type="date" 
+              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" 
+              value={formData.date} 
+              onChange={(e) => onFieldChange('date', e.target.value)}
+              required 
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Event Time <span className="text-red-500">*</span></label>
+            <input 
+              type="time" 
+              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" 
+              value={formData.time} 
+              onChange={(e) => onFieldChange('time', e.target.value)}
+              required 
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Event Location <span className="text-red-500">*</span></label>
+            <input 
+              type="text" 
+              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" 
+              placeholder="Enter venue address or location" 
+              value={formData.location} 
+              onChange={(e) => onFieldChange('location', e.target.value)}
+              required 
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Event Mode</label>
+            <select 
+              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" 
+              value={formData.mode} 
+              onChange={(e) => onFieldChange('mode', e.target.value)}
+            >
+              <option value="offline">Offline (In-person)</option>
+              <option value="online">Online</option>
+            </select>
+          </div>
+          {formData.mode === 'online' && (
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">RSVP Link or Meeting Link</label>
+              <input 
+                type="url" 
+                className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" 
+                placeholder="https://example.com/meeting-link" 
+                value={formData.eventLink} 
+                onChange={(e) => onFieldChange('eventLink', e.target.value)}
+                required 
+              />
+            </div>
+          )}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">RSVP Link or Contact Info (Optional)</label>
+            <input 
+              type="text" 
+              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" 
+              placeholder="RSVP link or contact email" 
+              value={formData.rsvpInfo} 
+              onChange={(e) => onFieldChange('rsvpInfo', e.target.value)}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Event Description <span className="text-red-500">*</span></label>
+            <textarea 
+              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 resize-none" 
+              rows={4} 
+              placeholder="Provide details about the event, agenda, dress code, and any other relevant information..." 
+              value={formData.description} 
+              onChange={(e) => onFieldChange('description', e.target.value)}
+              required 
+            />
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <button type="submit" className="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors">
+            Post Event
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
 // Announcements Section Component - Moved outside to prevent re-mounting
 const AnnouncementsSection = ({ announcements, announcementForm, onAnnouncementChange, onSendAnnouncement, fadeAnimation }) => {
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
@@ -744,14 +880,20 @@ const AdminDashboard = () => {
       setEventsLoading(true);
       setEventsError(null);
       
-      const token = localStorage.getItem('token');
+      // Use development token in dev mode, or get from localStorage
+      let token = localStorage.getItem('token');
+      if (!token && process.env.NODE_ENV === 'development') {
+        token = 'admin-local-token'; // Development bypass token
+      }
+      
       if (!token) {
-        setEventsError('Not authenticated');
+        setEventsError('Not authenticated - please login');
+        setEventsLoading(false);
         return;
       }
 
       const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
-      const response = await fetch('http://localhost:5000/api/admin/events', {
+      const response = await fetch('/api/admin/events', {
         method: 'GET',
         headers: {
           'Authorization': authHeader,
@@ -760,7 +902,9 @@ const AdminDashboard = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch events');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Error response:', response.status, errorData);
+        throw new Error(errorData.message || 'Failed to fetch events');
       }
 
       const result = await response.json();
@@ -778,10 +922,12 @@ const AdminDashboard = () => {
           past: pastFiltered.length,
           rejected: rejectedEvents.length
         });
+      } else {
+        setEvents({ upcoming: [], past: [] });
       }
     } catch (error) {
       console.error('❌ Error fetching events:', error);
-      setEventsError('Failed to load events');
+      setEventsError('Failed to load events: ' + error.message);
     } finally {
       setEventsLoading(false);
     }
@@ -796,14 +942,17 @@ const AdminDashboard = () => {
 
   const fetchRejectedEvents = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      let token = localStorage.getItem('token');
+      if (!token && process.env.NODE_ENV === 'development') {
+        token = 'admin-local-token';
+      }
       if (!token) {
         console.warn('No token found for rejected events fetch');
         return;
       }
 
       const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
-      const response = await fetch('http://localhost:5000/api/events/admin/rejected', {
+      const response = await fetch('/api/events/admin/rejected', {
         method: 'GET',
         headers: {
           'Authorization': authHeader,
@@ -830,11 +979,14 @@ const AdminDashboard = () => {
 
   const fetchPendingEvents = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      let token = localStorage.getItem('token');
+      if (!token && process.env.NODE_ENV === 'development') {
+        token = 'admin-local-token';
+      }
       if (!token) return;
 
       const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
-      const response = await fetch('http://localhost:5000/api/events/admin/pending', {
+      const response = await fetch('/api/events/admin/pending', {
         method: 'GET',
         headers: {
           'Authorization': authHeader,
@@ -856,10 +1008,13 @@ const AdminDashboard = () => {
   
   const handleApproveEvent = async (eventId) => {
     try {
-      const token = localStorage.getItem('token');
+      let token = localStorage.getItem('token');
+      if (!token && process.env.NODE_ENV === 'development') {
+        token = 'admin-local-token';
+      }
       const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
       
-      const response = await fetch(`http://localhost:5000/api/events/${eventId}/approve`, {
+      const response = await fetch(`/api/events/${eventId}/approve`, {
         method: 'PATCH',
         headers: {
           'Authorization': authHeader,
@@ -885,10 +1040,13 @@ const AdminDashboard = () => {
     if (reason === null) return; // User cancelled
     
     try {
-      const token = localStorage.getItem('token');
+      let token = localStorage.getItem('token');
+      if (!token && process.env.NODE_ENV === 'development') {
+        token = 'admin-local-token';
+      }
       const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
       
-      const response = await fetch(`http://localhost:5000/api/events/${eventId}/reject`, {
+      const response = await fetch(`/api/events/${eventId}/reject`, {
         method: 'PATCH',
         headers: {
           'Authorization': authHeader,
@@ -1257,13 +1415,26 @@ const AdminDashboard = () => {
                   {events.upcoming.length} upcoming • {events.past.length} past • {rejectedEvents.length} rejected
                 </p>
               </div>
-              <button className="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors flex items-center">
+              <button
+                type="button"
+                onClick={() => setShowAdminCreateEvent(prev => !prev)}
+                className="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors flex items-center"
+              >
                 <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd"></path>
                 </svg>
-                Create Event
+                {showAdminCreateEvent ? 'Close' : 'Create Event'}
               </button>
             </div>
+            {showAdminCreateEvent && (
+              <div className="px-6 pb-6">
+                <AdminEventForm 
+                  formData={adminEventForm}
+                  onSubmit={handleAdminCreateEvent}
+                  onFieldChange={handleAdminEventFormChange}
+                />
+              </div>
+            )}
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6">
               {/* Upcoming Events */}
@@ -1526,6 +1697,59 @@ const AdminDashboard = () => {
         )}
       </div>
     );
+  };
+  // Admin Create Event state & handler
+  const [showAdminCreateEvent, setShowAdminCreateEvent] = useState(false);
+  const [adminEventForm, setAdminEventForm] = useState({
+    title: '', type: '', audience: '', date: '', time: '', location: '', mode: 'offline', eventLink: '', rsvpInfo: '', description: ''
+  });
+
+  // Stable handler for form field changes - takes field name and value directly
+  const handleAdminEventFormChange = useCallback((field, value) => {
+    setAdminEventForm(prev => ({ ...prev, [field]: value }));
+  }, []);
+
+  const handleAdminCreateEvent = async (e) => {
+    e.preventDefault();
+    try {
+      let token = localStorage.getItem('token');
+      if (!token && process.env.NODE_ENV === 'development') {
+        token = 'admin-local-token';
+      }
+      if (!token) return;
+      if (adminEventForm.mode === 'online' && (!adminEventForm.eventLink || adminEventForm.eventLink.trim() === '')) {
+        alert('Online events must include a meeting/link URL');
+        return;
+      }
+      const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      const response = await fetch('/api/events', {
+        method: 'POST',
+        headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+        body: JSON.stringify(adminEventForm)
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        console.error('Failed to create event:', result);
+        alert(result.message || 'Failed to create event');
+        return;
+      }
+      const newEvent = result.data;
+      // Place into upcoming/past based on date
+      const eventDate = new Date(newEvent.date); eventDate.setHours(0,0,0,0);
+      const today = new Date(); today.setHours(0,0,0,0);
+      setEvents(prev => ({
+        upcoming: eventDate >= today ? [newEvent, ...(prev.upcoming||[])] : prev.upcoming,
+        past: eventDate < today ? [newEvent, ...(prev.past||[])] : prev.past
+      }));
+      // Refresh rejected (should be unaffected since admin-created is accepted), and pending
+      fetchPendingEvents();
+      fetchRejectedEvents();
+      setShowAdminCreateEvent(false);
+      setAdminEventForm({ title: '', type: '', audience: '', date: '', time: '', location: '', mode: 'offline', eventLink: '', rsvpInfo: '', description: '' });
+    } catch (err) {
+      console.error('Admin create event error:', err);
+      alert('Server error creating event');
+    }
   };
   
   // Skills & Technology Section

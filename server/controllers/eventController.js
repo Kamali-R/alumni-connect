@@ -230,8 +230,30 @@ export const createEvent = async (req, res) => {
     console.log('Creating event with user ID:', req.user?.id);
     console.log('Request body:', req.body);
     
-    // Use req.user.id (from your auth middleware)
-    req.body.postedBy = req.user.id;
+    // Determine postedBy for dev token vs real user
+    let postedById = req.user?.id;
+    const isDevAdmin = postedById === 'admin-dev';
+    if (!postedById || (typeof postedById === 'string' && postedById.length !== 24)) {
+      try {
+        const User = (await import('../models/User.js')).default;
+        const adminUser = await User.findOne({ role: 'admin' }).select('_id');
+        if (adminUser) {
+          postedById = adminUser._id.toString();
+          console.log('Using fallback admin user for postedBy:', postedById);
+        } else {
+          console.warn('No admin user found; cannot set postedBy correctly');
+        }
+      } catch (e) {
+        console.error('Error finding admin user for postedBy:', e.message);
+      }
+    }
+    req.body.postedBy = postedById;
+
+    // Auto-accept events created by admin
+    if (req.user?.role === 'admin' || isDevAdmin) {
+      req.body.status = 'accepted';
+      req.body.rejectionReason = '';
+    }
     // Normalize audience (accept case-insensitive and common plurals from frontend)
     if (req.body.audience && typeof req.body.audience === 'string') {
       const rawAudience = req.body.audience.toLowerCase().trim();
@@ -266,12 +288,14 @@ export const createEvent = async (req, res) => {
     
     // Populate the created event with user details
     const populatedEvent = await Event.findById(event._id)
-      .populate('postedBy', 'name email');
+      .populate('postedBy', 'name email role');
     
     const eventObj = populatedEvent.toObject();
-    eventObj.isUserAttending = false; // New event, user not attending yet
-    eventObj.attendance = 0; // New event, no attendees
-  eventObj.audience = eventObj.audience || 'all';
+    eventObj.isUserAttending = false;
+    eventObj.attendance = 0;
+    eventObj.audience = eventObj.audience || 'all';
+    eventObj.status = event.status || 'pending';
+    eventObj.rejectionReason = event.rejectionReason || '';
     
     console.log('Event created successfully:', populatedEvent);
     

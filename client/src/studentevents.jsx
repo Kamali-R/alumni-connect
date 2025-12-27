@@ -71,14 +71,17 @@ const EventHub = () => {
   // Load events from backend
   const loadEventsFromServer = async () => {
     try {
-      // Request only student-specific events from the backend
-      const response = await eventsAPI.getAll({ audience: 'student' });
+      // Get all events; we'll filter to student + all audiences on the client
+      const response = await eventsAPI.getAll();
       if (response.data && response.data.success) {
-        // Defensive: ensure we only process events with audience === 'student'
+        // Show events targeted to students or to everyone
         const raw = Array.isArray(response.data.data) ? response.data.data : [];
-        const studentOnly = raw.filter(ev => (ev.audience || '').toString().toLowerCase() === 'student');
+        const studentAndAll = raw.filter(ev => {
+          const audience = (ev.audience || '').toString().toLowerCase();
+          return audience === 'student' || audience === 'all' || audience === '';
+        });
 
-        const events = studentOnly.map(e => ({
+        const events = studentAndAll.map(e => ({
           ...e,
           id: e._id,
           title: e.title,
@@ -267,29 +270,29 @@ const EventHub = () => {
         const returnedEvent = res.data && res.data.event ? res.data.event : null;
 
         // Update events lists with returned event data (map server fields to client shape)
-        if (returnedEvent) {
-          const mapped = {
-            ...returnedEvent,
-            id: returnedEvent._id,
-            title: returnedEvent.title,
-            description: returnedEvent.description,
-            date: returnedEvent.date,
-            time: returnedEvent.time || '',
-            location: returnedEvent.location || '',
-            attendees: returnedEvent.attendance || (returnedEvent.attendees ? returnedEvent.attendees.length : 0),
-            spots: returnedEvent.spots || 0,
-            category: returnedEvent.category || returnedEvent.type || 'general',
-            postedByName: returnedEvent.postedBy?.name || 'Alumni',
+        // Helper to merge server event while ensuring attendee count increments at least by 1
+        const mergeAppliedEvent = (srv, prev) => {
+          const serverCount = srv?.attendance ?? (srv?.attendees ? srv.attendees.length : undefined);
+          const baseCount = typeof serverCount === 'number' ? serverCount : (prev?.attendees ?? 0) + 1;
+          return {
+            ...prev,
+            ...srv,
+            id: srv?._id || prev?.id,
+            title: srv?.title || prev?.title || '',
+            description: srv?.description || prev?.description || '',
+            date: srv?.date || prev?.date || '',
+            time: srv?.time || prev?.time || '',
+            location: srv?.location || prev?.location || '',
+            attendees: baseCount,
+            spots: srv?.spots || prev?.spots || 0,
+            category: srv?.category || srv?.type || prev?.category || 'general',
+            postedByName: srv?.postedBy?.name || prev?.postedByName || 'Alumni',
             applied: true
           };
+        };
 
-          setAllEvents(prev => prev.map(ev => ev.id === mapped.id ? mapped : ev));
-          setFilteredEvents(prev => prev.map(ev => ev.id === mapped.id ? mapped : ev));
-        } else {
-          // Fallback to optimistic update if server didn't return event
-          setAllEvents(prev => prev.map(ev => ev.id === currentEventId ? { ...ev, applied: true, attendees: (ev.attendees || 0) + 1 } : ev));
-          setFilteredEvents(prev => prev.map(ev => ev.id === currentEventId ? { ...ev, applied: true, attendees: (ev.attendees || 0) + 1 } : ev));
-        }
+        setAllEvents(prev => prev.map(ev => ev.id === currentEventId ? mergeAppliedEvent(returnedEvent, ev) : ev));
+        setFilteredEvents(prev => prev.map(ev => ev.id === currentEventId ? mergeAppliedEvent(returnedEvent, ev) : ev));
 
         // Add the created application returned by server or a local fallback
         const appToAdd = createdApp || {
@@ -578,29 +581,30 @@ const EventHub = () => {
                                       if (data.success) {
                                         // Use returned event from server if provided to update authoritative state
                                         const returnedEvent = data.event || null;
-                                        if (returnedEvent) {
-                                          const mapped = {
-                                            ...returnedEvent,
-                                            id: returnedEvent._id,
-                                            title: returnedEvent.title,
-                                            description: returnedEvent.description,
-                                            date: returnedEvent.date,
-                                            time: returnedEvent.time || '',
-                                            location: returnedEvent.location || '',
-                                            attendees: returnedEvent.attendance || (returnedEvent.attendees ? returnedEvent.attendees.length : 0),
-                                            spots: returnedEvent.spots || 0,
-                                            category: returnedEvent.category || returnedEvent.type || 'general',
-                                            postedByName: returnedEvent.postedBy?.name || 'Alumni',
+                                        const mergeCancelledEvent = (srv, prev) => {
+                                          const serverCount = srv?.attendance ?? (srv?.attendees ? srv.attendees.length : undefined);
+                                          const baseCount = typeof serverCount === 'number'
+                                            ? serverCount
+                                            : Math.max(0, (prev?.attendees ?? 1) - 1);
+                                          return {
+                                            ...prev,
+                                            ...srv,
+                                            id: srv?._id || prev?.id,
+                                            title: srv?.title || prev?.title || '',
+                                            description: srv?.description || prev?.description || '',
+                                            date: srv?.date || prev?.date || '',
+                                            time: srv?.time || prev?.time || '',
+                                            location: srv?.location || prev?.location || '',
+                                            attendees: baseCount,
+                                            spots: srv?.spots || prev?.spots || 0,
+                                            category: srv?.category || srv?.type || prev?.category || 'general',
+                                            postedByName: srv?.postedBy?.name || prev?.postedByName || 'Alumni',
                                             applied: false
                                           };
+                                        };
 
-                                          setAllEvents(prev => prev.map(ev => ev.id === mapped.id ? mapped : ev));
-                                          setFilteredEvents(prev => prev.map(ev => ev.id === mapped.id ? mapped : ev));
-                                        } else {
-                                          // Fallback: decrement attendees and mark not applied
-                                          setAllEvents(prev => prev.map(ev => ev.id === event.id ? { ...ev, applied: false, attendees: Math.max(0, (ev.attendees || 1) - 1) } : ev));
-                                          setFilteredEvents(prev => prev.map(ev => ev.id === event.id ? { ...ev, applied: false, attendees: Math.max(0, (ev.attendees || 1) - 1) } : ev));
-                                        }
+                                        setAllEvents(prev => prev.map(ev => ev.id === event.id ? mergeCancelledEvent(returnedEvent, ev) : ev));
+                                        setFilteredEvents(prev => prev.map(ev => ev.id === event.id ? mergeCancelledEvent(returnedEvent, ev) : ev));
 
                                         // Remove the corresponding application from myApplications immediately
                                         setMyApplications(prev => (prev || []).filter(a => {
