@@ -3,15 +3,27 @@ import { useNavigate } from 'react-router-dom';
 import SkillsSection from './SkillsSection';
 import ReportsSection from './ReportsSection';
 import SecuritySection from './SecuritySection';
+import AdminUserManagement from './AdminUserManagement';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('dashboard');
   const [fadeAnimation, setFadeAnimation] = useState(false);
-  const [userName] = useState('John Doe');
+  const [userName, setUserName] = useState('Admin');
   const [userRole] = useState('System Administrator');
   const [notification, setNotification] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
+
+  // Dashboard stats state
+  const [dashboardStats, setDashboardStats] = useState({
+    totalUsers: 0,
+    totalAlumni: 0,
+    totalStudents: 0,
+    activeJobs: 0,
+    pendingEvents: 0
+  });
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState(null);
 
   // Notification handler
   const showNotification = useCallback((message, type = 'success', duration = 3000) => {
@@ -310,22 +322,33 @@ const AdminDashboard = () => {
     else if (label === 'View Reports') setActiveSection('reports');
   };
   
-  // Stat cards data
+  // Stat cards data - now using real data from state
   const statCards = [
     { 
-      title: 'Total Users', 
-      value: '2,847', 
+      title: 'Total Alumni', 
+      value: dashboardStats.totalAlumni.toString(), 
       icon: (
         <svg className="w-8 h-8 text-blue-700" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+          <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
         </svg>
       ),
-      trend: '+12%',
+      trend: null,
+      trendColor: 'text-green-600'
+    },
+    { 
+      title: 'Total Students', 
+      value: dashboardStats.totalStudents.toString(), 
+      icon: (
+        <svg className="w-8 h-8 text-blue-700" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3L1 9l11 6 9-4.91V17h2V9L12 3z"/>
+        </svg>
+      ),
+      trend: null,
       trendColor: 'text-green-600'
     },
     { 
       title: 'Active Jobs', 
-      value: '156', 
+      value: dashboardStats.activeJobs.toString(), 
       icon: (
         <svg className="w-8 h-8 text-blue-700" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/>
@@ -336,26 +359,15 @@ const AdminDashboard = () => {
     },
     { 
       title: 'Pending Events', 
-      value: '3', 
+      value: dashboardStats.pendingEvents.toString(), 
       icon: (
         <svg className="w-8 h-8 text-blue-700" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"></path>
         </svg>
       ),
-      trend: '-2',
-      trendColor: 'text-red-600'
-    },
-    { 
-      title: 'System Health', 
-      value: '98%', 
-      icon: (
-        <svg className="w-8 h-8 text-blue-700" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd"></path>
-        </svg>
-      ),
-      trend: '+1%',
-      trendColor: 'text-green-600'
-    },
+      trend: dashboardStats.pendingEvents > 0 ? '-2' : '0',
+      trendColor: dashboardStats.pendingEvents > 0 ? 'text-red-600' : 'text-gray-600'
+    }
   ];
   
   // Rest of the methods remain the same
@@ -527,113 +539,6 @@ const AdminDashboard = () => {
             <span className="bg-green-500 w-3 h-3 rounded-full mr-2 animate-pulse"></span>
             <span className="font-medium">Healthy</span>
           </div>
-        </div>
-      </div>
-    </div>
-  );
-  
-  // Other sections with updated styling
-  const UserManagementSection = () => (
-    <div className={`content-section p-8 ${fadeAnimation ? 'fade-in' : ''}`}>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">User Management</h1>
-        <p className="text-gray-600">Manage all users on the platform</p>
-      </div>
-      
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-          <h2 className="text-xl font-semibold text-gray-900">All Users</h2>
-          <button className="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition-colors flex items-center">
-            <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd"></path>
-            </svg>
-            Add New User
-          </button>
-        </div>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              <tr className="hover:bg-gray-50 transition-colors">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold">MJ</div>
-                    <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">Mike Johnson</div>
-                      <div className="text-sm text-gray-500">mike.johnson@email.com</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Alumni</span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Active</span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Jan 15, 2024</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                  <button className="text-blue-600 hover:text-blue-800 font-medium">View</button>
-                  <button className="text-green-600 hover:text-green-800 font-medium">Edit</button>
-                  <button className="text-red-600 hover:text-red-800 font-medium">Deactivate</button>
-                </td>
-              </tr>
-              <tr className="hover:bg-gray-50 transition-colors">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center text-white font-semibold">AS</div>
-                    <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">Anna Smith</div>
-                      <div className="text-sm text-gray-500">anna.smith@email.com</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">Student</span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Active</span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Feb 3, 2024</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                  <button className="text-blue-600 hover:text-blue-800 font-medium">View</button>
-                  <button className="text-green-600 hover:text-green-800 font-medium">Edit</button>
-                  <button className="text-red-600 hover:text-red-800 font-medium">Deactivate</button>
-                </td>
-              </tr>
-              <tr className="hover:bg-gray-50 transition-colors">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 bg-orange-600 rounded-full flex items-center justify-center text-white font-semibold">RB</div>
-                    <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">Robert Brown</div>
-                      <div className="text-sm text-gray-500">robert.brown@techcorp.com</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Active</span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Jan 28, 2024</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                  <button className="text-blue-600 hover:text-blue-800 font-medium">View</button>
-                  <button className="text-green-600 hover:text-green-800 font-medium">Edit</button>
-                  <button className="text-red-600 hover:text-red-800 font-medium">Deactivate</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
         </div>
       </div>
     </div>
@@ -828,6 +733,78 @@ const AdminDashboard = () => {
   const [securityLoading, setSecurityLoading] = useState(true);
   const [securityError, setSecurityError] = useState(null);
 
+  // Fetch dashboard stats
+  const fetchDashboardStats = useCallback(async () => {
+    try {
+      setStatsLoading(true);
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        throw new Error('No authentication token found. Please login again.');
+      }
+
+      const response = await fetch('/api/admin/dashboard/stats', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch dashboard stats: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Dashboard stats received:', data);
+      if (data.stats) {
+        setDashboardStats(data.stats);
+      }
+      setStatsError(null);
+    } catch (error) {
+      console.error('❌ Error fetching dashboard stats:', error);
+      setStatsError(error.message);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
+  // Fetch events
+  const fetchEventsList = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        throw new Error('No authentication token found. Please login again.');
+      }
+
+      const response = await fetch('/api/admin/events', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch events: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Events received:', data);
+      if (data.events) {
+        setEvents(data.events);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching events:', error);
+    }
+  }, []);
+
+  // Initial fetch of dashboard data
+  useEffect(() => {
+    fetchDashboardStats();
+    fetchEventsList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Test the API and fetch skills overview
   const testSkillsAPI = useCallback(async () => {
     try {
@@ -864,7 +841,7 @@ const AdminDashboard = () => {
         throw new Error('No authentication token found. Please login again.');
       }
 
-      const fetchUrl = '/api/skills/overview';
+      const fetchUrl = '/api/admin/skills/overview';
       console.log('📡 Fetch URL:', fetchUrl);
 
       const response = await fetch(fetchUrl, {
@@ -980,7 +957,7 @@ const AdminDashboard = () => {
         throw new Error('No authentication token found. Please login again.');
       }
 
-      const response = await fetch('/api/reports/overview', {
+      const response = await fetch('/api/admin/reports/overview', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -1027,7 +1004,7 @@ const AdminDashboard = () => {
         throw new Error('No authentication token found. Please login again.');
       }
 
-      const response = await fetch('/api/security/overview', {
+      const response = await fetch('/api/admin/security/overview', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -1336,7 +1313,11 @@ const AdminDashboard = () => {
       case 'dashboard':
         return <DashboardSection />;
       case 'users':
-        return <UserManagementSection />;
+        return (
+          <div className={`content-section p-8 ${fadeAnimation ? 'fade-in' : ''}`}>
+            <AdminUserManagement />
+          </div>
+        );
       case 'events':
         return <EventManagementSection />;
       case 'skills':

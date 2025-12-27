@@ -153,3 +153,110 @@ export const getReportsOverview = async (req, res) => {
     return res.status(500).json({ message: 'Failed to load reports overview', error: error.message });
   }
 };
+// Add this function to reportController.js (at the bottom):
+
+export const exportReports = async (req, res) => {
+  try {
+    const { type, format = 'json' } = req.query;
+    
+    if (!type) {
+      return res.status(400).json({
+        success: false,
+        message: 'Report type is required'
+      });
+    }
+
+    let data;
+    switch(type) {
+      case 'user-growth':
+        data = await getUsersReport();
+        break;
+      case 'event-attendance':
+        data = await getEventsReport();
+        break;
+      case 'job-applications':
+        data = await getJobsReport();
+        break;
+      case 'platform-usage':
+        data = await getPlatformUsageReport();
+        break;
+      default:
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid report type'
+        });
+    }
+
+    if (format === 'csv') {
+      // Convert to CSV format
+      const csvData = convertToCSV(data);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename=${type}-report-${Date.now()}.csv`);
+      return res.send(csvData);
+    }
+
+    // Default JSON response
+    return res.status(200).json({
+      success: true,
+      reportType: type,
+      data,
+      exportedAt: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error exporting reports:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to export report'
+    });
+  }
+};
+
+// Helper functions for exportReports:
+const getUsersReport = async () => {
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+  const users = await User.find({ 
+    createdAt: { $gte: sixMonthsAgo } 
+  })
+    .select('name email role createdAt lastLogin')
+    .sort({ createdAt: -1 });
+
+  return {
+    title: 'User Growth Report',
+    period: 'Last 6 months',
+    total: users.length,
+    users
+  };
+};
+
+const getEventsReport = async () => {
+  const events = await Event.find()
+    .select('title date location attendees description createdAt')
+    .populate('organizer', 'name email')
+    .sort({ date: -1 });
+
+  return {
+    title: 'Events Report',
+    totalEvents: events.length,
+    upcomingEvents: events.filter(e => new Date(e.date) > new Date()).length,
+    pastEvents: events.filter(e => new Date(e.date) <= new Date()).length,
+    events
+  };
+};
+
+const convertToCSV = (data) => {
+  // Simple CSV conversion logic
+  const items = Array.isArray(data) ? data : [data];
+  if (items.length === 0) return '';
+  
+  const headers = Object.keys(items[0]).join(',');
+  const rows = items.map(item => 
+    Object.values(item).map(val => 
+      typeof val === 'string' ? `"${val.replace(/"/g, '""')}"` : val
+    ).join(',')
+  );
+  
+  return [headers, ...rows].join('\n');
+};

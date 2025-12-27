@@ -1,5 +1,14 @@
 import express from 'express';
-import { getSkillsOverview, searchSkills } from '../controllers/adminController.js';
+import { 
+  getSkillsOverview, 
+  searchSkills,
+  getDashboardStats,
+  getAdminUsers,
+  getAdminEvents,
+  updateAdminUser,
+  deleteAdminUser,
+  createAdminUser
+} from '../controllers/adminController.js';
 import auth from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -13,6 +22,18 @@ router.get('/skills/test', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// Dashboard stats
+router.get('/dashboard/stats', auth, getDashboardStats);
+
+// Users management
+router.get('/users', auth, getAdminUsers);
+router.post('/users', auth, createAdminUser);
+router.put('/users/:id', auth, updateAdminUser);
+router.delete('/users/:id', auth, deleteAdminUser);
+
+// Events management
+router.get('/events', auth, getAdminEvents);
 
 // Get skills and technologies overview
 router.get('/skills/overview', auth, getSkillsOverview);

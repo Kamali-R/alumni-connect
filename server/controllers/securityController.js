@@ -130,3 +130,79 @@ export const getSecurityOverview = async (req, res) => {
     });
   }
 };
+// Add this function to securityController.js (at the bottom):
+
+export const getSecurityScore = async (req, res) => {
+  try {
+    const data = await getSecurityOverviewData(); // Reuse logic
+    
+    // Calculate security score (0-100)
+    let score = 0;
+    let maxScore = 0;
+
+    // 1. OTP Verification (25 points)
+    maxScore += 25;
+    score += data.otpVerification.status === 'Enabled' ? 25 : 0;
+
+    // 2. Password Security (25 points)
+    maxScore += 25;
+    score += data.passwordSecurity.allUsersProtected ? 25 : 0;
+
+    // 3. Account Verification (20 points)
+    maxScore += 20;
+    const verificationRate = data.verifiedAccounts.percentage;
+    score += (verificationRate / 100) * 20;
+
+    // 4. Login Security (15 points)
+    maxScore += 15;
+    if (data.loginActivity.failedAttempts === 0) {
+      score += 15;
+    } else if (data.loginActivity.failedAttempts < 10) {
+      score += 10;
+    } else if (data.loginActivity.failedAttempts < 50) {
+      score += 5;
+    }
+
+    // 5. Data Protection (15 points)
+    maxScore += 15;
+    const protectionItems = [
+      data.dataProtection.passwordHashing === 'Enabled',
+      data.dataProtection.databaseValidation === 'Active',
+      data.dataProtection.encryptionStatus === 'Active',
+      data.dataProtection.dataBackupStatus === 'Enabled'
+    ];
+    const protectionScore = (protectionItems.filter(Boolean).length / protectionItems.length) * 15;
+    score += protectionScore;
+
+    const securityScore = Math.round((score / maxScore) * 100);
+
+    return res.status(200).json({
+      success: true,
+      securityScore,
+      breakdown: {
+        otpVerification: data.otpVerification.status === 'Enabled' ? 25 : 0,
+        passwordSecurity: data.passwordSecurity.allUsersProtected ? 25 : 0,
+        accountVerification: (verificationRate / 100) * 20,
+        loginSecurity: data.loginActivity.failedAttempts === 0 ? 15 : 
+                     data.loginActivity.failedAttempts < 10 ? 10 : 
+                     data.loginActivity.failedAttempts < 50 ? 5 : 0,
+        dataProtection: protectionScore
+      }
+    });
+  } catch (error) {
+    console.error('Error calculating security score:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to calculate security score'
+    });
+  }
+};
+
+// Helper function (add this too):
+const getSecurityOverviewData = async () => {
+  const now = new Date();
+  const last30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  // Same logic as before...
+  // ... (copy the main logic from getSecurityOverview here)
+};
