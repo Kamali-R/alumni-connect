@@ -13,7 +13,7 @@ const EventsAndReunions = () => {
     endDate: '',
     location: '',
     mode: '', // 'online' | 'offline' | '' for all
-    audience: '' // 'alumni' | 'student' | '' for all
+    audience: 'alumni' // default to alumni-only view
   });
   const [formData, setFormData] = useState({
     title: '',
@@ -32,8 +32,17 @@ const EventsAndReunions = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [userPostedEventsLoading, setUserPostedEventsLoading] = useState(false);
 
-  // Helper function to get current user ID
-  const getCurrentUserId = () => localStorage.getItem('userId');
+  // Helper function to get current user ID (fallback to stored user object)
+  const getCurrentUserId = () => {
+    const storedId = localStorage.getItem('userId');
+    if (storedId) return storedId;
+    try {
+      const userObj = JSON.parse(localStorage.getItem('user') || '{}');
+      return userObj._id || userObj.id || null;
+    } catch (e) {
+      return null;
+    }
+  };
 
   // Helper function to check if event date has passed
   const isEventPast = (eventDate) => {
@@ -186,7 +195,8 @@ const EventsAndReunions = () => {
   const fetchAllEvents = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await eventsAPI.getAll(filters);
+      // Force alumni audience so alumni see only approved-for-alumni events
+      const response = await eventsAPI.getAll({ ...filters, audience: 'alumni' });
       const eventsData = response.data?.data || response.data || response || [];
       
       console.log('Raw events from server:', eventsData);
@@ -195,8 +205,17 @@ const EventsAndReunions = () => {
       
       console.log('Processed events with attendance status:', processedEvents);
       
-      setEvents(processedEvents);
-      setFilteredEvents(processedEvents);
+      // Hide my own events from the public "View Events" list; they stay in "Posted Events"
+      const currentUserId = getCurrentUserId();
+      const visibleEvents = currentUserId
+        ? processedEvents.filter(ev => {
+            const ownerId = ev?.postedBy?._id || ev?.postedBy?.id || ev?.postedBy || '';
+            return ownerId?.toString() !== currentUserId?.toString();
+          })
+        : processedEvents;
+
+      setEvents(visibleEvents);
+      setFilteredEvents(visibleEvents);
     } catch (err) {
       console.error('Failed to fetch events:', err);
       setEvents([]);
@@ -432,12 +451,25 @@ const EventsAndReunions = () => {
     }
   };
 
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'accepted':
+        return 'bg-green-100 text-green-800';
+      case 'rejected':
+        return 'bg-red-100 text-red-800';
+      case 'pending':
+      default:
+        return 'bg-yellow-100 text-yellow-800';
+    }
+  };
+
   // Event Card Component
   const EventCard = ({ event, onAttendanceClick }) => {
     const eventTypeDisplay = getEventTypeDisplay(event.type);
     const isPastEvent = isEventPast(event.date);
     const eventId = event._id || event.id;
     const isLoadingAttendance = attendanceLoading.has(eventId);
+    const status = event.status || 'pending';
     
     // Use server-provided values
     const attendanceCount = Math.max(0, event.attendance || 0);
@@ -457,6 +489,9 @@ const EventsAndReunions = () => {
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">{event.title}</h3>
             <div className="flex items-center text-sm text-gray-600 mb-1 flex-wrap gap-2">
+              <span className={`${getStatusBadge(status)} px-2 py-1 rounded-full text-xs font-medium capitalize`}>
+                {status}
+              </span>
               <span className={`${eventTypeDisplay.color} px-2 py-1 rounded-full text-xs font-medium`}>
                 {eventTypeDisplay.text}
               </span>
@@ -478,6 +513,11 @@ const EventsAndReunions = () => {
               <span>{event.location}</span>
             </div>
             <p className="text-gray-700 text-sm leading-relaxed mb-4">{event.description}</p>
+            {status === 'rejected' && event.rejectionReason && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 mb-3">
+                <strong>Rejection reason:</strong> {event.rejectionReason}
+              </div>
+            )}
             {event.rsvpInfo && (
               <p className="text-sm text-gray-600"><strong>RSVP:</strong> {event.rsvpInfo}</p>
             )}
@@ -492,14 +532,16 @@ const EventsAndReunions = () => {
             Posted {getTimeSincePosted(event.postedDate || event.createdAt)}
           </span>
           
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <div className="flex items-center text-sm text-gray-600">
-              <span className="mr-2">👥</span>
-              <span>{attendanceCount} {attendanceCount === 1 ? 'person' : 'people'} willing to attend</span>
-            </div>
-            
-            {/* Only show attendance button if user is logged in */}
-            {isLoggedIn && (
+          {/* Hide attendance section for rejected events */}
+          {status !== 'rejected' && (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <div className="flex items-center text-sm text-gray-600">
+                <span className="mr-2">👥</span>
+                <span>{attendanceCount} {attendanceCount === 1 ? 'person' : 'people'} willing to attend</span>
+              </div>
+              
+              {/* Only show attendance button if user is logged in */}
+              {isLoggedIn && (
               <button 
                 onClick={() => onAttendanceClick(eventId)}
                 disabled={isPastEvent || isLoadingAttendance}
@@ -535,13 +577,14 @@ const EventsAndReunions = () => {
               </button>
             )}
             
-            {/* Show login prompt for non-logged in users */}
-            {!isLoggedIn && !isPastEvent && (
-              <span className="text-sm text-gray-500 italic">
-                Login to attend events
-              </span>
-            )}
-          </div>
+              {/* Show login prompt for non-logged in users */}
+              {!isLoggedIn && !isPastEvent && (
+                <span className="text-sm text-gray-500 italic">
+                  Login to attend events
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );

@@ -32,6 +32,7 @@ import mentorshipRoutes from './routes/mentorshipRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import securityRoutes from './routes/securityRoutes.js';
+import announcementRoutes from './routes/announcementRoutes.js';
 
 // Load Google OAuth config
 import './config/googleAuth.js';
@@ -42,7 +43,7 @@ const __dirname = path.dirname(__filename);
 
 // ✅ CORS Configuration
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://127.0.0.1:3000', 'http://127.0.0.1:3001', 'http://127.0.0.1:3002'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
@@ -101,6 +102,7 @@ app.use('/api', protectedRoutes);
 app.use('/api', contactRoutes);
 app.use('/api', alumniRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api', NewsAndAchievementsRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api', networkingRoutes);
 app.use('/api', successStoryRoutes);

@@ -33,6 +33,12 @@ const achievementSchema = new mongoose.Schema({
       type: String,
       required: [true, 'Current position is required'],
       trim: true
+    },
+    role: {
+      type: String,
+      enum: ['student', 'alumni', 'admin'],
+      default: 'alumni',
+      trim: true
     }
   },
   title: {

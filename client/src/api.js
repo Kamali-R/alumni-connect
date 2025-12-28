@@ -132,16 +132,18 @@ export const testAPI = {
   health: () => api.get('/health'),
 };
 
-// Mentorship API
-export const mentorshipAPI = {
-  getMentors: () => api.get('/mentorship/mentors'),
-  becomeMentor: (profile) => api.post('/mentorship/mentors', profile),
-  requestMentor: (mentorId, body = {}) => api.post(`/mentorship/mentors/${mentorId}/request`, body),
-  getRequests: () => api.get('/mentorship/requests'),
-  respondToRequest: (requestId, action) => api.patch(`/mentorship/requests/${requestId}`, { action }),
-  getMyMentorships: () => api.get('/mentorship/my')
+// Admin Dashboard API
+export const dashboardAPI = {
+  getStats: () => api.get('/admin/dashboard/stats'),
 };
 
-
+// Announcements API
+export const announcementsAPI = {
+  getAll: () => api.get('/announcements/all'),
+  getStudentAnnouncements: () => api.get('/announcements/student/announcements'),
+  getAlumniAnnouncements: () => api.get('/announcements/alumni/announcements'),
+  create: (announcementData) => api.post('/announcements/create', announcementData),
+  delete: (id) => api.delete(`/announcements/${id}`),
+};
 
 export default api;

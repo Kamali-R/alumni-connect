@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { newsAPI, achievementsAPI, testAPI } from './api';
+import { newsAPI, achievementsAPI, testAPI, announcementsAPI } from './api';
 
 const NewsAndAchievements = () => {
   // State management
-  const [activeTab, setActiveTab] = useState('news');
+  const [activeTab, setActiveTab] = useState('achievements');
   const [showAchievementModal, setShowAchievementModal] = useState(false);
   const [showNewsModal, setShowNewsModal] = useState(false);
   const [selectedNews, setSelectedNews] = useState(null);
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -20,6 +22,7 @@ const NewsAndAchievements = () => {
   // Data states
   const [newsItems, setNewsItems] = useState([]);
   const [achievements, setAchievements] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
   
@@ -699,6 +702,36 @@ const loadMyAchievements = async () => {
     }
   };
 
+  // Load announcements based on user type
+  const loadAnnouncements = async () => {
+    try {
+      console.log('🔄 Loading announcements...');
+      
+      // Get user role from localStorage
+      const storedUser = localStorage.getItem('user');
+      const userData = storedUser ? JSON.parse(storedUser) : {};
+      const userRole = userData.role || 'alumni';
+      
+      let response;
+      if (userRole === 'student') {
+        response = await announcementsAPI.getStudentAnnouncements();
+      } else if (userRole === 'alumni') {
+        response = await announcementsAPI.getAlumniAnnouncements();
+      } else {
+        response = await announcementsAPI.getAll();
+      }
+      
+      console.log('✅ Announcements loaded:', response.data);
+      const announcementList = response.data.data || response.data || [];
+      setAnnouncements(announcementList);
+      return announcementList;
+    } catch (error) {
+      console.error('❌ Error loading announcements:', error);
+      setAnnouncements([]);
+      return [];
+    }
+  };
+
   // ✅ SINGLE loadData FUNCTION
  // ✅ UPDATED: Better error handling for data loading
 const loadData = async () => {
@@ -729,6 +762,16 @@ const loadData = async () => {
     
     // Always use sample news for now
     setNewsItems(sampleNews);
+    
+    // Load announcements
+    try {
+      console.log('📥 Loading announcements...');
+      await loadAnnouncements();
+      console.log('✅ Announcements loaded');
+    } catch (announcementError) {
+      console.warn('⚠️ Failed to load announcements:', announcementError);
+      setAnnouncements([]);
+    }
     
     console.log('🎉 Data load completed successfully');
     
@@ -941,6 +984,17 @@ const loadData = async () => {
     setShowNewsModal(false);
     setSelectedNews(null);
   };
+
+  // Handle announcement modal
+  const handleOpenAnnouncementModal = (announcement) => {
+    setSelectedAnnouncement(announcement);
+    setShowAnnouncementModal(true);
+  };
+
+  const handleCloseAnnouncementModal = () => {
+    setShowAnnouncementModal(false);
+    setSelectedAnnouncement(null);
+  };
   
   // Handle opening achievement modal
 // Handle opening achievement modal
@@ -1057,6 +1111,8 @@ const handleSubmitAchievement = async (e) => {
       loadAchievements();
     } else if (activeTab === 'my-achievements' && userProfile) {
       loadMyAchievements();
+    } else if (activeTab === 'announcements') {
+      loadAnnouncements();
     }
   }, [activeTab, userProfile]);
 
@@ -1091,21 +1147,6 @@ const handleSubmitAchievement = async (e) => {
           <div className="flex items-center justify-between py-3">
             <div className="flex space-x-1">
               <button 
-                onClick={() => handleTabChange('news')}
-                className={`px-6 py-2 rounded-lg text-sm font-medium flex items-center transition-colors ${
-                  activeTab === 'news' 
-                    ? 'bg-blue-600 text-white shadow-lg' 
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                📰 Campus News
-                <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
-                  activeTab === 'news' ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-600'
-                }`}>
-                  {newsItems.length}
-                </span>
-              </button>
-              <button 
                 onClick={() => handleTabChange('achievements')}
                 className={`px-6 py-2 rounded-lg text-sm font-medium flex items-center transition-colors ${
                   activeTab === 'achievements' 
@@ -1131,6 +1172,22 @@ const handleSubmitAchievement = async (e) => {
               >
                 📋 My Achievements
               </button>
+              {/* NEW: Campus Announcements Tab */}
+              <button 
+                onClick={() => handleTabChange('announcements')}
+                className={`px-6 py-2 rounded-lg text-sm font-medium flex items-center transition-colors ${
+                  activeTab === 'announcements' 
+                    ? 'bg-blue-600 text-white shadow-lg' 
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                📢 Campus Announcements
+                <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
+                  activeTab === 'announcements' ? 'bg-purple-500 text-white' : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {announcements.length}
+                </span>
+              </button>
             </div>
             <div className="flex items-center space-x-3">
               {(activeTab === 'achievements' || activeTab === 'my-achievements') && (
@@ -1146,78 +1203,8 @@ const handleSubmitAchievement = async (e) => {
         </div>
       </nav>
 
-      {/* Admin Notice for News */}
-      {activeTab === 'news' && (
-        <div className="max-w-7xl mx-auto px-4 pt-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-            <div className="flex items-center">
-              <span className="text-blue-500 text-lg mr-2">ℹ️</span>
-              <p className="text-blue-800 text-sm">
-                <strong>Note:</strong> News updates are managed by campus administration. 
-                To share updates, please contact the admin office.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-      
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-6">
-        {/* News Section */}
-        {activeTab === 'news' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {newsItems.map((news) => (
-              <div key={news._id} className="news-card bg-white rounded-xl shadow-md overflow-hidden border border-gray-100 hover:shadow-lg transition-all duration-300">
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <span className={`text-xs font-medium px-3 py-1 rounded-full ${getNewsCategoryColor(news.category)}`}>
-                      {newsCategoryEmojis[news.category]} {news.category.toUpperCase()}
-                    </span>
-                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{news.time}</span>
-                  </div>
-                  
-                  <h3 className="text-lg font-bold text-gray-900 mb-3 leading-tight">{news.title}</h3>
-                  
-                  <p className="text-gray-600 text-sm mb-4 leading-relaxed line-clamp-3">
-                    {news.description}
-                  </p>
-                  
-                  <div className="space-y-2 mb-4">
-                    {news.details && Object.entries(news.details).map(([key, value]) => (
-                      <div key={key} className="flex items-center text-xs text-gray-500">
-                        <span className="mr-2">
-                          {key === 'attendees' && '👥'}
-                          {key === 'date' && '📅'}
-                          {key === 'venue' && '🏛️'}
-                          {key === 'books' && '📚'}
-                          {key === 'feature' && '💡'}
-                          {key === 'capacity' && '👥'}
-                          {key === 'companies' && '🏢'}
-                          {key === 'opportunities' && '💼'}
-                          {key === 'deadline' && '⏰'}
-                          {key === 'initiative' && '🌱'}
-                          {key === 'goal' && '🎯'}
-                          {key === 'projects' && '📋'}
-                          {key === 'network' && '🌍'}
-                          {key === 'mentors' && '👨‍🏫'}
-                          {key === 'domains' && '📊'}
-                        </span>
-                        <span className="font-medium">{value}</span>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <button 
-                    onClick={() => handleReadFullStory(news)}
-                    className="w-full bg-blue-50 hover:bg-blue-100 text-blue-600 text-sm font-medium py-2 rounded-lg transition-colors flex items-center justify-center"
-                  >
-                    Read Full Story →
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
         
 {/* All Achievements Section */}
 {activeTab === 'achievements' && (
@@ -1485,6 +1472,89 @@ const handleSubmitAchievement = async (e) => {
     )}
   </div>
 )}
+{/* NEW: Campus Announcements Section */}
+{activeTab === 'announcements' && (
+  <div>
+    {announcements.length === 0 ? (
+      <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="text-6xl mb-4">📢</div>
+        <h3 className="text-xl font-bold text-gray-600 mb-2">No Announcements</h3>
+        <p className="text-gray-500">No announcements available at this time. Check back later!</p>
+      </div>
+    ) : (
+      <div className="space-y-4">
+        {announcements.map((announcement) => {
+          // Truncate message to 2 lines
+          const lines = (announcement.message || '').split('\n');
+          const truncatedMessage = lines.slice(0, 2).join('\n');
+          const isFullMessageShown = truncatedMessage === announcement.message;
+          
+          return (
+            <div key={announcement._id} className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200 hover:shadow-lg transition-all duration-300 p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  <div className={`w-12 h-12 bg-gradient-to-r ${
+                    announcement.category === 'Announcements' ? 'from-purple-500 to-pink-500' :
+                    announcement.category === 'Academic' ? 'from-blue-500 to-cyan-500' :
+                    announcement.category === 'Events' ? 'from-green-500 to-emerald-500' :
+                    'from-yellow-500 to-orange-500'
+                  } rounded-full flex items-center justify-center text-white text-lg font-bold shadow-lg`}>
+                    {announcement.category === 'Announcements' && '📢'}
+                    {announcement.category === 'Academic' && '📚'}
+                    {announcement.category === 'Events' && '🎉'}
+                    {announcement.category === 'General' && '💡'}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900">{announcement.subject}</h3>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <span className={`text-xs font-medium px-3 py-1 rounded-full ${
+                        announcement.category === 'Announcements' ? 'bg-purple-100 text-purple-700' :
+                        announcement.category === 'Academic' ? 'bg-blue-100 text-blue-700' :
+                        announcement.category === 'Events' ? 'bg-green-100 text-green-700' :
+                        'bg-yellow-100 text-yellow-700'
+                      }`}>
+                        {announcement.category}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {new Date(announcement.createdAt).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <span className={`text-xs font-medium px-3 py-1 rounded-full ${
+                  announcement.audience === 'All Users' ? 'bg-blue-100 text-blue-700' :
+                  announcement.audience === 'Students Only' ? 'bg-green-100 text-green-700' :
+                  'bg-purple-100 text-purple-700'
+                }`}>
+                  {announcement.audience === 'All Users' && '👥 All'}
+                  {announcement.audience === 'Students Only' && '🎓 Students'}
+                  {announcement.audience === 'Alumni Only' && '👨‍🎓 Alumni'}
+                </span>
+              </div>
+              
+              <p className="text-gray-700 mb-4 whitespace-pre-wrap leading-relaxed">
+                {truncatedMessage}
+              </p>
+              
+              {!isFullMessageShown && (
+                <button 
+                  onClick={() => handleOpenAnnouncementModal(announcement)}
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                >
+                  Read Full Announcement →
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </div>
+)}
       </main>
 
       {/* Edit Achievement Modal */}
@@ -1717,6 +1787,144 @@ const handleSubmitAchievement = async (e) => {
     </div>
   </div>
 )}
+
+      {/* Announcement Full Message Modal */}
+      {showAnnouncementModal && selectedAnnouncement && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="modal-backdrop fixed inset-0 bg-black bg-opacity-50 backdrop-filter backdrop-blur-sm" 
+            onClick={handleCloseAnnouncementModal}
+          ></div>
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto relative z-10">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-1">{selectedAnnouncement.subject || 'Announcement'}</h3>
+                  <div className="flex items-center space-x-2 text-xs text-gray-500">
+                    <span>{new Date(selectedAnnouncement.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    <span>•</span>
+                    <span className={`px-2 py-0.5 rounded-full ${
+                      selectedAnnouncement.category === 'Academic' ? 'bg-blue-100 text-blue-700' :
+                      selectedAnnouncement.category === 'Events' ? 'bg-purple-100 text-purple-700' :
+                      selectedAnnouncement.category === 'General' ? 'bg-gray-100 text-gray-700' :
+                      'bg-orange-100 text-orange-700'
+                    }`}>
+                      {selectedAnnouncement.category || 'Announcements'}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full ${
+                      selectedAnnouncement.audience === 'All Users' ? 'bg-blue-100 text-blue-700' :
+                      selectedAnnouncement.audience === 'Students Only' ? 'bg-green-100 text-green-700' :
+                      'bg-purple-100 text-purple-700'
+                    }`}>
+                      {selectedAnnouncement.audience === 'All Users' && '👥 All'}
+                      {selectedAnnouncement.audience === 'Students Only' && '🎓 Students'}
+                      {selectedAnnouncement.audience === 'Alumni Only' && '👨‍🎓 Alumni'}
+                    </span>
+                  </div>
+                </div>
+                <button 
+                  onClick={handleCloseAnnouncementModal} 
+                  className="text-gray-400 hover:text-gray-600 text-3xl transition-colors"
+                  aria-label="Close announcement"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="text-gray-700 whitespace-pre-wrap leading-relaxed bg-gray-50 border border-gray-100 rounded-lg p-4">
+                {selectedAnnouncement.message || ''}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* News Full Story Modal */}
+      {showNewsModal && selectedNews && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="modal-backdrop fixed inset-0 bg-black bg-opacity-50 backdrop-filter backdrop-blur-sm" 
+            onClick={handleCloseNewsModal}
+          ></div>
+          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto relative z-10">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-gray-900">{selectedNews.title}</h3>
+                <button 
+                  onClick={handleCloseNewsModal} 
+                  className="text-gray-400 hover:text-gray-600 text-3xl transition-colors"
+                >
+                  ×
+                </button>
+              </div>
+              
+              {/* News Details */}
+              <div className="mb-6 flex items-center justify-between text-sm text-gray-500">
+                <span className="flex items-center">
+                  <span className="mr-2">📅</span>
+                  {selectedNews.time}
+                </span>
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  selectedNews.category === 'events' ? 'bg-purple-100 text-purple-700' :
+                  selectedNews.category === 'academic' ? 'bg-blue-100 text-blue-700' :
+                  selectedNews.category === 'placement' ? 'bg-green-100 text-green-700' :
+                  'bg-gray-100 text-gray-700'
+                }`}>
+                  {selectedNews.category}
+                </span>
+              </div>
+              
+              {/* Full Story Content */}
+              <div className="prose max-w-none">
+                <div className="text-gray-700 whitespace-pre-line leading-relaxed">
+                  {selectedNews.fullStory}
+                </div>
+              </div>
+              
+              {/* Details Section */}
+              {selectedNews.details && (
+                <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                  <h4 className="font-semibold text-gray-900 mb-3">Event Details</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {Object.entries(selectedNews.details).map(([key, value]) => (
+                      <div key={key} className="flex items-start">
+                        <span className="text-2xl mr-2">
+                          {key === 'attendees' && '👥'}
+                          {key === 'date' && '📅'}
+                          {key === 'venue' && '📍'}
+                          {key === 'books' && '📚'}
+                          {key === 'feature' && '✨'}
+                          {key === 'capacity' && '👥'}
+                          {key === 'companies' && '🏢'}
+                          {key === 'placements' && '📊'}
+                          {key === 'package' && '💰'}
+                          {key === 'awards' && '🏆'}
+                          {key === 'participants' && '👥'}
+                          {key === 'winners' && '🥇'}
+                        </span>
+                        <div>
+                          <div className="text-xs text-gray-500 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</div>
+                          <div className="font-medium text-gray-900">{value}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Close Button */}
+              <div className="mt-6 flex justify-end">
+                <button 
+                  onClick={handleCloseNewsModal}
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         .news-card, .achievement-card { 

@@ -42,24 +42,9 @@ passport.use(
         });
         
         if (!user) {
-          // Create new user with Google profile
-          console.log('👤 Creating new user for Google login:', email);
-          
-          user = new User({
-            name: name,
-            email: email,
-            role: 'alumni', // Default role for Google signups
-            googleId: profile.id,
-            isVerified: true, // Auto-verify Google users
-            profileCompleted: false, // They'll need to complete profile
-            authProvider: 'google',
-            createdAt: new Date(),
-            lastLogin: new Date()
-          });
-          
-          await user.save();
-          console.log('✅ New Google user created successfully');
-          
+          // Do NOT auto-create users. Signal signup requirement.
+          console.log('⚠️ No existing user for Google account. Redirecting to signup:', email);
+          return done(null, false, { needsSignup: true, email, name, googleId: profile.id });
         } else {
           // Update existing user
           console.log('🔄 Updating existing user for Google login:', email);

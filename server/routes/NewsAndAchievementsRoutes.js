@@ -70,6 +70,7 @@ router.post('/achievements', authenticateToken, async (req, res) => {
     console.log('\n=== NEW ACHIEVEMENT REQUEST ===');
     console.log('📝 User:', req.user?.id);
     console.log('📝 Body:', JSON.stringify(req.body, null, 2));
+    console.log('📝 UserProfile Role:', req.body.userProfile?.role);
     console.log('📝 MongoDB Status:', mongoose.connection.readyState === 1 ? 'Connected ✅' : 'Disconnected ❌');
     
     const { title, description, achievementDate, category, userProfile } = req.body;
@@ -112,7 +113,8 @@ router.post('/achievements', authenticateToken, async (req, res) => {
         initials: userProfile.initials.trim(),
         department: userProfile.department.trim(),
         graduationYear: userProfile.graduationYear.toString().trim(),
-        currentPosition: userProfile.currentPosition.trim()
+        currentPosition: userProfile.currentPosition.trim(),
+        role: userProfile.role ? userProfile.role.trim().toLowerCase() : 'alumni'
       },
       title: title.trim(),
       description: description.trim(),

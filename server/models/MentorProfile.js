@@ -7,18 +7,19 @@ const mentorProfileSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
-  isActive: {
-    type: Boolean,
-    default: true
-  },
   expertise: [{
-    category: String,
-    skills: [String]
+    category: {
+      type: String,
+      required: true
+    },
+    skills: [{
+      type: String
+    }]
   }],
   availability: {
     type: String,
-    enum: ['1-2 hours/month', '3-4 hours/month', '5+ hours/month'],
-    required: true
+    enum: ['Full-time', 'Part-time', 'Weekends', 'Flexible'],
+    default: 'Flexible'
   },
   description: {
     type: String,
@@ -30,13 +31,12 @@ const mentorProfileSchema = new mongoose.Schema({
   },
   experience: {
     type: String,
-    enum: ['3-5 years', '5-10 years', '10-15 years', '15+ years'],
+    enum: ['1-3 years', '3-5 years', '5-10 years', '10+ years'],
     required: true
   },
   companySize: {
     type: String,
-    enum: ['Startup (1-50)', 'Medium (51-500)', 'Large (500+)'],
-    required: true
+    enum: ['Startup (<50)', 'Small (50-200)', 'Medium (200-1000)', 'Large (1000+)']
   },
   location: {
     type: String,
@@ -44,25 +44,30 @@ const mentorProfileSchema = new mongoose.Schema({
   },
   mentorshipStyle: {
     type: String,
-    enum: ['Structured', 'Casual', 'Goal-oriented', 'Flexible']
+    enum: ['Structured', 'Casual', 'Project-based', 'Career Guidance'],
+    default: 'Casual'
   },
   preferredCommunication: [{
     type: String,
-    enum: ['Video Call', 'Phone Call', 'Chat', 'Email']
+    enum: ['Video Call', 'Phone Call', 'Chat', 'Email', 'In-person']
   }],
-  languages: [String],
-  rating: {
-    average: { type: Number, default: 0 },
-    count: { type: Number, default: 0 }
+  languages: [{
+    type: String
+  }],
+  isActive: {
+    type: Boolean,
+    default: true
   },
-  reviews: [{
-    menteeId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    rating: Number,
-    comment: String,
-    createdAt: { type: Date, default: Date.now }
-  }]
-}, {
-  timestamps: true
-});
+  rating: {
+    type: Number,
+    default: 0
+  },
+  totalMentees: {
+    type: Number,
+    default: 0
+  }
+}, { timestamps: true });
 
-export default mongoose.model('MentorProfile', mentorProfileSchema);
+const MentorProfile = mongoose.model('MentorProfile', mentorProfileSchema);
+
+export default MentorProfile;

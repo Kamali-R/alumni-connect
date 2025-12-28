@@ -8,15 +8,19 @@ const mentorshipSchema = new mongoose.Schema({
   },
   menteeId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+    ref: 'User',
+    required: true
   },
   status: {
     type: String,
-    enum: ['pending', 'active', 'completed', 'rejected', 'cancelled'],
+    enum: ['pending', 'active', 'completed', 'declined', 'cancelled'],
     default: 'pending'
   },
   mentorDetails: {
-    expertise: [String],
+    expertise: [{
+      category: String,
+      skills: [String]
+    }],
     availability: String,
     description: String,
     industry: String,
@@ -24,27 +28,45 @@ const mentorshipSchema = new mongoose.Schema({
     companySize: String,
     location: String
   },
-  requestMessage: String,
-  startDate: Date,
-  endDate: Date,
-  goals: [String],
+  requestMessage: {
+    type: String,
+    default: ''
+  },
+  goals: [{
+    type: String
+  }],
+  startDate: {
+    type: Date
+  },
+  endDate: {
+    type: Date
+  },
   sessions: [{
     date: Date,
-    duration: Number,
+    duration: Number, // in minutes
     notes: String,
-    status: {
-      type: String,
-      enum: ['scheduled', 'completed', 'cancelled'],
-      default: 'scheduled'
-    }
-  }]
-}, {
-  timestamps: true
-});
+    topics: [String]
+  }],
+  feedback: {
+    mentorRating: {
+      type: Number,
+      min: 1,
+      max: 5
+    },
+    menteeRating: {
+      type: Number,
+      min: 1,
+      max: 5
+    },
+    mentorFeedback: String,
+    menteeFeedback: String
+  }
+}, { timestamps: true });
 
-// Index for better query performance
-mentorshipSchema.index({ mentorId: 1, status: 1 });
-mentorshipSchema.index({ menteeId: 1, status: 1 });
+// Index for efficient queries
+mentorshipSchema.index({ mentorId: 1, menteeId: 1 });
 mentorshipSchema.index({ status: 1 });
 
-export default mongoose.model('Mentorship', mentorshipSchema);
+const Mentorship = mongoose.model('Mentorship', mentorshipSchema);
+
+export default Mentorship;
