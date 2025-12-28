@@ -96,6 +96,7 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // ✅ API Routes - MOVE THIS AFTER app DECLARATION
+// ✅ API Routes
 app.use('/', authRoutes);
 app.use('/api', protectedRoutes);
 app.use('/api', contactRoutes);
@@ -110,10 +111,25 @@ app.use('/api/applications', applicationRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/mentorship', mentorshipRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/admin', reportRoutes);
-app.use('/api/admin', securityRoutes);
-app.use('/api/announcements', announcementRoutes);
+
+// ✅ Admin Dashboard Routes (should come after regular routes)
+app.use('/api/admin', adminRoutes);          // Routes: /api/admin/skills/overview, etc.
+app.use('/api/admin/reports', reportRoutes);    // Routes: /api/admin/reports/overview
+app.use('/api/admin/security', securityRoutes); // Routes: /api/admin/security/overview
+
+// Add this before your route mounting
+app.get('/api/admin/test-all', (req, res) => {
+  res.json({
+    message: 'Admin routes are working!',
+    endpoints: {
+      skills: '/api/admin/skills/overview',
+      reports: '/api/admin/reports/overview',
+      security: '/api/admin/security/overview',
+      test: '/api/admin/skills/test'
+    }
+  });
+});
+
 // ✅ Root Route
 app.get('/', (req, res) => {
   res.json({
@@ -180,18 +196,29 @@ if (!MONGO_URI) {
 }
 
 mongoose
-  .connect(MONGO_URI)
+  .connect(MONGO_URI, {
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+  })
   .then(() => {
     console.log('✅ MongoDB Connected');
   })
   .catch((err) => {
-    console.error('❌ MongoDB connection failed:', err.message);
-    process.exit(1);
+    console.warn('⚠️ MongoDB connection failed:', err.message);
+    console.warn('⚠️ Server will still start but database features may not work');
   });
 
 // After MongoDB connection
 mongoose.connection.on('connected', () => {
   console.log('✅ MongoDB Connected');
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.warn('⚠️ MongoDB Disconnected');
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('❌ MongoDB Error:', err.message);
 });
 
 // Create HTTP server

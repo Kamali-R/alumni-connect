@@ -1,5 +1,14 @@
 import express from 'express';
-import { getSkillsOverview, searchSkills, getEventsForAdmin, getDashboardStats } from '../controllers/adminController.js';
+import { 
+  getSkillsOverview, 
+  searchSkills,
+  getDashboardStats,
+  getAdminUsers,
+  getAdminEvents,
+  updateAdminUser,
+  deleteAdminUser,
+  createAdminUser
+} from '../controllers/adminController.js';
 import auth from '../middleware/authMiddleware.js';
 import Achievement from '../models/Achievement.js';
 
@@ -15,8 +24,17 @@ router.get('/skills/test', (req, res) => {
   });
 });
 
-// Get dashboard stats
+// Dashboard stats
 router.get('/dashboard/stats', auth, getDashboardStats);
+
+// Users management
+router.get('/users', auth, getAdminUsers);
+router.post('/users', auth, createAdminUser);
+router.put('/users/:id', auth, updateAdminUser);
+router.delete('/users/:id', auth, deleteAdminUser);
+
+// Events management
+router.get('/events', auth, getAdminEvents);
 
 // Get skills and technologies overview
 router.get('/skills/overview', auth, getSkillsOverview);
@@ -102,7 +120,6 @@ router.post('/migrate-achievement-roles', auth, async (req, res) => {
   }
 });
 
-// Get all events categorized for admin dashboard
-router.get('/events', auth, getEventsForAdmin);
+// (single events route above)
 
 export default router;

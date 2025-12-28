@@ -5,6 +5,6 @@ import { getReportsOverview } from '../controllers/reportController.js';
 const router = express.Router();
 
 // Reports & Analytics
-router.get('/reports/overview', auth, getReportsOverview);
+router.get('/overview', auth, getReportsOverview);
 
 export default router;
